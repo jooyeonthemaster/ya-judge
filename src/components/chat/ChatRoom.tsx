@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useChatStore, Message } from '@/store/chatStore';
+import { useChatStore, Message, CourtStage } from '@/store/chatStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
 import { 
   Brain, 
   Gavel, 
   MessageSquare, 
-  AlertTriangle, 
+  AlertTriangle,
+
   ThumbsUp,
   ThumbsDown,
   Quote,
@@ -23,20 +24,59 @@ import {
   Eye,
   Star,
   UserCircle,
-  Link
+  Link,
+  Share2,
+  Loader2,
+  Share
 } from 'lucide-react';
-import { getJudgeResponse, VerdictData, PersonalizedResponse } from '@/lib/gemini';
+import { 
+  getJudgeResponse, 
+  generateIssues, 
+  generateDiscussion, 
+  generateQuestions,
+  generateClosing,
+  generateVerdict,
+  generateJudgeMessage,
+  VerdictData,
+  PersonalizedResponse,
+  IssuesData,
+  DiscussionData,
+  QuestionsData,
+  ClosingData,
+  JudgeMessageData
+} from '@/lib/gemini';
 import { ref, onValue, set, remove, off } from 'firebase/database';
 import { database } from '@/lib/firebase';
+import { useParams } from 'next/navigation';
 
-interface Props {
-  roomId?: string;
-  userType?: 'user-a' | 'user-b' | null;
-  customUsername?: string;  // 커스텀 사용자 이름 추가
-  onShare?: () => void;     // 공유 버튼 클릭 핸들러 추가
+// 새 컴포넌트 임포트
+import StageTimer from './StageTimer';
+import CourtProgressBar from './CourtProgressBar';
+import IssuesList from './IssuesList';
+import EvidenceRequest from './EvidenceRequest';
+import MessageComposer from './MessageComposer';
+import VerdictDisplay from './VerdictDisplay';
+import CourtReadyModal from './CourtReadyModal';
+import JudgeMessageDisplay from './JudgeMessageDisplay';
+
+interface ChatRoomProps {
+  roomId: string | null;
+  userType?: string;
+  customUsername?: string;
+  onShare?: () => void;
+  initialStage?: string;
+  activeChattersCount?: number;
 }
 
-export default function ChatRoom({ roomId, userType, customUsername, onShare }: Props) {
+export default function ChatRoom({ 
+  roomId, 
+  userType, 
+  customUsername, 
+  onShare, 
+  initialStage = 'waiting',
+  activeChattersCount = 0
+}: ChatRoomProps) {
+  const { roomId: nextRoomId } = useParams<{ roomId: string }>();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -57,6 +97,17 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
   const [showJudgeModal, setShowJudgeModal] = useState(false);
   const [isJudgeInProgress, setIsJudgeInProgress] = useState(false);
   
+  // 메시지 타입 관련 상태
+  const [messageType, setMessageType] = useState<string | null>(null);
+  
+  // 항소 관련 상태
+  const [showAppealModal, setShowAppealModal] = useState(false);
+  const [appealReason, setAppealReason] = useState('');
+  
+  // 재판 준비 모달 상태 추가
+  const [showCourtReadyModal, setShowCourtReadyModal] = useState(false);
+  const [userReady, setUserReady] = useState(false);
+  
   const { 
     messages, 
     stats, 
@@ -68,7 +119,24 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
     typingUsers,
     setTypingStatus,
     joinRoom,
-    leaveRoom
+    leaveRoom,
+    // 재판 관련 상태와 메서드
+    court,
+    startCourt,
+    moveToNextStage,
+    setStage,
+    toggleStageTimer,
+    setIssues,
+    moveToNextIssue,
+    setCurrentIssue,
+    addEvidenceRequest,
+    fulfillEvidenceRequest,
+    setVerdict,
+    requestAppeal,
+    // 추가된 준비 상태 관련 메서드
+    setParticipantReady,
+    isAllParticipantsReady,
+    getReadyParticipants
   } = useChatStore();
 
   // 사용자 이름 처리
@@ -130,25 +198,163 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
   }, []);
 
   // 메시지 보내기
-  const sendMessage = () => {
-    if (!input.trim() || !roomId) return;
+  const sendMessage = (text: string, type?: string, relatedIssue?: string) => {
+    if (!text.trim() || !roomId) return;
     
     const userId = localStorage.getItem('userId') || uuidv4();
+    
+    // Firebase에 undefined 값을 저장할 수 없으므로 null 처리
+    const cleanRelatedIssue = relatedIssue || undefined; // null 대신 undefined 사용
+    const cleanType = type || 'normal';
     
     addMessage({
       user: 'user-general',
       name: username,
-      text: input,
+      text: text,
       roomId: roomId,
       sender: {
         id: userId,
         username
-      }
+      },
+      messageType: cleanType as any,
+      relatedIssue: cleanRelatedIssue,
+      stage: court.stage
     });
-    
-    setInput('');
   };
 
+  // 재판 시작 - 수정된 버전
+  const initiateCourtProcess = () => {
+    // 이미 진행 중인 경우 중복 시작 방지
+    if (court.stage !== 'waiting') {
+      console.log('이미 재판이 진행 중입니다.');
+      return;
+    }
+    
+    console.log('재판 준비 모달 표시');
+    console.log('현재 참가자 목록:', roomUsers);
+    
+    // 재판 준비 모달 표시
+    setShowCourtReadyModal(true);
+  };
+  
+  // 사용자 준비 완료 처리
+  const handleUserReady = () => {
+    const userId = localStorage.getItem('userId') || uuidv4();
+    setUserReady(true);
+    setParticipantReady(userId, true);
+  };
+  
+  // 모달에서 실제 재판 시작을 처리하는 함수
+  const startCourtAfterReady = () => {
+    console.log("startCourtAfterReady 함수 호출됨");
+    console.log("readyParticipants:", getReadyParticipants());
+    console.log("roomUsers:", roomUsers);
+    
+    // 모달 닫기
+    setShowCourtReadyModal(false);
+    
+    // 재판 시작 - 바로 opening 단계로 설정
+    console.log("재판 시작: opening 단계로 설정");
+    setStage('opening');
+    
+    // 시작 메시지 추가
+    addMessage({
+      user: 'system',
+      name: '시스템',
+      text: '재판이 시작되었습니다. 모두 진술 단계에서 각 참여자는 자신의 입장을 설명해주세요.',
+      roomId: roomId || '',
+      stage: 'opening'
+    });
+    
+    // 판사 메시지 추가
+    addMessage({
+      user: 'judge',
+      name: '판사',
+      text: '안녕하세요, 법정에 오신 것을 환영합니다.\n\n' +
+            '지금부터 모두 진술 단계를 시작하겠습니다. 각 참여자는 자신의 입장을 설명해주세요.\n' + 
+            '예시: "저는 이 사건에서 ~한 피해를 입었습니다" 또는 "저는 ~한 이유로 이러한 행동을 했습니다"\n\n' + 
+            '말씀하실 때 증거가 있다면 화면 아래 특수 메시지 기능을 사용해 제출해주시고, 상대방 의견에 반박이 있으시면 반론 기능을 이용해주세요.',
+      roomId: roomId || '',
+      stage: 'opening'
+    });
+    
+    console.log("재판 시작 완료");
+  };
+  
+  // 다음 단계로 이동
+  const handleMoveToNextStage = () => {
+    // 모든 참가자 동의 필요 (실제 구현 시 추가)
+    moveToNextStage();
+    
+    // 판사 호출이 필요한 단계 확인
+    const nextStage = getNextStage(court.stage);
+    const needsJudgeCall = ['intro', 'opening', 'issues', 'questions', 'verdict'].includes(nextStage);
+    
+    if (needsJudgeCall) {
+      // 약간의 지연 후 판사 호출 (UI가 업데이트된 후)
+      setTimeout(() => callJudge(), 500);
+    }
+  };
+  
+  // 다음 단계 계산 (헬퍼 함수)
+  const getNextStage = (currentStage: CourtStage): CourtStage => {
+    const stages: CourtStage[] = [
+      'waiting', 'intro', 'opening', 'issues', 'discussion', 
+      'questions', 'closing', 'verdict', 'appeal'
+    ];
+    
+    const currentIndex = stages.indexOf(currentStage);
+    if (currentIndex === -1 || currentIndex === stages.length - 1) {
+      return currentStage;
+    }
+    
+    return stages[currentIndex + 1];
+  };
+  
+  // 판사 요청 핸들러
+  const handleJudgeRequest = () => {
+    if (isAnalyzing) return;
+    
+    // 단계에 따라 다른 요청 형태
+    if (court.stage === 'verdict') {
+      startJudgement();
+    } else {
+      callJudge();
+    }
+  };
+  
+  // 증거 제출 처리
+  const handleEvidenceSubmit = (id: string, evidence: string) => {
+    if (!evidence.trim()) return;
+    
+    // 증거 요청 이행 상태 업데이트
+    fulfillEvidenceRequest(id);
+    
+    // 증거 메시지 추가
+    sendMessage(evidence, 'evidence', court.issues[court.currentIssueIndex]);
+  };
+  
+  // 항소 요청 처리
+  const handleAppealRequest = () => {
+    if (!appealReason.trim()) return;
+    
+    // 항소 요청
+    requestAppeal(appealReason);
+    
+    // 항소 이유 메시지 추가
+    addMessage({
+      user: 'system',
+      name: '시스템',
+      text: `항소 이유: ${appealReason}`,
+      roomId: roomId || '',
+      stage: 'appeal'
+    });
+    
+    // 모달 닫기
+    setShowAppealModal(false);
+    setAppealReason('');
+  };
+  
   // 타이핑 상태 관리
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -183,7 +389,8 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      // 인자를 전달하여 sendMessage 호출
+      sendMessage(input);
     }
   };
 
@@ -191,6 +398,217 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
   const [judgeError, setJudgeError] = useState<string | null>(null);
   const [judgeAttempts, setJudgeAttempts] = useState(0);
   
+  // 단계별 판사 호출 함수
+  const callJudge = async () => {
+    if (isAnalyzing) {
+      console.log('이미 판사 요청 중입니다.');
+      return;
+    }
+    
+    setIsAnalyzing(true);
+    setJudgeError(null);
+    
+    try {
+      // 시스템 메시지 제외한 메시지 필터링
+      const filteredMessages = messages.filter(msg => msg.user !== 'system');
+      
+      if (filteredMessages.length < 2) {
+        setJudgeError('판사가 분석할 충분한 대화가 없습니다.');
+        setIsAnalyzing(false);
+        return;
+      }
+      
+      // Message 타입 불일치 해결을 위해 타입 변환 (user-a나 user-b를 user-general로 변환)
+      const compatibleMessages = filteredMessages.map(msg => ({
+        ...msg,
+        user: (msg.user === 'user-a' || msg.user === 'user-b') ? 'user-general' : msg.user
+      })) as import('@/lib/gemini').Message[];
+      
+      // 현재 단계에 맞는 API 호출
+      switch (court.stage) {
+        case 'intro':
+          // 재판 소개 - 진행 방식 설명
+          const introResponse = await generateJudgeMessage(compatibleMessages, 'intro');
+          
+          // 추가 지시사항을 새 메시지로 추가
+          addMessage({
+            user: 'judge',
+            name: '판사',
+            text: introResponse.judgeMessage.includes('판사 메시지') 
+              ? '각 참여자는 지금 즉시 자신의 입장을 간략히 설명해 주세요. "저는 이 사건에서 ~한 입장입니다"와 같은 형식으로 말씀해주시면 됩니다.' 
+              : introResponse.judgeMessage,
+            roomId: roomId || '',
+            stage: 'intro'
+          });
+          
+          break;
+          
+        case 'opening':
+          // 모두 진술 종료 - 쟁점 추출
+          const issuesData = await generateIssues(compatibleMessages);
+          
+          // 쟁점 저장
+          setIssues(issuesData.issues);
+          
+          // 판사 메시지 추가
+          addMessage({
+            user: 'judge',
+            name: '판사',
+            text: issuesData.judgeMessage,
+            roomId: roomId || '',
+            stage: 'opening'
+          });
+          
+          // moveToNextStage(); // 이 부분 제거 - 타이머가 끝나면 자동으로 다음 단계로 이동
+          break;
+          
+        case 'issues':
+          // 쟁점 정리 완료 - 토론 시작
+          addMessage({
+            user: 'judge',
+            name: '판사',
+            text: `이제 각 쟁점에 대해 토론을 시작하겠습니다. 첫 번째 쟁점은 "${court.issues[0]}"입니다. 이 쟁점에 대한 의견을 자유롭게 말씀해주세요.`,
+            roomId: roomId || '',
+            stage: 'issues'
+          });
+          
+          // moveToNextStage(); // 이 부분 제거 - 타이머가 끝나면 자동으로 다음 단계로 이동
+          break;
+          
+        case 'discussion':
+          // 현재 쟁점에 대한 토론 분석
+          const currentIssue = court.issues[court.currentIssueIndex];
+          const discussionData = await generateDiscussion(compatibleMessages, currentIssue);
+          
+          // 판사 메시지 추가
+          addMessage({
+            user: 'judge',
+            name: '판사',
+            text: discussionData.judgeMessage,
+            roomId: roomId || '',
+            stage: 'discussion',
+            relatedIssue: currentIssue
+          });
+          
+          // 증거 요청이 필요한 경우
+          if (discussionData.evidenceRequired && discussionData.evidenceRequests) {
+            discussionData.evidenceRequests.forEach(request => {
+              addEvidenceRequest({
+                targetUser: request.targetUser,
+                claim: request.claim,
+                requestReason: request.requestReason
+              });
+            });
+          }
+          
+          // 마지막 쟁점인 경우 판사 질문 단계로 이동, 아니면 다음 쟁점으로
+          if (court.currentIssueIndex >= court.issues.length - 1) {
+            moveToNextStage(); // 판사 질문 단계로
+          } else {
+            moveToNextIssue(); // 다음 쟁점으로
+          }
+          break;
+          
+        case 'questions':
+          // 판사 질문 생성
+          const questionsData = await generateQuestions(compatibleMessages);
+          
+          // 판사 메시지 추가
+          addMessage({
+            user: 'judge',
+            name: '판사',
+            text: questionsData.judgeMessage,
+            roomId: roomId || '',
+            stage: 'questions'
+          });
+          
+          // 질문 차례대로 추가
+          questionsData.questions.forEach((question, i) => {
+            setTimeout(() => {
+              addMessage({
+                user: 'judge',
+                name: '판사',
+                text: `${question.targetUser}님께 질문합니다: ${question.question}`,
+                roomId: roomId || '',
+                stage: 'questions'
+              });
+            }, (i + 1) * 3000); // 3초 간격으로 질문
+          });
+          
+          // 최종 변론 단계로 이동 (마지막 질문 후) - 이 부분 제거
+          // setTimeout(() => {
+          //   moveToNextStage();
+          // }, (questionsData.questions.length + 1) * 3000);
+          break;
+          
+        case 'closing':
+          // 최종 변론 안내
+          const closingData = await generateClosing(compatibleMessages);
+          
+          // 판사 메시지 추가
+          addMessage({
+            user: 'judge',
+            name: '판사',
+            text: closingData.judgeMessage,
+            roomId: roomId || '',
+            stage: 'closing'
+          });
+          
+          // 최종 변론 지침 추가
+          addMessage({
+            user: 'system',
+            name: '시스템',
+            text: closingData.closingInstructions,
+            roomId: roomId || '',
+            stage: 'closing'
+          });
+          break;
+          
+        case 'verdict':
+          // 최종 판결
+          const verdictData = await generateVerdict(compatibleMessages);
+          
+          // 판결 데이터 저장
+          setVerdict(verdictData);
+          
+          // 판결 메시지 추가
+          addMessage({
+            user: 'judge',
+            name: '판사',
+            text: JSON.stringify(verdictData),
+            roomId: roomId || '',
+            stage: 'verdict'
+          });
+          break;
+          
+        case 'appeal':
+          // 항소심 처리 (실제 구현 시 추가)
+          break;
+          
+        default:
+          console.log('알 수 없는 단계:', court.stage);
+      }
+      
+      setJudgeAttempts(0);
+    } catch (error) {
+      console.error('판사 호출 오류:', error);
+      setJudgeError('판사 요청 중 오류가 발생했습니다.');
+      
+      // 에러 메시지 추가
+      addMessage({
+        user: 'system',
+        name: '시스템',
+        text: '판사 요청 중 오류가 발생했습니다. 다시 시도해주세요.',
+        roomId: roomId || '',
+      });
+      
+      setJudgeAttempts(prev => prev + 1);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+  
+  // 기존 판결 함수 (for backward compatibility)
   const startJudgement = async () => {
     // 이미 분석 중이면 중복 호출 방지
     if (isAnalyzing) {
@@ -221,12 +639,20 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
       // Message 타입 불일치 해결을 위해 타입 변환 (user-a나 user-b를 user-general로 변환)
       const compatibleMessages = filteredMessages.map(msg => ({
         ...msg,
-        user: msg.user === 'user-a' || msg.user === 'user-b' ? 'user-general' as const : msg.user
-      }));
+        user: (msg.user === 'user-a' || msg.user === 'user-b') ? 'user-general' : msg.user
+      })) as import('@/lib/gemini').Message[];
       
       console.log('Gemini API 호출 시도');
-      const judgeResponse = await getJudgeResponse(compatibleMessages);
+      const judgeResponse = await getJudgeResponse(compatibleMessages, 'verdict');
       console.log('Gemini API 응답 받음:', judgeResponse ? '성공' : '실패');
+      
+      // 판결 데이터 저장
+      try {
+        const verdictData = JSON.parse(judgeResponse);
+        setVerdict(verdictData);
+      } catch (e) {
+        console.error('판결 데이터 파싱 오류:', e);
+      }
       
       // 판사 메시지 추가
       addMessage({
@@ -234,15 +660,11 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
         name: '판사',
         text: judgeResponse || '판단을 내릴 수 없습니다. 더 많은 대화가 필요합니다.',
         roomId: roomId || '',
+        stage: 'verdict'
       });
       
-      // 스탯 업데이트 (판정 결과에 따라 다르게 적용할 수 있음)
-      updateStats({
-        logicPowerA: Math.min(100, stats.logicPowerA + 5),
-        logicPowerB: Math.max(0, stats.logicPowerB - 3),
-        bullshitMeter: Math.max(0, stats.bullshitMeter - 5),
-        evidenceStrength: Math.min(100, stats.evidenceStrength + 3)
-      });
+      // 단계 업데이트
+      setStage('verdict');
       
       // 성공 시 재시도 횟수 초기화
       setJudgeAttempts(0);
@@ -273,6 +695,11 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
     try {
       console.log('판사 응답 원본:', text);
       
+      // 일반 텍스트 메시지인지 확인 (JSON 형식이 아닌 경우)
+      if (!text.startsWith('{') && !text.includes('{"responses"') && !text.includes('{"issues"')) {
+        return <JudgeMessageDisplay text={text} stage={court.stage} />;
+      }
+      
       // 응답이 오류 메시지인 경우 바로 표시
       if (text.includes('판사를 불러오는 중 오류가 발생했습니다') || 
           text.includes('API 키가 설정되지 않았습니다')) {
@@ -296,12 +723,7 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
           text = jsonMatch[1];
         } else {
           // JSON이 없으면 전체 텍스트를 그대로 표시
-          return (
-            <div className="bg-yellow-50 p-4 rounded-lg">
-              <div className="font-semibold text-yellow-800 mb-2">판사 판결</div>
-              <p className="text-yellow-900 whitespace-pre-wrap">{text}</p>
-            </div>
-          );
+          return <JudgeMessageDisplay text={text} stage={court.stage} />;
         }
       }
       
@@ -334,52 +756,13 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
         console.error('JSON 파싱 실패:', parseError);
         console.log('일반 텍스트 응답으로 처리');
         
-        // JSON 파싱 실패 시 중괄호로 둘러싸인 부분 찾기 시도
-        try {
-          const jsonPattern = /\{[\s\S]*\}/g;
-          const matches = text.match(jsonPattern);
-          
-          if (matches && matches.length > 0) {
-            // 가장 긴 중괄호 부분을 JSON으로 파싱 시도
-            const longestMatch = matches.reduce((a, b) => a.length > b.length ? a : b);
-            verdictData = JSON.parse(longestMatch) as VerdictData;
-            console.log('중괄호 추출 후 JSON 파싱 성공');
-          }
-        } catch (e) {
-          console.error('중괄호 추출 후 JSON 파싱 실패:', e);
-        }
-        
-        // 여전히 파싱 실패 시 기본 구조 생성
-        if (!verdictData) {
-          verdictData = {
-            responses: [
-              {
-                targetUser: "모든 참여자",
-                analysis: "",
-                message: cleanedText,
-                style: "일반",
-                percentage: 50,
-                reasoning: ["판결 내용 참조"],
-                punishment: "판결 내용 참조"
-              }
-            ],
-            verdict: {
-              summary: "판사의 판결",
-              conflict_root_cause: "",
-              recommendation: ""
-            }
-          };
-        }
+        // 파싱 실패 시 일반 텍스트로 표시
+        return <JudgeMessageDisplay text={text} stage={court.stage} />;
       }
       
       // 형식이 완전히 잘못된 경우 텍스트로 처리
       if (!verdictData || !verdictData.responses) {
-        return (
-          <div className="bg-yellow-50 p-4 rounded-lg">
-            <div className="font-semibold text-yellow-800 mb-2">판사 판결</div>
-            <p className="text-yellow-900 whitespace-pre-wrap">{text}</p>
-          </div>
-        );
+        return <JudgeMessageDisplay text={text} stage={court.stage} />;
       }
       
       return (
@@ -498,7 +881,7 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
   };
 
   // 현재 채팅 참여자 수 계산 - 시스템 계정 제외
-  const activeChattersCount = roomUsers
+  const calculatedChattersCount = roomUsers
     .filter(user => !user.username.includes('System') && user.username !== 'System')
     .length;
   
@@ -720,250 +1103,166 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+    <div className={`flex flex-col h-full ${court.stage !== 'waiting' ? 'pt-24' : ''}`}>
+      {/* 진행 상황 표시줄 (재판 진행 중일 때만) */}
+      {court.stage !== 'waiting' && (
+        <CourtProgressBar
+          currentStage={court.stage}
+          stages={['opening', 'issues', 'discussion', 'questions', 'closing', 'verdict', 'appeal'] as CourtStage[]}
+          stageTimeLeft={court.stageTimeLeft}
+          stageTimerActive={court.stageTimerActive}
+          onRequestJudge={handleJudgeRequest}
+          onTimeEnd={() => {
+            // 시간 종료 시 자동으로 판사 호출 또는 다음 단계로 이동
+            if (['opening', 'discussion', 'questions', 'closing'].includes(court.stage)) {
+              callJudge();
+            } else {
+              // 그 외의 경우에는 다음 단계로 자동 이동
+              moveToNextStage();
+            }
+          }}
+        />
+      )}
+      
       {/* 채팅방 헤더 */}
       <div className="bg-white p-4 border-b flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <MessageSquare className="h-5 w-5 text-indigo-600" />
-          <h2 className="font-medium text-gray-900">대화방 #{roomId?.slice(0, 6)}</h2>
-          <div className="flex items-center text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded-full">
-            <UserCircle className="w-3 h-3 mr-1" />
-            <span>{activeChattersCount}명 참여 중</span>
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center">
+            <MessageSquare className="h-5 w-5 text-indigo-600 mr-2" />
+            <h2 className="font-medium text-gray-900">대화방 #{roomId?.slice(0, 6)}</h2>
+          </div>
+          <div className="flex items-center text-sm bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+            <UserCircle className="w-4 h-4 text-indigo-500 mr-1.5" />
+            <span className="font-medium text-gray-700">{calculatedChattersCount}명 참여 중</span>
           </div>
         </div>
         <div className="flex items-center space-x-2">
           {onShare && (
             <button
               onClick={onShare}
-              className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full flex items-center font-medium hover:bg-indigo-100 transition-colors"
+              className="flex items-center text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg shadow-sm transition-colors duration-200"
             >
-              <Link className="w-3 h-3 mr-1" />
-              <span>채팅방 공유</span>
+              <Link className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">채팅방 공유</span>
             </button>
           )}
         </div>
       </div>
-
-      {/* 판사 부르기 플로팅 버튼 - 직접 요청에서 모달 표시로 변경 */}
-      <div className="fixed bottom-6 right-6 z-30">
-        <button 
-          onClick={showJudgeRequestModal}
-          disabled={isAnalyzing || isJudgeInProgress}
-          className="bg-gradient-to-r from-yellow-500 to-amber-500 text-white px-4 py-2 rounded-full flex items-center font-medium hover:from-yellow-600 hover:to-amber-600 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Gavel className="w-4 h-4 mr-2" />
-          <span>판사 부르기</span>
-        </button>
-      </div>
-
-      {/* 판사 모달 */}
-      {showJudgeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden">
-            {/* 모달 헤더 */}
-            <div className="bg-gradient-to-r from-amber-400 to-orange-500 p-4 text-white">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Gavel className="h-6 w-6" />
-                  <h3 className="text-xl font-bold">판사 호출</h3>
-                </div>
-                {!isAnalyzing && !isJudgeInProgress && (
-                  <button 
-                    onClick={closeJudgeModal}
-                    className="text-white hover:text-gray-200 focus:outline-none"
-                  >
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-            
-            {/* 모달 내용 */}
-            <div className="p-6 space-y-4">
-              {isAnalyzing || isJudgeInProgress ? (
-                <div className="flex flex-col items-center justify-center space-y-4 py-6">
-                  <div className="animate-spin rounded-full h-12 w-12 border-4 border-amber-500 border-t-transparent"></div>
-                  <p className="text-gray-700 font-medium text-center">
-                    판사가 대화 내용을 분석하고 있습니다...
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {judgeAttempts > 1 ? `재시도 중... (${judgeAttempts}번째)` : '약 10-20초 정도 소요됩니다.'}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="bg-amber-50 p-4 rounded-lg border border-amber-100">
-                    <p className="text-amber-800">
-                      {judgeRequested 
-                        ? "판사를 호출하기 위해 모든 참여자의 승인이 필요합니다." 
-                        : "판사를 불러 현재 논쟁에 대한 판정을 요청하시겠습니까?"}
-                    </p>
-                  </div>
-                  
-                  {/* 판사 호출 가이드 */}
-                  <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
-                    <p className="font-medium mb-2">💡 판사 기능 이용 가이드</p>
-                    <ul className="list-disc pl-4 space-y-1">
-                      <li>두 명 이상이 대화에 참여해야 판결이 가능합니다.</li>
-                      <li>충분한 대화 내용이 있어야 정확한 판결이 가능합니다.</li>
-                      <li>분석에는 약 10-20초 정도 소요됩니다.</li>
-                      {judgeRequested && <li className="font-medium text-amber-700">모든 대화 참여자의 승인이 필요합니다!</li>}
-                    </ul>
-                  </div>
-                  
-                  {/* 에러 메시지 표시 */}
-                  {judgeError && (
-                    <div className="text-red-600 text-sm bg-red-50 p-3 rounded-md">
-                      <p className="font-medium">⚠️ 오류</p>
-                      <p>{judgeError}</p>
-                    </div>
-                  )}
-                  
-                  {/* 승인 상태 표시 */}
-                  {judgeRequested && activeChattersCount > 0 && (
-                    <div className="bg-white border border-gray-200 p-4 rounded-md">
-                      <p className="text-sm font-medium text-gray-700 mb-3">참여자 승인 상태:</p>
-                      <div className="space-y-2">
-                        {/* 현재 사용자 승인 상태 */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <div className="bg-indigo-100 p-1 rounded-full">
-                              <UserCircle className="h-4 w-4 text-indigo-700" />
-                            </div>
-                            <span className="text-sm">{username} <span className="text-xs text-gray-500">(나)</span></span>
-                          </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${localApproval 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-gray-100 text-gray-800'}`}>
-                            {localApproval ? '승인됨' : '대기 중'}
-                          </span>
-                        </div>
-                        
-                        {/* 다른 참여자들 승인 상태 */}
-                        {roomUsers
-                          .filter(user => user.username !== username && !user.username.includes('System'))
-                          .map(user => (
-                            <div key={user.id} className="flex items-center justify-between">
-                              <div className="flex items-center space-x-2">
-                                <div className="bg-gray-100 p-1 rounded-full">
-                                  <UserCircle className="h-4 w-4 text-gray-700" />
-                                </div>
-                                <span className="text-sm">{user.username}</span>
-                              </div>
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${approvals[user.username] 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-gray-100 text-gray-800'}`}>
-                                {approvals[user.username] ? '승인됨' : '대기 중'}
-                              </span>
-                            </div>
-                          ))
-                        }
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* 액션 버튼 */}
-                  <div className="flex justify-end space-x-3 pt-2">
-                    {!judgeRequested && (
-                      <>
-                        <button 
-                          onClick={closeJudgeModal}
-                          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
-                        >
-                          취소
-                        </button>
-                        <button 
-                          onClick={requestJudge}
-                          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-md hover:from-amber-600 hover:to-orange-600 transition-colors"
-                        >
-                          판사 요청
-                        </button>
-                      </>
-                    )}
-                    
-                    {judgeRequested && (
-                      <>
-                        <button 
-                          onClick={closeJudgeModal}
-                          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
-                          disabled={isAnalyzing}
-                        >
-                          취소
-                        </button>
-                        <button 
-                          onClick={approveJudgeRequest}
-                          disabled={localApproval}
-                          className={`px-4 py-2 rounded-md ${
-                            localApproval
-                              ? 'bg-green-500 text-white cursor-not-allowed'
-                              : 'bg-amber-500 text-white hover:bg-amber-600'
-                          } transition-colors`}
-                        >
-                          {localApproval ? '승인됨' : '승인하기'}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+      
+      {/* 토론 단계에서 쟁점 목록 표시 */}
+      {court.stage === 'discussion' && court.issues.length > 0 && (
+        <IssuesList
+          issues={court.issues}
+          currentIssueIndex={court.currentIssueIndex}
+          onSelectIssue={(index) => setCurrentIssue(index)}
+          isDiscussionStage={court.stage === 'discussion'}
+        />
       )}
 
       {/* 채팅 메시지 영역 */}
       <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto space-y-4">
-        {messages.map((message, index) => (
-          <div 
-            key={`${message.id}-${index}`} 
-            className={`flex items-start space-x-2 ${
-              message.user === 'judge' ? 'flex-col w-full' :
-              message.sender?.username === username ? 'justify-end' : 'justify-start'
-            }`}
-          >
-            {message.user !== 'judge' && message.sender?.username !== username && (
-              <div className="flex-shrink-0 bg-gray-200 rounded-full p-2 mt-1">
-                {getUserIcon(message.user)}
-              </div>
-            )}
-            
+        {/* 증거 요청이 있는 경우 표시 */}
+        {court.evidenceRequests.filter(req => !req.fulfilled).map(request => (
+          <EvidenceRequest
+            key={request.id}
+            id={request.id}
+            targetUser={request.targetUser}
+            claim={request.claim}
+            requestReason={request.requestReason}
+            isMine={request.targetUser === username}
+            onSubmit={handleEvidenceSubmit}
+          />
+        ))}
+      
+        {messages.map((message, index) => {
+          // 메시지 유형에 따른 스타일 결정
+          let messageTypeClass = '';
+          if (message.messageType === 'evidence') {
+            messageTypeClass = 'border-l-4 border-emerald-500';
+          } else if (message.messageType === 'objection') {
+            messageTypeClass = 'border-l-4 border-red-500';
+          } else if (message.messageType === 'closing') {
+            messageTypeClass = 'border-l-4 border-indigo-500';
+          }
+          
+          return (
             <div 
-              className={`max-w-none w-full rounded-lg p-3 ${
-                message.user === 'system' 
-                  ? 'bg-gray-100 text-gray-800' 
-                  : message.user === 'judge' 
-                  ? 'bg-yellow-50 border border-yellow-200' 
-                  : message.sender?.username === username 
-                  ? 'bg-indigo-100 text-indigo-900' 
-                  : 'bg-white border border-gray-200 text-gray-900'
+              key={`${message.id}-${index}`} 
+              className={`flex items-start space-x-2 ${
+                message.user === 'judge' ? 'flex-col w-full' :
+                message.sender?.username === username ? 'justify-end' : 'justify-start'
               }`}
             >
-              <div className="flex items-center space-x-1 mb-1">
-                <span className="font-medium text-sm text-gray-800">{message.name}</span>
-                <span className="text-xs text-gray-600">{message.timestamp}</span>
+              {message.user !== 'judge' && message.sender?.username !== username && (
+                <div className="flex-shrink-0 bg-gray-200 rounded-full p-2 mt-1">
+                  {getUserIcon(message.user)}
+                </div>
+              )}
+              
+              <div 
+                className={`max-w-none w-full rounded-lg p-3 ${
+                  message.user === 'system' 
+                    ? 'bg-gray-100 text-gray-800' 
+                    : message.user === 'judge' 
+                    ? 'bg-yellow-50 border border-yellow-200' 
+                    : message.sender?.username === username 
+                    ? `bg-indigo-100 text-indigo-900 ${messageTypeClass}` 
+                    : `bg-white border border-gray-200 text-gray-900 ${messageTypeClass}`
+                }`}
+              >
+                <div className="flex items-center space-x-1 mb-1">
+                  <span className="font-medium text-sm text-gray-800">{message.name}</span>
+                  <span className="text-xs text-gray-600">{message.timestamp}</span>
+                  
+                  {/* 메시지 유형 표시 */}
+                  {message.messageType && message.messageType !== 'normal' && (
+                    <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
+                      message.messageType === 'evidence' 
+                        ? 'bg-emerald-100 text-emerald-800' 
+                        : message.messageType === 'objection'
+                          ? 'bg-red-100 text-red-800'
+                          : message.messageType === 'closing'
+                            ? 'bg-indigo-100 text-indigo-800'
+                            : ''
+                    }`}>
+                      {message.messageType === 'evidence' && '증거'}
+                      {message.messageType === 'objection' && '반론'}
+                      {message.messageType === 'closing' && '최종변론'}
+                    </span>
+                  )}
+                  
+                  {/* 관련 쟁점 표시 */}
+                  {message.relatedIssue && (
+                    <span className="ml-1 text-xs text-gray-500">
+                      쟁점: {message.relatedIssue}
+                    </span>
+                  )}
+                </div>
+                
+                {message.user === 'judge' && court.stage === 'verdict' 
+                  ? <VerdictDisplay 
+                      verdictData={court.verdictData || JSON.parse(message.text)} 
+                      currentUsername={username}
+                    />
+                  : message.user === 'judge' 
+                    ? renderJudgeResponse(message.text)
+                    : <p className="whitespace-pre-wrap break-words text-gray-800">{message.text}</p>
+                }
               </div>
-              {message.user === 'judge' ? 
-                renderJudgeResponse(message.text) :
-                <p className="whitespace-pre-wrap break-words text-gray-800">{message.text}</p>
-              }
+              
+              {message.user !== 'judge' && message.sender?.username === username && (
+                <div className="flex-shrink-0 bg-indigo-100 rounded-full p-2 mt-1">
+                  {getUserIcon('user-general')}
+                </div>
+              )}
             </div>
-            
-            {message.user !== 'judge' && message.sender?.username === username && (
-              <div className="flex-shrink-0 bg-indigo-100 rounded-full p-2 mt-1">
-                {getUserIcon('user-general')}
-              </div>
-            )}
-          </div>
-        ))}
-        
-        {/* 분석 진행 중 UI - 모달로 이동했기 때문에 중복 제거 */}
+          );
+        })}
         
         <div ref={messagesEndRef} />
       </div>
       
-      {/* 타이핑 표시기 - 고정 높이로 변경 */}
+      {/* 타이핑 표시기 */}
       <div className="h-6 px-4 bg-gray-50 border-t border-gray-100">
         {typingUsersList.length > 0 ? (
           <div className="text-xs text-gray-700 animate-pulse">
@@ -974,34 +1273,83 @@ export default function ChatRoom({ roomId, userType, customUsername, onShare }: 
         )}
       </div>
 
-      {/* 메시지 입력 영역 */}
-      <div className="bg-white p-4 border-t">
-        <div className="flex items-stretch space-x-2">
-          <textarea
-            value={input}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            placeholder="메시지를 입력하세요..."
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-gray-900 placeholder-gray-400"
-            rows={2}
-          />
-          <button
-            onClick={sendMessage}
-            disabled={!input.trim() || isLoading}
-            className={`px-4 rounded-lg flex items-center justify-center ${
-              !input.trim() || isLoading
-                ? 'bg-gray-200 text-gray-500'
-                : 'bg-indigo-600 text-white hover:bg-indigo-700'
-            }`}
-          >
-            {isLoading ? (
-              <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" />
-            ) : (
-              '전송'
-            )}
-          </button>
-        </div>
-      </div>
+      {/* 메시지 입력 영역 - 새로운 컴포넌트 사용 */}
+      <MessageComposer
+        onSendMessage={sendMessage}
+        isLoading={isLoading}
+        stage={court.stage}
+        currentIssue={court.issues[court.currentIssueIndex]}
+        onStartCourt={initiateCourtProcess}
+        onInputChange={handleInputChange}
+      />
+      
+      {/* 재판 준비 모달 */}
+      <CourtReadyModal 
+        isOpen={showCourtReadyModal}
+        onClose={() => {
+          console.log('모달 닫기');
+          setShowCourtReadyModal(false);
+        }}
+        onUserReady={() => {
+          console.log('사용자 준비 완료');
+          handleUserReady();
+        }}
+        onStartTrial={() => {
+          console.log('재판 시작하기 콜백 호출됨');
+          startCourtAfterReady();
+        }}
+        roomId={roomId || ''}
+        userId={localStorage.getItem('userId') || uuidv4()}
+        username={username}
+        participants={roomUsers}
+      />
+      
+      {/* 항소 모달 */}
+      <AnimatePresence>
+        {showAppealModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-lg shadow-xl w-full max-w-md"
+            >
+              <h3 className="text-xl font-bold text-gray-900 mb-4">항소 신청</h3>
+              <p className="text-gray-700 mb-4">
+                항소 이유를 구체적으로 작성해주세요.
+              </p>
+              
+              <textarea
+                value={appealReason}
+                onChange={(e) => setAppealReason(e.target.value)}
+                placeholder="항소 이유..."
+                className="w-full border border-gray-300 rounded-lg p-3 mb-4 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                rows={4}
+              />
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowAppealModal(false)}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleAppealRequest}
+                  disabled={!appealReason.trim()}
+                  className={`px-4 py-2 rounded-md ${
+                    appealReason.trim()
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  } transition-colors`}
+                >
+                  항소 제출
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
