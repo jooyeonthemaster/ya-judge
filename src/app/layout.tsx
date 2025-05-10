@@ -17,7 +17,7 @@ export default function RootLayout({
       <body className="antialiased">
         <header className="sticky top-0 bg-white border-b z-50">
           <div className="container max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-            <a href="/" className="flex items-center gap-2 font-bold text-xl text-gray-900">
+            <a href="/main" className="flex items-center gap-2 font-bold text-xl text-gray-900">
               <Gavel className="h-5 w-5 text-indigo-600" />
               야 판사야!
             </a>
