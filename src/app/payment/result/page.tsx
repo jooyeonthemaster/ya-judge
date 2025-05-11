@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { recordPayment } from '@/lib/portone';
 
-export default function PaymentResultPage() {
+function PaymentResult() {
   const searchParams = useSearchParams();
   const [paymentStatus, setPaymentStatus] = useState<'loading' | 'success' | 'failed'>('loading');
   const [paymentDetails, setPaymentDetails] = useState<any>(null);
@@ -168,5 +168,26 @@ export default function PaymentResultPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// 로딩 상태를 표시하는 컴포넌트
+function PaymentResultFallback() {
+  return (
+    <div className="container mx-auto p-8 max-w-xl text-center">
+      <h1 className="text-2xl font-bold mb-4">결제 정보 로딩 중</h1>
+      <div className="flex justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+      <p className="mt-4 text-gray-600">잠시만 기다려주세요...</p>
+    </div>
+  );
+}
+
+export default function PaymentResultPage() {
+  return (
+    <Suspense fallback={<PaymentResultFallback />}>
+      <PaymentResult />
+    </Suspense>
   );
 } 
