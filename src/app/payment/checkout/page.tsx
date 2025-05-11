@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import PortOne, { PaymentRequest } from "@portone/browser-sdk/v2";
 import { useRouter } from "next/navigation";
 
@@ -14,9 +14,18 @@ interface CheckoutFormData {
   payMethod: string;
 }
 
+// 에러 정보 저장을 위한 인터페이스
+interface PaymentError {
+  code: string;
+  message: string;
+  details?: string;
+  timestamp: number;
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState<CheckoutFormData>({
     name: "",
     email: "",
@@ -27,6 +36,39 @@ export default function CheckoutPage() {
     payMethod: "CARD",
   });
 
+  // 커스텀 에러 처리 함수
+  const handlePaymentError = (code: string, message: string, details?: string) => {
+    console.error(`결제 오류 [${code}]:`, message, details ? `(${details})` : '');
+    
+    // 에러 정보를 로컬 스토리지에 저장
+    const errorInfo: PaymentError = {
+      code,
+      message,
+      details,
+      timestamp: Date.now()
+    };
+    
+    localStorage.setItem('payment_error', JSON.stringify(errorInfo));
+    
+    // UI에 에러 메시지 표시
+    setErrorMessage(message);
+    
+    // 기본 alert도 시도해보기
+    try {
+      window.alert(message);
+    } catch (e) {
+      console.error("Native alert failed:", e);
+    }
+    
+    // 에러가 발생했기 때문에 로딩 상태 해제
+    setIsLoading(false);
+  };
+  
+  // 에러 모달 닫기
+  const closeErrorModal = () => {
+    setErrorMessage(null);
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -35,9 +77,38 @@ export default function CheckoutPage() {
     }));
   };
 
+  // 초기화 시 로컬 스토리지의 에러 정보 확인
+  useEffect(() => {
+    // 테스트 alert - 브라우저에서 alert 기능이 작동하는지 확인
+    try {
+      console.log("Alert 테스트");
+      // alert 호출은 주석 처리하여 사용자 경험에 방해되지 않게 함
+      // window.alert("Alert 테스트");
+    } catch (e) {
+      console.error("Alert 테스트 실패:", e);
+    }
+    
+    // 이전에 저장된 에러 정보가 있으면 표시
+    const storedError = localStorage.getItem('payment_error');
+    if (storedError) {
+      try {
+        const errorData = JSON.parse(storedError) as PaymentError;
+        // 10분(600000ms) 이내의 에러만 표시
+        if (Date.now() - errorData.timestamp < 600000) {
+          setErrorMessage(errorData.message);
+        }
+      } catch (e) {
+        console.error("저장된 에러 정보 파싱 실패:", e);
+      }
+      // 표시 후 삭제
+      localStorage.removeItem('payment_error');
+    }
+  }, []);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setErrorMessage(null); // 기존 에러 메시지 초기화
 
     try {
       // Generate payment ID using timestamp and random string (max 40 chars)
@@ -62,6 +133,17 @@ export default function CheckoutPage() {
         redirectUrl: window.location.origin + '/payment/result',
       };
 
+      // PortOne 결제 요청 전에 에러를 localStorage에 기록하는 함수 등록
+      window.addEventListener('beforeunload', function() {
+        if (isLoading) {
+          localStorage.setItem('payment_error', JSON.stringify({
+            code: 'PAYMENT_INTERRUPTED',
+            message: '결제 처리 중 페이지를 떠났습니다. 결제 상태를 확인해주세요.',
+            timestamp: Date.now()
+          }));
+        }
+      });
+
       // Request payment with Portone
       let response;
       try {
@@ -70,15 +152,13 @@ export default function CheckoutPage() {
         if (response?.code != null) {
           // PortOne에서 에러 발생
           const errorMessage = `Payment failed: ${response.message || 'Unknown error from payment provider'}`;
-          console.error(errorMessage);
-          alert(errorMessage);
+          handlePaymentError('PORTONE_ERROR', errorMessage, response.code);
           return; // 추가 프로세스 중단
         }
       } catch (paymentError) {
         // PortOne 결제 요청 자체가 실패
         const errorMessage = `Payment processing failed: ${paymentError instanceof Error ? paymentError.message : 'Unknown payment error'}`;
-        console.error('PortOne payment error:', paymentError);
-        alert(errorMessage);
+        handlePaymentError('PAYMENT_PROCESS_ERROR', errorMessage);
         return; // 추가 프로세스 중단
       }
 
@@ -119,8 +199,7 @@ export default function CheckoutPage() {
             }
           }
           
-          console.error(errorMessage);
-          alert(errorMessage);
+          handlePaymentError('VERIFICATION_ERROR', errorMessage, `Status: ${verifyResponse.status}`);
           return; // 추가 프로세스 중단
         }
 
@@ -128,15 +207,13 @@ export default function CheckoutPage() {
           verificationResult = await verifyResponse.json();
         } catch (jsonError) {
           const errorMessage = `Failed to parse verification result: ${jsonError instanceof Error ? jsonError.message : 'Invalid response format'}`;
-          console.error(errorMessage);
-          alert(errorMessage);
+          handlePaymentError('PARSE_ERROR', errorMessage);
           return; // 추가 프로세스 중단
         }
       } catch (verifyError) {
         // 서버 통신 자체가 실패한 경우
         const errorMessage = `Payment verification error: ${verifyError instanceof Error ? verifyError.message : 'Failed to communicate with server'}`;
-        console.error('Verification error:', verifyError);
-        alert(errorMessage);
+        handlePaymentError('SERVER_COMMUNICATION_ERROR', errorMessage);
         return; // 추가 프로세스 중단
       }
 
@@ -167,7 +244,12 @@ export default function CheckoutPage() {
               amount: formData.totalAmount,
               orderName: formData.orderName
             });
-            alert('Payment successful!');
+            // 성공 메시지
+            try {
+              window.alert('Payment successful!');
+            } catch (e) {
+              console.error("Success alert failed:", e);
+            }
           } else {
             // 응답 본문을 확인하여 에러 메시지 추출
             const errorText = await externalResponse.text();
@@ -192,23 +274,21 @@ export default function CheckoutPage() {
               }
             }
             
-            console.error(errorMessage);
-            alert(errorMessage);
+            handlePaymentError('EXTERNAL_API_ERROR', errorMessage, `Status: ${externalResponse.status}`);
           }
         } catch (error) {
-          console.error('Error recording payment to external API:', error);
-          alert(`Error recording payment to external API: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          const errorMessage = `Error recording payment to external API: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          handlePaymentError('EXTERNAL_API_COMMUNICATION_ERROR', errorMessage);
         }
       } else {
         // 결제 검증 실패
         const errorMessage = `Payment failed: ${verificationResult.message || 'Verification failed'}`;
-        console.error('Payment verification failed:', verificationResult.message);
-        alert(errorMessage);
+        handlePaymentError('VERIFICATION_FAILED', errorMessage);
       }
     } catch (error) {
       // 모든 처리되지 않은 에러 캐치
-      console.error('Checkout error:', error);
-      alert(`Payment process error: ${error instanceof Error ? error.message : 'An unknown error occurred'}`);
+      const errorMessage = `Payment process error: ${error instanceof Error ? error.message : 'An unknown error occurred'}`;
+      handlePaymentError('UNKNOWN_ERROR', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -217,6 +297,25 @@ export default function CheckoutPage() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <h1 className="text-3xl font-bold mb-6">Checkout</h1>
+      
+      {/* 에러 모달 */}
+      {errorMessage && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md border-2 border-red-500">
+            <h3 className="text-xl font-bold text-red-700 mb-4">결제 오류</h3>
+            <p className="text-gray-800 mb-6">{errorMessage}</p>
+            <div className="flex justify-end">
+              <button
+                onClick={closeErrorModal}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+          <div className="fixed inset-0 bg-black opacity-50 -z-10"></div>
+        </div>
+      )}
       
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-gray-50 p-6 rounded-lg shadow mb-6">

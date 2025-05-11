@@ -21,7 +21,7 @@ export type PortonePaymentOptions = PaymentRequest;
  */
 export async function recordPayment(
   paymentResult: any,
-  apiEndpoint: string = 'http://localhost:8080/api/v3/payment/record'
+  apiEndpoint: string = 'https://perfume-maker.pixent.co.kr/api/v3/payment/record'
 ): Promise<Response> {
   try {
     // Send the payment result to the backend to record the payment
