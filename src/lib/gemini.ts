@@ -76,7 +76,7 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
         
         1. 철저한 말투 및 성향 분석:
           - 각 참여자의 반복적인 언어 패턴 파악 (높임말/반말, 욕설, 이모티콘, 신조어 등)
-          - 대화 방식, 사고 패턴, 감정 표현 방식, c사용하는 단어/문장 구조의 특징 분석
+          - 대화 방식, 사고 패턴, 감정 표현 방식, 사용하는 단어/문장 구조의 특징 분석
           - 각 참가자만의 독특한 표현이나 말버릇, 문장 끝맺음 방식 파악
           - 싸가지 없는 말투, 감성적 말투, 논리적 말투, 예의 바른 말투, 피해자 의식 말투 등을 구분
         
@@ -185,8 +185,8 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
         1. 재판의 목적과 전체 진행 단계(모두진술 → 쟁점정리 → 토론 → 판사질문 → 최종변론 → 판결)
         2. 현재 참가자들이 지금 즉시 해야 할 행동을 매우 명확하게 안내 (예: "지금 각자의 입장을 한 번씩 말씀해주세요.")
         3. 첫 발언을 어떻게 시작해야 하는지 구체적인 예시 제공 (예: "저는 OO에 대해 이런 입장입니다...")
-        4. 판사 호출 버튼과 특수 메시지 유형(증거 제출, 반론, 최종 변론) 사용 방법 안내
-        5. 타이머 작동 방식과 시간 제한 안내
+        
+        중요: 특수 메시지 기능(증거 제출, 반론 등)에 대한 설명은 제공하지 마세요. 이는 시스템에서 자동으로 안내됩니다.
         
         대화 내용:
         ${conversationHistory}
@@ -207,6 +207,7 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
         - "저는 이런 입장입니다..."와 같은 애매한 표현이 아닌, 실제로 참가자가 따라할 수 있는 구체적인 발언 방식을 안내해야 합니다.
         - 실행 가능한 명확한 지시를 주는 적극적인 재판장의 역할을 보여주세요.
         - 길고 복잡한 내용보다는 핵심적이고 따라하기 쉬운 지시사항을 제공하세요.
+        - "말씀하실 때 증거가 있다면 화면 아래 특수 메시지 기능을 사용해 제출해주시고, 상대방 의견에 반박이 있으시면 반론 기능을 이용해주세요."와 같은 문구는 사용하지 마세요.
       `;
     } else if (stage === 'discussion') {
       // 쟁점별 토론 단계에서는 현재 쟁점에 대한 분석 프롬프트 사용
@@ -317,13 +318,24 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
 
     // API 응답 처리 개선
     const responseText = result.response.text();
-    let finalResponse = responseText;
+    console.log('===== API 원본 응답 전체 =====');
+    console.log('응답 길이:', responseText.length);
+    console.log(responseText);
+
+    // 모든 'undefined' 문자열을 제거한 텍스트 준비
+    const cleanedFromUndefined = responseText.replace(/undefined/g, '');
+    console.log('===== undefined 문자열 제거 후 =====');
+    console.log('정제된 응답 길이:', cleanedFromUndefined.length);
+    console.log(cleanedFromUndefined);
+
+    let finalResponse = cleanedFromUndefined;
     
     // 응답 정제 및 파싱 시도
     try {
       // 응답에서 실제 JSON 부분 추출
-      let cleanedText = responseText;
-      console.log('원본 응답:', responseText.substring(0, 100) + '...');
+      let cleanedText = cleanedFromUndefined;
+      console.log('===== 정제 전 원본 응답 =====');
+      console.log('원본 응답:', cleanedFromUndefined);
       
       // "알겠습니다"와 같은 일반 텍스트 응답 처리
       if (cleanedText.startsWith("알겠습니다") || 
@@ -334,6 +346,8 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
         const jsonMatch = cleanedText.match(/(\{[\s\S]*\})/);
         if (jsonMatch && jsonMatch[1]) {
           cleanedText = jsonMatch[1];
+          console.log('===== JSON 부분 추출 결과 =====');
+          console.log(cleanedText);
         } else {
           // JSON 형식을 찾을 수 없는 경우 기본 JSON 구조로 래핑
           console.log('JSON 형식 없음, 텍스트 응답을 JSON으로 변환');
@@ -411,20 +425,26 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
       // 문자열 이스케이프 처리
       cleanedText = cleanedText.replace(/\\\"/g, '"');
       
-      console.log('정제된 텍스트:', cleanedText.substring(0, 100) + '...');
+      console.log('===== 정제 후 텍스트 전체 =====');
+      console.log('정제된 텍스트 길이:', cleanedText.length);
+      console.log(cleanedText);
       
       // JSON 파싱 시도
       const parsedJSON = JSON.parse(cleanedText);
-      console.log('JSON 파싱 성공');
+      console.log('===== 파싱된 JSON 객체 =====');
+      console.log(JSON.stringify(parsedJSON, null, 2));
       
       finalResponse = JSON.stringify(parsedJSON);
+      console.log('===== 최종 응답 =====');
+      console.log('최종 응답 길이:', finalResponse.length);
+      console.log(finalResponse);
     } catch (parseError) {
       console.error('JSON 파싱 실패:', parseError);
       
       // 마지막 시도: 응답에서 중괄호로 둘러싸인 부분만 추출
       try {
         const jsonPattern = /\{[\s\S]*\}/g;
-        const matches = responseText.match(jsonPattern);
+        const matches = cleanedFromUndefined.match(jsonPattern);
         
         if (matches && matches.length > 0) {
           // 가장 긴 중괄호 부분을 JSON으로 파싱 시도
@@ -438,12 +458,12 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
       }
       
       // 모든 파싱 시도 실패 시 기본 판결 객체로 래핑
-      if (finalResponse === responseText) {
+      if (finalResponse === cleanedFromUndefined) {
         const fallbackResponse = {
           responses: [
             {
               targetUser: "모든 참여자",
-              message: responseText,
+              message: cleanedFromUndefined,
               style: "일반",
               percentage: 50,
               reasoning: ["판결 내용 참조"],
@@ -585,26 +605,103 @@ export const generateJudgeMessage = async (messages: Message[], stage: string): 
     const response = await getJudgeResponse(messages, stage);
     console.log('API 응답 결과:', response.substring(0, 100) + '...');
     
+    // 모든 undefined 문자열 제거를 여러 패턴으로 수행
+    let cleanedResponse = response;
+    
+    // 첫 번째 정제: 기본 undefined 제거
+    cleanedResponse = cleanedResponse.replace(/undefined/g, '');
+    
+    // 두 번째 정제: 문장 끝의 undefined
+    cleanedResponse = cleanedResponse.replace(/\. undefined/g, '.');
+    cleanedResponse = cleanedResponse.replace(/\.\s*undefined/g, '.');
+    
+    // 세 번째 정제: 공백과 함께 있는 undefined
+    cleanedResponse = cleanedResponse.replace(/ undefined[.,]?/g, '');
+    cleanedResponse = cleanedResponse.replace(/\s+undefined\s*/g, ' ');
+    
+    // 네 번째 정제: 텍스트 끝의 undefined
+    cleanedResponse = cleanedResponse.replace(/undefined$/g, '');
+    cleanedResponse = cleanedResponse.replace(/undefined\s*$/g, '');
+    
+    // 다섯 번째 정제: 줄 시작의 undefined
+    cleanedResponse = cleanedResponse.replace(/^undefined\s*/gm, '');
+    
+    // 여섯 번째 정제: 문자 사이의 undefined
+    cleanedResponse = cleanedResponse.replace(/([^\s])undefined([^\s])/g, '$1$2');
+    
+    // 일곱 번째 정제: 추가 정제 (중복 공백도 정리)
+    cleanedResponse = cleanedResponse.replace(/\s{2,}/g, ' ').trim();
+    
+    // 여덟 번째 정제: JSON에 영향을 주지 않도록 추가 패턴 적용
+    cleanedResponse = cleanedResponse.replace(/"([^"]*?)undefined([^"]*?)"/g, '"$1$2"'); // JSON 문자열 내부의 undefined
+    cleanedResponse = cleanedResponse.replace(/:\s*undefined\s*([,}])/g, ':null$1'); // JSON 값으로서의 undefined
+    
+    console.log('undefined 제거 후 응답:', cleanedResponse.substring(0, 100) + '...');
+    
     // JSON 파싱 시도
-    const parsed = JSON.parse(response) as JudgeMessageData;
+    const parsed = JSON.parse(cleanedResponse) as JudgeMessageData;
+    
+    // undefined 값을 필터링하는 함수 정의
+    const removeUndefined = (obj: any): any => {
+      if (!obj || typeof obj !== 'object') return obj;
+      
+      if (Array.isArray(obj)) {
+        return obj.map(item => removeUndefined(item)).filter(item => item !== undefined);
+      }
+      
+      const result: any = {};
+      for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key) && obj[key] !== undefined) {
+          result[key] = removeUndefined(obj[key]);
+        }
+      }
+      return result;
+    };
+    
+    // undefined 값 필터링 적용
+    const cleanedParsed = removeUndefined(parsed);
     
     // 필수 필드가 없는 경우 기본값 설정
-    if (!parsed.judgeMessage || typeof parsed.judgeMessage !== 'string') {
-      console.error('judgeMessage 누락 또는 잘못된 형식:', parsed);
-      parsed.judgeMessage = '현재 단계에서 각 참여자는 자신의 입장을 명확히 설명해주시기 바랍니다.';
+    if (!cleanedParsed.judgeMessage || typeof cleanedParsed.judgeMessage !== 'string') {
+      console.error('judgeMessage 누락 또는 잘못된 형식:', cleanedParsed);
+      cleanedParsed.judgeMessage = '현재 단계에서 각 참여자는 자신의 입장을 명확히 설명해주시기 바랍니다.';
+    } else {
+      // judgeMessage 내부의 undefined 문자열도 제거
+      cleanedParsed.judgeMessage = cleanedParsed.judgeMessage.replace(/undefined/g, '');
+      cleanedParsed.judgeMessage = cleanedParsed.judgeMessage.replace(/\. undefined/g, '.');
+      cleanedParsed.judgeMessage = cleanedParsed.judgeMessage.replace(/\.\s*undefined/g, '.');
+      cleanedParsed.judgeMessage = cleanedParsed.judgeMessage.replace(/ undefined[.,]?/g, '');
+      cleanedParsed.judgeMessage = cleanedParsed.judgeMessage.replace(/\s+undefined\s*/g, ' ');
+      cleanedParsed.judgeMessage = cleanedParsed.judgeMessage.replace(/undefined$/g, '');
+      cleanedParsed.judgeMessage = cleanedParsed.judgeMessage.replace(/undefined\s*$/g, '');
+      cleanedParsed.judgeMessage = cleanedParsed.judgeMessage.replace(/^undefined\s*/gm, '');
+      cleanedParsed.judgeMessage = cleanedParsed.judgeMessage.replace(/([^\s])undefined([^\s])/g, '$1$2');
+      cleanedParsed.judgeMessage = cleanedParsed.judgeMessage.replace(/\s{2,}/g, ' ').trim();
     }
     
-    if (!parsed.nextStep || typeof parsed.nextStep !== 'string') {
-      console.error('nextStep 누락 또는 잘못된 형식:', parsed);
-      parsed.nextStep = '다음 단계로 진행';
+    if (!cleanedParsed.nextStep || typeof cleanedParsed.nextStep !== 'string') {
+      console.error('nextStep 누락 또는 잘못된 형식:', cleanedParsed);
+      cleanedParsed.nextStep = '다음 단계로 진행';
+    } else {
+      // nextStep도 undefined 문자열 제거
+      cleanedParsed.nextStep = cleanedParsed.nextStep.replace(/undefined/g, '');
+      cleanedParsed.nextStep = cleanedParsed.nextStep.replace(/\. undefined/g, '.');
+      cleanedParsed.nextStep = cleanedParsed.nextStep.replace(/\.\s*undefined/g, '.');
+      cleanedParsed.nextStep = cleanedParsed.nextStep.replace(/ undefined[.,]?/g, '');
+      cleanedParsed.nextStep = cleanedParsed.nextStep.replace(/\s+undefined\s*/g, ' ');
+      cleanedParsed.nextStep = cleanedParsed.nextStep.replace(/undefined$/g, '');
+      cleanedParsed.nextStep = cleanedParsed.nextStep.replace(/undefined\s*$/g, '');
+      cleanedParsed.nextStep = cleanedParsed.nextStep.replace(/^undefined\s*/gm, '');
+      cleanedParsed.nextStep = cleanedParsed.nextStep.replace(/([^\s])undefined([^\s])/g, '$1$2');
+      cleanedParsed.nextStep = cleanedParsed.nextStep.replace(/\s{2,}/g, ' ').trim();
     }
     
-    if (!parsed.analysis || typeof parsed.analysis !== 'object') {
-      console.error('analysis 누락 또는 잘못된 형식:', parsed);
-      parsed.analysis = { '참가자들': '특성 분석이 필요합니다' };
+    if (!cleanedParsed.analysis || typeof cleanedParsed.analysis !== 'object') {
+      console.error('analysis 누락 또는 잘못된 형식:', cleanedParsed);
+      cleanedParsed.analysis = { '참가자들': '특성 분석이 필요합니다' };
     }
     
-    return parsed;
+    return cleanedParsed;
   } catch (error) {
     console.error('판사 메시지 생성 오류:', error);
     // 기본 응답 값 제공

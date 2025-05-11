@@ -86,12 +86,13 @@ export default function CourtReadyModal({
     { stage: 'appeal', name: '재심의', time: '선택', desc: '더 나누고 싶은 이야기가 있다면 말씀하세요.' }
   ];
   
-  // Firebase에서 준비 상태 동기화
+  // Firebase에서 준비 상태 및 재판 시작 상태 동기화
   useEffect(() => {
     if (!isOpen || !roomId) return;
     
     const db = database as Database;
     const readyStatusRef = ref(db, `rooms/${roomId}/courtReady`);
+    const courtStartedRef = ref(db, `rooms/${roomId}/courtStarted`);
     
     // 초기에 자신의 준비 상태를 설정
     if (!isUserReady) {
@@ -99,7 +100,7 @@ export default function CourtReadyModal({
     }
     
     // 준비 상태 변경 감지
-    const unsubscribe = onValue(readyStatusRef, (snapshot) => {
+    const unsubscribeReady = onValue(readyStatusRef, (snapshot) => {
       const data = snapshot.val() || {};
       setReadyUsers(data);
       
@@ -149,10 +150,22 @@ export default function CourtReadyModal({
       setIsEveryoneReady(allReady);
     });
     
+    // 재판 시작 상태 감지
+    const unsubscribeStarted = onValue(courtStartedRef, (snapshot) => {
+      const started = snapshot.val();
+      console.log('재판 시작 상태 변경:', started);
+      
+      if (started === true) {
+        console.log('재판 시작 상태가 감지되었습니다. 재판을 시작합니다.');
+        onStartTrial();
+      }
+    });
+    
     return () => {
       off(readyStatusRef);
+      off(courtStartedRef);
     };
-  }, [isOpen, roomId, userId, participants, isUserReady]);
+  }, [isOpen, roomId, userId, participants, isUserReady, onStartTrial]);
   
   // 사용자 준비 상태 변경 처리
   const handleUserReady = () => {
@@ -181,9 +194,34 @@ export default function CourtReadyModal({
     console.log('isEveryoneReady 값:', isEveryoneReady);
     
     try {
-      // 재판 시작
-      onStartTrial();
-      console.log('onStartTrial 호출 완료');
+      // 중복 실행 방지를 위한 플래그 설정
+      const db = database as Database;
+      const courtStartingRef = ref(db, `rooms/${roomId}/courtStarting`);
+      
+      // 먼저 시작 중 플래그 확인
+      onValue(courtStartingRef, (snapshot) => {
+        const isStarting = snapshot.val();
+        
+        // 이미 시작 중이면 중단
+        if (isStarting === true) {
+          console.log('이미 다른 클라이언트에서 재판 시작 중입니다.');
+          return;
+        }
+        
+        // 시작 중 플래그 설정
+        set(courtStartingRef, true).then(() => {
+          // 재판 시작
+          onStartTrial();
+          console.log('onStartTrial 호출 완료');
+          
+          // 플래그 제거 (완료 표시)
+          setTimeout(() => {
+            set(courtStartingRef, false);
+          }, 2000);
+        });
+      }, {
+        onlyOnce: true // 한 번만 읽기
+      });
     } catch (error) {
       console.error('재판 시작 중 오류 발생:', error);
       // 사용자에게 오류 알림 표시
@@ -198,8 +236,71 @@ export default function CourtReadyModal({
     console.log('readyUsers:', readyUsers);
     console.log('participants:', participants);
     
-    // 직접 handleStartTrial 호출
-    handleStartTrial();
+    // 이미 처리 중인 경우 중복 실행 방지
+    const db = database as Database;
+    
+    // 1. 시작 중 플래그 확인 (중복 실행 방지)
+    const courtStartingRef = ref(db, `rooms/${roomId}/courtStarting`);
+    const courtStartedRef = ref(db, `rooms/${roomId}/courtStarted`);
+    
+    // 2. 시작 상태 확인 (이미 시작되었는지)
+    onValue(courtStartedRef, (startedSnapshot) => {
+      // 이미 시작된 경우
+      if (startedSnapshot.val() === true) {
+        console.log('이미 재판이 시작되었습니다. 중복 방지.');
+        // 재판 시작 함수를 즉시 호출하여 상태를 동기화
+        onStartTrial();
+        return;
+      }
+      
+      // 시작 중 플래그 확인
+      onValue(courtStartingRef, (startingSnapshot) => {
+        const isStarting = startingSnapshot.val();
+        
+        // 이미 시작 중인 경우
+        if (isStarting === true) {
+          console.log('이미 다른 클라이언트에서 재판 시작 버튼을 클릭했습니다.');
+          return;
+        }
+        
+        // 시작 중 플래그 설정 (다른 클라이언트에서 중복 실행 방지)
+        set(courtStartingRef, true)
+          .then(() => {
+            console.log('시작 중 플래그 설정 완료');
+            
+            // Firebase에 재판 시작 상태 설정 (전역 상태 업데이트)
+            set(courtStartedRef, true)
+              .then(() => {
+                console.log('재판 시작 상태가 Firebase에 설정되었습니다.');
+                // Firebase 이벤트 구독을 통해 자동으로 onStartTrial이 호출됨
+                
+                // 5초 후에 플래그 제거 (충분한 시간 확보)
+                setTimeout(() => {
+                  console.log('시작 중 플래그 초기화');
+                  set(courtStartingRef, false).catch(err => console.error('플래그 초기화 실패:', err));
+                }, 5000);
+              })
+              .catch(error => {
+                console.error('재판 시작 상태 설정 오류:', error);
+                // 오류 발생 시 플래그 제거 및 폴백으로 직접 호출
+                set(courtStartingRef, false)
+                  .then(() => {
+                    // 직접 시작 함수 호출
+                    console.log('오류 발생 시 폴백으로 직접 onStartTrial 호출');
+                    onStartTrial();
+                  })
+                  .catch(err => console.error('플래그 초기화 실패:', err));
+              });
+          })
+          .catch(error => {
+            console.error('시작 중 플래그 설정 오류:', error);
+          });
+      }, {
+        onlyOnce: true
+      });
+    }, {
+      onlyOnce: true
+    });
   };
   
   // 토글 함수 추가
@@ -248,7 +349,7 @@ export default function CourtReadyModal({
           </div>
           
           {/* 본문 */}
-          <div className="flex-1 overflow-auto no-scrollbar">
+          <div className="flex-1 overflow-y-auto no-scrollbar">
             <div className="p-6 space-y-8">
               {/* 소개 카드 - 현재 단계만 표시 */}
               <motion.div
@@ -301,36 +402,24 @@ export default function CourtReadyModal({
               </motion.div>
               
               {/* 단계 내비게이션 */}
-              <div className="flex justify-center space-x-3 py-2">
-                {introSteps.map((step, idx) => {
-                  let activeClass, inactiveClass;
-                  
-                  if (idx === 0) {
-                    activeClass = "bg-blue-500 scale-125";
-                    inactiveClass = "bg-blue-200 dark:bg-blue-700/50";
-                  } else if (idx === 1) {
-                    activeClass = "bg-rose-500 scale-125";
-                    inactiveClass = "bg-rose-200 dark:bg-rose-700/50";
-                  } else if (idx === 2) {
-                    activeClass = "bg-amber-500 scale-125";
-                    inactiveClass = "bg-amber-200 dark:bg-amber-700/50";
-                  } else {
-                    activeClass = "bg-green-500 scale-125";
-                    inactiveClass = "bg-green-200 dark:bg-green-700/50";
-                  }
-                  
-                  return (
-                    <button 
+              <div className="flex justify-center">
+                <div className="flex space-x-2">
+                  {introSteps.map((_, idx) => (
+                    <button
                       key={idx}
                       onClick={() => setCurrentStep(idx)}
-                      className={`w-3 h-3 rounded-full transition-all ${idx === currentStep ? activeClass : inactiveClass}`}
-                      aria-label={`소개 단계 ${idx + 1}`}
+                      className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                        idx === currentStep
+                          ? 'bg-indigo-600 dark:bg-indigo-400'
+                          : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
+                      }`}
+                      aria-label={`단계 ${idx + 1}로 이동`}
                     />
-                  );
-                })}
+                  ))}
+                </div>
               </div>
               
-              {/* 재판 단계 타임라인 */}
+              {/* 재판 단계 설명 */}
               <div className="mt-6 space-y-4">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                   <FileText className="w-5 h-5 mr-2 text-indigo-500 dark:text-indigo-400" />
@@ -441,7 +530,7 @@ export default function CourtReadyModal({
           </div>
           
           {/* 푸터 */}
-          <div className="border-t border-gray-200 dark:border-gray-800 p-5 flex flex-col justify-between items-start sticky bottom-0 bg-white dark:bg-gray-900">
+          <div className="border-t border-gray-200 dark:border-gray-800 p-5 bg-gray-50 dark:bg-gray-900 flex flex-col space-y-3">
             <div className="text-sm font-medium text-gray-800 dark:text-gray-300 mb-3">
               {isEveryoneReady 
                 ? '모든 참가자가 준비를 마쳤습니다! 이제 시작할 수 있어요.'

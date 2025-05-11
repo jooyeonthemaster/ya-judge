@@ -76,35 +76,44 @@ export default function JudgeMessageDisplay({ text, stage }: JudgeMessageDisplay
   const transformJudgeMessage = (message: string) => {
     if (!message) return '';
     
+    console.log('===== transformJudgeMessage 함수 입력 =====');
+    console.log('입력 메시지 길이:', message.length);
+    console.log(message);
+    
     // 기본 문구 변환
     let transformed = message;
     
-    // undefined 문자열 제거
+    // undefined 문자열 제거 전 상태 확인
+    console.log('===== undefined 제거 전 =====');
+    console.log(transformed);
+    
+    // 강화된 undefined 문자열 제거 로직
+    // 1. 문장 끝에 나타나는 undefined
     transformed = transformed.replace(/\. undefined/g, '.');
+    transformed = transformed.replace(/\.\s*undefined/g, '.');
+    
+    // 2. 공백과 함께 나타나는 undefined
     transformed = transformed.replace(/ undefined[.,]?/g, '');
+    transformed = transformed.replace(/\s+undefined\s*/g, ' ');
+    
+    // 3. 텍스트 끝에 나타나는 undefined
     transformed = transformed.replace(/undefined$/g, '');
+    transformed = transformed.replace(/undefined\s*$/g, '');
     
-    // 단계별 인트로 문구 개선
-    if (stage === 'opening' && message.includes('모두 진술 단계를 시작')) {
-      transformed = transformed.replace(
-        '지금부터 모두 진술 단계를 시작하겠습니다.',
-        '지금부터 모두 진술 단계를 시작하겠습니다. 모두 진술은 각 당사자가 자신의 주장을 요약하여 발표하는 단계입니다. 각 당사자는 상대방의 발언을 방해하지 말고 차례를 지켜주시기 바랍니다. 이 단계에서는 *5분의 제한 시간*이 주어지며, 핵심적인 내용을 간결하게 전달해 주시기 바랍니다.'
-      );
-    }
+    // 4. 줄 시작 부분의 undefined
+    transformed = transformed.replace(/^undefined\s*/gm, '');
     
-    if (stage === 'issues' && message.includes('쟁점 정리')) {
-      transformed = transformed.replace(
-        '쟁점을 정리하겠습니다',
-        '지금부터 제시된 내용을 바탕으로 쟁점을 정리하겠습니다'
-      );
-    }
+    // 5. 문자 사이의 undefined
+    transformed = transformed.replace(/([^\s])undefined([^\s])/g, '$1$2');
     
-    if (stage === 'questions') {
-      transformed = transformed.replace(
-        '질문을 드리겠습니다',
-        '쟁점에 관하여 몇 가지 질문을 드리겠습니다'
-      );
-    }
+    // 6. 모든 남아있는 undefined 제거
+    transformed = transformed.replace(/undefined/g, '');
+    
+    console.log('===== undefined 제거 후 =====');
+    console.log(transformed);
+    
+    // ChatRoom.tsx에서 생성된 텍스트를 그대로 사용하고, 여기서 내용을 변경하지 않음
+    // 단계별 인트로 문구 개선 부분 제거
     
     // 마크다운 처리
     transformed = transformed
@@ -121,6 +130,9 @@ export default function JudgeMessageDisplay({ text, stage }: JudgeMessageDisplay
     if (!transformed || transformed.trim().length === 0) {
       return '판사 메시지를 불러오는 중 오류가 발생했습니다.';
     }
+    
+    console.log('===== 최종 변환 결과 =====');
+    console.log(transformed);
     
     return transformed;
   };
@@ -143,7 +155,8 @@ export default function JudgeMessageDisplay({ text, stage }: JudgeMessageDisplay
       // 나머지 부분은 타이핑 효과로 표시 (빠른 속도)
       const typingInterval = setInterval(() => {
         if (charIndexRef.current < fullTextRef.current.length) {
-          setDisplayedText(prevText => prevText + fullTextRef.current[charIndexRef.current]);
+          const nextChar = fullTextRef.current.charAt(charIndexRef.current);
+          setDisplayedText(prevText => prevText + nextChar);
           charIndexRef.current++;
         } else {
           clearInterval(typingInterval);
@@ -161,7 +174,8 @@ export default function JudgeMessageDisplay({ text, stage }: JudgeMessageDisplay
       // 타이핑 효과 시작 - 속도 증가
       const typingInterval = setInterval(() => {
         if (charIndexRef.current < fullTextRef.current.length) {
-          setDisplayedText(prevText => prevText + fullTextRef.current[charIndexRef.current]);
+          const nextChar = fullTextRef.current.charAt(charIndexRef.current);
+          setDisplayedText(prevText => prevText + nextChar);
           charIndexRef.current++;
         } else {
           clearInterval(typingInterval);
@@ -182,8 +196,102 @@ export default function JudgeMessageDisplay({ text, stage }: JudgeMessageDisplay
     
     // JSON 형식 메시지 체크
     if (text.startsWith("{") || text.includes("responses") || text.includes("issues")) {
-      // JSON 형식은 타이핑 효과 없이 기존 형식대로 처리
-      return <p className="text-gray-900 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: formatMessage(text) }} />;
+      // JSON 형식도 'undefined' 문자열 제거 로직을 적용
+      const cleanedJsonText = transformJudgeMessage(text);
+      return <p className="text-gray-900 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: formatMessage(cleanedJsonText) }} />;
+    }
+    
+    // 쟁점 정리 단계의 메시지를 특별히 처리
+    if (stage === 'issues') {
+      // 쟁점을 찾기 위한 패턴
+      // 1. 숫자로 시작하는 패턴 (1. 쟁점내용, 2. 쟁점내용)
+      // 2. 불릿으로 시작하는 패턴 (• 쟁점내용, * 쟁점내용, - 쟁점내용)
+      // 3. '쟁점 #번호:' 패턴 (쟁점 1:, 쟁점 #1:)
+      
+      // 쟁점 구분을 위한 정규식 패턴들
+      const patterns = [
+        /(\d+\.\s+[\s\S]*?)(?=\d+\.|$)/g,            // 1. 쟁점내용
+        /(?:•|\*|-)\s+([\s\S]*?)(?=(?:•|\*|-)|$)/g,   // • 쟁점내용
+        /쟁점\s+#?(\d+):\s+([\s\S]*?)(?=쟁점|$)/g,    // 쟁점 1: 내용
+      ];
+      
+      let issues: string[] = [];
+      let issuesFound = false;
+      
+      // 각 패턴으로 쟁점 찾기 시도
+      for (const pattern of patterns) {
+        const matches = [...displayedText.matchAll(pattern)];
+        if (matches.length > 0) {
+          issuesFound = true;
+          if (pattern.toString().includes('쟁점')) {
+            // '쟁점 #번호:' 패턴인 경우
+            issues = matches.map(match => match[2] ? match[2].trim() : '');
+          } else if (pattern.toString().includes('\\d+\\.')) {
+            // '숫자.' 패턴인 경우
+            issues = matches.map(match => match[0].trim());
+          } else {
+            // 불릿 패턴인 경우
+            issues = matches.map(match => match[1] ? match[1].trim() : '');
+          }
+          break;
+        }
+      }
+      
+      // 쟁점을 찾지 못한 경우, 텍스트에서 쟁점으로 보이는 문장을 찾음
+      if (!issuesFound) {
+        // 단락을 나누고 쟁점을 문맥상 찾기
+        const paragraphs = displayedText.split('\n\n').filter(p => p.trim());
+        
+        // "쟁점", "논의사항", "해결할 점" 등의 키워드를 포함하는 단락을 찾아서 쟁점으로 처리
+        for (const paragraph of paragraphs) {
+          if (paragraph.includes('쟁점') || paragraph.includes('논의') || paragraph.includes('해결') || 
+              paragraph.includes('다음') || paragraph.includes('문제') || paragraph.includes('사안')) {
+            const sentences = paragraph.split(/[.!?]\s+/);
+            issues = sentences.filter(s => s.trim().length > 10);  // 짧은 문장 제외
+            issuesFound = issues.length > 0;
+            break;
+          }
+        }
+      }
+      
+      // 구조화된 쟁점 정리 UI 반환
+      if (issuesFound && issues.length > 0) {
+        const paragraphs = displayedText.split('\n\n').filter(p => p.trim());
+        const introText = paragraphs[0] || '다음 쟁점들에 대해 논의하겠습니다:';
+        
+        return (
+          <div className="space-y-4">
+            {/* 쟁점 정리 소개 */}
+            <div className="text-lg font-medium text-indigo-900 border-b border-indigo-100 pb-3">
+              <Sparkles className="inline-block w-5 h-5 mr-2 text-indigo-500" />
+              <span dangerouslySetInnerHTML={{ __html: formatMessage(introText) }} />
+            </div>
+            
+            {/* 쟁점 목록 (카드 형태) */}
+            <div className="space-y-3 mt-2">
+              {issues.map((issue, idx) => (
+                <div key={idx} className="bg-white border border-indigo-100 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-start">
+                    <div className="bg-indigo-100 text-indigo-600 rounded-full h-6 w-6 flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+                      <span className="text-sm font-medium">{idx + 1}</span>
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-gray-900">쟁점 {idx + 1}</h3>
+                      <p className="text-gray-700 mt-1">{issue}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* 토론 안내 */}
+            <div className="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+              <Lightbulb className="inline-block w-4 h-4 mr-2 text-blue-600" />
+              <span className="text-blue-900">각 쟁점에 대한 토론은 차례로 진행됩니다. 토론 중에는 증거를 제시하거나 반론을 제기할 수 있습니다.</span>
+            </div>
+          </div>
+        );
+      }
     }
     
     // 타이핑 효과가 적용된 텍스트를 단락별로 나누기

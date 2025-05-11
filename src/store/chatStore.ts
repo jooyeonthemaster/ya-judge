@@ -45,37 +45,37 @@ export const STAGE_CONFIGS: Record<CourtStage, StageConfig> = {
   intro: {
     title: '재판 소개',
     description: 'AI 판사가 재판의 진행 방식을 설명합니다.',
-    duration: 60, // 1분
+    duration: 0, // 타이머 제거
     judgePrompt: '재판의 진행 방식과 규칙을 설명하고, 참여자들에게 공정한 토론을 당부하세요.'
   },
   opening: {
     title: '모두 진술',
     description: '각 참여자가 자신의 입장에서 상황을 설명합니다.',
-    duration: 300, // 5분
+    duration: 0, // 타이머 제거
     judgePrompt: '각 참여자의 모두 진술을 듣고, 그들의 주장과 입장을 명확하게 파악하세요. 진술이 끝나면 핵심 쟁점을 추출하세요.'
   },
   issues: {
     title: '쟁점 정리',
     description: 'AI 판사가 사건의 핵심 쟁점을 정리합니다.',
-    duration: 60, // 1분
+    duration: 0, // 타이머 제거
     judgePrompt: '지금까지의 진술을 바탕으로 이 사건의 핵심 쟁점 3-5개를 추출하고 명확하게 설명하세요.'
   },
   discussion: {
     title: '쟁점별 토론',
     description: '각 쟁점에 대해 차례대로 토론합니다.',
-    duration: 240, // 4분
+    duration: 0, // 타이머 제거
     judgePrompt: '현재 쟁점에 대한 양측의 주장을 듣고, 필요시 증거를 요청하세요. 토론 내용을 요약하고 다음 쟁점으로 넘어가세요.'
   },
   questions: {
     title: '판사 질문',
     description: 'AI 판사가 추가 질문을 합니다.',
-    duration: 180, // 3분
+    duration: 0, // 타이머 제거
     judgePrompt: '불명확한 부분이나 추가 정보가 필요한 부분에 대해 참여자들에게 구체적인 질문을 하세요.'
   },
   closing: {
     title: '최종 변론',
     description: '각 참여자가 최종 변론을 합니다.',
-    duration: 120, // 2분
+    duration: 0, // 타이머 제거
     judgePrompt: '각 참여자에게 최종 변론 기회를 주고, 그들의 핵심 주장을 요약하세요.'
   },
   verdict: {
@@ -128,6 +128,7 @@ export interface CourtState {
   appealRequested: boolean;           // 항소 요청 여부
   appealReason: string;               // 항소 이유
   readyParticipants: Record<string, boolean>; // 참가자 준비 상태 - 추가된 필드
+  stageReadyStatus: Record<string, boolean>; // 단계 전환을 위한 동의 상태
 }
 
 interface ChatState {
@@ -172,6 +173,13 @@ interface ChatState {
   setParticipantReady: (userId: string, isReady: boolean) => void;  // 참가자 준비 상태 설정
   isAllParticipantsReady: () => boolean;                           // 모든 참가자가 준비되었는지 확인
   getReadyParticipants: () => Record<string, boolean>;             // 준비된 참가자 목록 반환
+  
+  // 단계 동의 메서드
+  setStageReady: (userId: string, isReady: boolean) => void;       // 단계 전환 동의 상태 설정
+  isAllStageReady: () => boolean;                                  // 모든 참가자가 단계 전환에 동의했는지 확인
+  getStageReadyStatus: () => Record<string, boolean>;              // 단계 동의 상태 반환
+  resetStageReady: () => void;                                     // 단계 동의 상태 초기화
+  checkAndMoveToNextStage: () => void;                            // 모든 참가자 동의 시 다음 단계로 이동
 }
 
 export const useChatStore = create<ChatState>((set, get) => {
@@ -199,7 +207,8 @@ export const useChatStore = create<ChatState>((set, get) => {
       verdictData: null,
       appealRequested: false,
       appealReason: '',
-      readyParticipants: {} // 추가된 필드
+      readyParticipants: {}, // 추가된 필드
+      stageReadyStatus: {}  // 단계 동의 상태
     },
   };
 
@@ -646,10 +655,168 @@ export const useChatStore = create<ChatState>((set, get) => {
     }
   };
 
+  // 단계 동의 관련 메서드 그룹화
+  const stageReadyMethods = {
+    // 단계 전환 동의 상태 설정
+    setStageReady: (userId: string, isReady: boolean) => {
+      if (!db || !currentRoomRef) {
+        console.error('Cannot set stage ready status - database or room reference not initialized');
+        return;
+      }
+      
+      console.log(`참가자 ${userId} 단계 전환 동의:`, isReady);
+      
+      // 로컬 상태 업데이트
+      set(state => ({
+        court: {
+          ...state.court,
+          stageReadyStatus: {
+            ...state.court.stageReadyStatus,
+            [userId]: isReady
+          }
+        }
+      }));
+      
+      // Firebase에 상태 저장
+      if (currentRoomRef) {
+        const pathArray = currentRoomRef.toString().split('/');
+        const roomId = pathArray[pathArray.length - 2]; // rooms/{roomId}/messages
+        const readyRef = ref(db, `rooms/${roomId}/stageReady/${userId}`);
+        firebaseSet(readyRef, isReady)
+          .then(() => console.log(`Firebase에 참가자 ${userId} 단계 동의 상태 저장 성공:`, isReady))
+          .catch(err => console.error(`Firebase에 참가자 ${userId} 단계 동의 상태 저장 실패:`, err));
+      }
+    },
+    
+    // 모든 참가자가 단계 전환에 동의했는지 확인
+    isAllStageReady: () => {
+      const state = get();
+      const { stageReadyStatus } = state.court;
+      const { roomUsers } = state;
+      
+      console.log("isAllStageReady 호출됨");
+      console.log("stageReadyStatus:", stageReadyStatus);
+      console.log("roomUsers:", roomUsers);
+      
+      // 참가자가 없으면 false 반환
+      if (roomUsers.length === 0) {
+        console.log("참가자가 없어 false 반환");
+        return false;
+      }
+      
+      // 동의한 참가자 수 계산
+      const readyCount = Object.values(stageReadyStatus).filter(v => Boolean(v)).length;
+      console.log(`단계 전환 동의 참가자 수: ${readyCount}/${roomUsers.length}`);
+      
+      // [수정] ID 기반 검사에서 카운트 기반 검사로 변경
+      // 모든 참가자가 동의했는지 확인 (동의 수 >= 참가자 수)
+      const everyoneReady = readyCount >= roomUsers.length;
+      console.log(`모든 참가자 동의 여부(카운트 기반):`, everyoneReady);
+      
+      // [추가] 기존 ID 기반 검사 결과도 로깅 (디버깅용)
+      const idBasedReady = roomUsers.every(user => {
+        const isReady = Boolean(stageReadyStatus[user.id]);
+        console.log(`참가자 ${user.username}(${user.id}) 단계 동의 상태:`, isReady);
+        return isReady;
+      });
+      console.log(`모든 참가자 동의 여부(ID 기반, 참고용):`, idBasedReady);
+      
+      // 카운트 기반 결과를 반환
+      return everyoneReady;
+    },
+    
+    // 단계 동의 상태 반환
+    getStageReadyStatus: () => {
+      return get().court.stageReadyStatus;
+    },
+    
+    // 단계 동의 상태 초기화
+    resetStageReady: () => {
+      console.log('단계 동의 상태 초기화');
+      
+      set(state => ({
+        court: {
+          ...state.court,
+          stageReadyStatus: {}
+        }
+      }));
+      
+      // Firebase에서도 삭제
+      if (db && currentRoomRef) {
+        const pathArray = currentRoomRef.toString().split('/');
+        const roomId = pathArray[pathArray.length - 2];
+        const readyRef = ref(db, `rooms/${roomId}/stageReady`);
+        remove(readyRef)
+          .then(() => console.log('Firebase에서 단계 동의 상태 삭제 성공'))
+          .catch(err => console.error('Firebase에서 단계 동의 상태 삭제 실패:', err));
+      }
+    },
+    
+    // 모든 참가자 동의 시 다음 단계로 이동
+    checkAndMoveToNextStage: () => {
+      console.log('checkAndMoveToNextStage 함수 호출됨');
+      
+      const isReady = get().isAllStageReady();
+      console.log('isAllStageReady 결과:', isReady);
+      
+      if (isReady) {
+        console.log('모든 참가자가 동의했습니다. 다음 단계로 이동합니다.');
+        
+        // 단계 동의 상태 초기화
+        get().resetStageReady();
+        console.log('단계 동의 상태 초기화 완료');
+        
+        // 현재 단계
+        const currentStage = get().court.stage;
+        
+        // 단계 순서 정의
+        const stageOrder: CourtStage[] = [
+          'waiting', 'intro', 'opening', 'issues', 'discussion', 
+          'questions', 'closing', 'verdict', 'appeal'
+        ];
+        
+        // 현재 단계 인덱스 찾기
+        const currentIndex = stageOrder.indexOf(currentStage);
+        if (currentIndex === -1 || currentIndex === stageOrder.length - 1) {
+          console.error('Invalid stage or already at the last stage');
+          return;
+        }
+        
+        // 다음 단계 계산
+        const nextStage = stageOrder[currentIndex + 1];
+        
+        // 다음 단계로 이동
+        courtMethods.moveToNextStage();
+        console.log('moveToNextStage 호출 완료');
+        
+        // issues에서 discussion으로 이동하는 경우 안내 메시지 추가
+        if (currentStage === 'issues' && nextStage === 'discussion') {
+          const roomId = currentRoomRef ? currentRoomRef.toString().split('/')[currentRoomRef.toString().split('/').length - 2] : '';
+          const issues = get().court.issues;
+          const firstIssue = issues[0] || '';
+          
+          if (firstIssue && roomId) {
+            // 시스템 안내 메시지 추가
+            get().addMessage({
+              user: 'system',
+              name: '시스템',
+              text: `쟁점별 토론 단계가 시작되었습니다. 첫 번째 쟁점: "${firstIssue}"에 대해 토론해주세요. 각자의 의견을 제시하고 필요시 증거를 제출해주세요.`,
+              roomId,
+              stage: 'discussion'
+            });
+          }
+        }
+      } else {
+        console.log('아직 모든 참가자가 동의하지 않았습니다. 다음 단계로 이동하지 않습니다.');
+      }
+    }
+  };
+
   return {
-    ...initialState,
+    ...initialState,  // 초기 상태 값 포함
     ...courtMethods,
     ...participantReadyMethods,
+    ...stageReadyMethods,
 
     // 채팅방 참여
     joinRoom: (roomId: string, username: string) => {
@@ -878,14 +1045,17 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
       
       try {
+        // 먼저 message에서 필요한 값을 추출
+        const { relatedIssue, stage, ...restMessage } = message;
+        
         // Firebase에 undefined를 저장할 수 없으므로 undefined 값 정리
         const cleanMessage = {
+          ...restMessage,
           id: uuidv4(),
           timestamp: new Date().toISOString(),
           messageType: message.messageType || 'normal',
-          relatedIssue: message.relatedIssue || null, // undefined -> null
-          stage: message.stage || null, // undefined -> null
-          ...message,
+          relatedIssue: relatedIssue || null, // undefined -> null
+          stage: stage || null, // undefined -> null
         };
         
         console.log('Adding new message:', cleanMessage.id);
