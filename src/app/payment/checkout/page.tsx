@@ -117,8 +117,31 @@ export default function CheckoutPage() {
             });
             alert('Payment successful!');
           } else {
-            console.error('Failed to record payment to external API');
-            alert('Failed to record payment to external API');
+            // 응답 본문을 확인하여 에러 메시지 추출
+            const errorText = await externalResponse.text();
+            let errorMessage = 'Failed to record payment to external API';
+            
+            try {
+              // JSON 형식인지 확인
+              const errorJson = JSON.parse(errorText);
+              if (errorJson.message) {
+                errorMessage += `: ${errorJson.message}`;
+              } else if (errorJson.error) {
+                errorMessage += `: ${errorJson.error}`;
+              } else {
+                errorMessage += ` (Status: ${externalResponse.status})`;
+              }
+            } catch (e) {
+              // JSON이 아닌 경우 상태 코드와 함께 텍스트 표시
+              if (errorText) {
+                errorMessage += `: ${errorText}`;
+              } else {
+                errorMessage += ` (Status: ${externalResponse.status})`;
+              }
+            }
+            
+            console.error(errorMessage);
+            alert(errorMessage);
           }
         } catch (error) {
           console.error('Error recording payment to external API:', error);
