@@ -63,33 +63,85 @@ export default function CheckoutPage() {
       };
 
       // Request payment with Portone
-      const response = await PortOne.requestPayment(paymentRequest);
-
-      if (response?.code != null) {
-        // Error occurred
-        throw new Error(response.message || 'Payment failed');
+      let response;
+      try {
+        response = await PortOne.requestPayment(paymentRequest);
+        
+        if (response?.code != null) {
+          // PortOne에서 에러 발생
+          const errorMessage = `Payment failed: ${response.message || 'Unknown error from payment provider'}`;
+          console.error(errorMessage);
+          alert(errorMessage);
+          return; // 추가 프로세스 중단
+        }
+      } catch (paymentError) {
+        // PortOne 결제 요청 자체가 실패
+        const errorMessage = `Payment processing failed: ${paymentError instanceof Error ? paymentError.message : 'Unknown payment error'}`;
+        console.error('PortOne payment error:', paymentError);
+        alert(errorMessage);
+        return; // 추가 프로세스 중단
       }
 
-      // Payment successful, record the payment
-      // Notify server of successful payment
-      const verifyResponse = await fetch('/api/payment/complete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          paymentId: paymentId,
-          orderData: {
-            ...formData,
-            totalAmount: formData.totalAmount
-          }
-        }),
-      });
+      // 결제 성공, 서버에 결제 완료 통지
+      let verificationResult;
+      try {
+        const verifyResponse = await fetch('/api/payment/complete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            paymentId: paymentId,
+            orderData: {
+              ...formData,
+              totalAmount: formData.totalAmount
+            }
+          }),
+        });
 
-      const verificationResult = await verifyResponse.json();
+        if (!verifyResponse.ok) {
+          // 서버에서 에러 응답 반환
+          const errorText = await verifyResponse.text();
+          let errorMessage = `Payment verification failed with status: ${verifyResponse.status}`;
+          
+          try {
+            // JSON 형식인지 확인
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.message) {
+              errorMessage += ` - ${errorJson.message}`;
+            } else if (errorJson.error) {
+              errorMessage += ` - ${errorJson.error}`;
+            }
+          } catch (jsonError) {
+            // JSON이 아닌 경우 텍스트 그대로 표시
+            if (errorText) {
+              errorMessage += ` - ${errorText}`;
+            }
+          }
+          
+          console.error(errorMessage);
+          alert(errorMessage);
+          return; // 추가 프로세스 중단
+        }
+
+        try {
+          verificationResult = await verifyResponse.json();
+        } catch (jsonError) {
+          const errorMessage = `Failed to parse verification result: ${jsonError instanceof Error ? jsonError.message : 'Invalid response format'}`;
+          console.error(errorMessage);
+          alert(errorMessage);
+          return; // 추가 프로세스 중단
+        }
+      } catch (verifyError) {
+        // 서버 통신 자체가 실패한 경우
+        const errorMessage = `Payment verification error: ${verifyError instanceof Error ? verifyError.message : 'Failed to communicate with server'}`;
+        console.error('Verification error:', verifyError);
+        alert(errorMessage);
+        return; // 추가 프로세스 중단
+      }
 
       if (verificationResult.status === 'success') {
-        // Send payment data to external API
+        // 결제 검증 성공, 외부 API에 결제 기록 전송
         try {
           const externalResponse = await fetch('https://perfume-maker.pixent.co.kr/api/v3/payment/record', {
             method: 'POST',
@@ -148,13 +200,15 @@ export default function CheckoutPage() {
           alert(`Error recording payment to external API: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       } else {
-        // Payment verification failed
+        // 결제 검증 실패
+        const errorMessage = `Payment failed: ${verificationResult.message || 'Verification failed'}`;
         console.error('Payment verification failed:', verificationResult.message);
-        alert(`Payment failed: ${verificationResult.message}`);
+        alert(errorMessage);
       }
     } catch (error) {
+      // 모든 처리되지 않은 에러 캐치
       console.error('Checkout error:', error);
-      alert(error instanceof Error ? error.message : 'An unknown error occurred');
+      alert(`Payment process error: ${error instanceof Error ? error.message : 'An unknown error occurred'}`);
     } finally {
       setIsLoading(false);
     }
