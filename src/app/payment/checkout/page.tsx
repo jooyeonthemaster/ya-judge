@@ -118,9 +118,11 @@ export default function CheckoutPage() {
             alert('Payment successful!');
           } else {
             console.error('Failed to record payment to external API');
+            alert('Failed to record payment to external API');
           }
         } catch (error) {
           console.error('Error recording payment to external API:', error);
+          alert(`Error recording payment to external API: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       } else {
         // Payment verification failed
