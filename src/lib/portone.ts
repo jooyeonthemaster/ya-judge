@@ -28,12 +28,6 @@ export interface PaymentDetails {
   payMethod: string;
 }
 
-/**
- * Requests a payment using Portone SDK
- * @param customer Customer information
- * @param payment Payment details
- * @returns The payment response from Portone
- */
 export async function requestPayment(
   customer: CustomerInfo,
   payment: PaymentDetails
@@ -107,15 +101,10 @@ export async function verifyPayment(
   }
 }
 
-/**
- * Records a payment with the backend service
- * @param paymentResult The payment result from Portone
- * @param apiEndpoint Your backend API endpoint (defaults to localhost:8080 for the demo)
- * @returns Response from the payment record endpoint
- */
+
 export async function recordPayment(
   paymentResult: any,
-  apiEndpoint: string = 'http://localhost:8080/api/v3/payment/record'
+  apiEndpoint: string = 'https://perfume-maker.pixent.co.kr/api/v3/payment/record'
 ): Promise<Response> {
   try {
     // Send the payment result to the backend to record the payment

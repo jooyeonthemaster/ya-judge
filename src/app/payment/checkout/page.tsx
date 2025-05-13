@@ -117,145 +117,147 @@ export default function CheckoutPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Checkout</h1>
-      
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-gray-50 p-6 rounded-lg shadow mb-6">
-          <h2 className="text-xl font-semibold mb-4">Customer Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                Full Name
-              </label>
-              <input
-                id="name"
-                name="name"
-                type="text"
-                required
-                value={formData.name}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                value={formData.email}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                Phone Number
-              </label>
-              <input
-                id="phone"
-                name="phone"
-                type="tel"
-                required
-                value={formData.phone}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-                Address
-              </label>
-              <input
-                id="address"
-                name="address"
-                type="text"
-                required
-                value={formData.address}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
+    <div className="min-h-screen bg-white">
+      <div className="max-w-4xl mx-auto p-6 bg-white">
+        <h1 className="text-3xl font-bold mb-6 text-black">결제 페이지(임시)</h1>
+        
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="bg-white p-6 rounded-lg shadow mb-6 border border-gray-200">
+            <h2 className="text-xl font-semibold mb-4 text-black">결제 정보</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-black mb-1">
+                  고객명
+                </label>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-black mb-1">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="phone" className="block text-sm font-medium text-black mb-1">
+                  Phone Number
+                </label>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  required
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="address" className="block text-sm font-medium text-black mb-1">
+                  주소
+                </label>
+                <input
+                  id="address"
+                  name="address"
+                  type="text"
+                  required
+                  value={formData.address}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
             </div>
           </div>
-        </div>
-        
-        <div className="bg-gray-50 p-6 rounded-lg shadow mb-6">
-          <h2 className="text-xl font-semibold mb-4">Order Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="orderName" className="block text-sm font-medium text-gray-700 mb-1">
-                Order Name
-              </label>
-              <input
-                id="orderName"
-                name="orderName"
-                type="text"
-                required
-                value={formData.orderName}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="totalAmount" className="block text-sm font-medium text-gray-700 mb-1">
-                Total Amount (KRW)
-              </label>
-              <input
-                id="totalAmount"
-                name="totalAmount"
-                type="number"
-                min="1000"
-                required
-                value={formData.totalAmount}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
+          
+          <div className="bg-white p-6 rounded-lg shadow mb-6 border border-gray-200">
+            <h2 className="text-xl font-semibold mb-4 text-black">주문 정보</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="orderName" className="block text-sm font-medium text-black mb-1">
+                  주문명
+                </label>
+                <input
+                  id="orderName"
+                  name="orderName"
+                  type="text"
+                  required
+                  value={formData.orderName}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="totalAmount" className="block text-sm font-medium text-black mb-1">
+                  결제금액 (KRW)
+                </label>
+                <input
+                  id="totalAmount"
+                  name="totalAmount"
+                  type="number"
+                  min="1000"
+                  required
+                  value={formData.totalAmount}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
             </div>
           </div>
-        </div>
-        
-        <div className="bg-gray-50 p-6 rounded-lg shadow mb-6">
-          <h2 className="text-xl font-semibold mb-4">Payment Method</h2>
-          <div>
-            <label htmlFor="payMethod" className="block text-sm font-medium text-gray-700 mb-1">
-              Payment Method
-            </label>
-            <select
-              id="payMethod"
-              name="payMethod"
-              required
-              value={formData.payMethod}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          
+          <div className="bg-white p-6 rounded-lg shadow mb-6 border border-gray-200">
+            <h2 className="text-xl font-semibold mb-4 text-black">결제수단</h2>
+            <div>
+              <label htmlFor="payMethod" className="block text-sm font-medium text-black mb-1">
+                결제수단
+              </label>
+              <select
+                id="payMethod"
+                name="payMethod"
+                required
+                value={formData.payMethod}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              >
+                <option value="CARD">신용카드</option>
+                <option value="VIRTUAL_ACCOUNT">가상계좌</option>
+                <option value="PHONE">휴대폰결제</option>
+                <option value="TRANSFER">계좌이체</option>
+              </select>
+            </div>
+          </div>
+          
+          <div className="mt-6">
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={`w-full py-3 px-4 rounded-md text-white font-medium ${
+                isLoading ? 'bg-gray-400' : 'bg-purple-600 hover:bg-black'
+              }`}
             >
-              <option value="CARD">Credit Card</option>
-              <option value="VIRTUAL_ACCOUNT">Virtual Account</option>
-              <option value="PHONE">Mobile Phone</option>
-              <option value="TRANSFER">Bank Transfer</option>
-            </select>
+              {isLoading ? 'Processing...' : 'Complete Payment'}
+            </button>
           </div>
-        </div>
-        
-        <div className="mt-6">
-          <button
-            type="submit"
-            disabled={isLoading}
-            className={`w-full py-3 px-4 rounded-md text-white font-medium ${
-              isLoading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-          >
-            {isLoading ? 'Processing...' : 'Complete Payment'}
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
