@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     
     // Forward payment data to the payment record endpoint
     try {
-      const recordResponse = await fetch('http://localhost:8080/api/v3/payment/record', {
+      const recordResponse = await fetch('https://perfume-maker.pixent.co.kr/api/v3/payment/record', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
