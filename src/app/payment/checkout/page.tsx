@@ -1,8 +1,10 @@
 "use client"
 
 import { useState, FormEvent } from "react";
-import PortOne, { PaymentRequest } from "@portone/browser-sdk/v2";
 import { useRouter } from "next/navigation";
+import { usePaymentStore } from "@/app/store/paymentStore";
+import { requestPayment, verifyPayment, recordPayment } from "@/lib/portone";
+import type { CustomerInfo, PaymentDetails } from "@/lib/portone";
 
 interface CheckoutFormData {
   name: string;
@@ -16,6 +18,7 @@ interface CheckoutFormData {
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const setPaymentResult = usePaymentStore((state) => state.setPaymentResult);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState<CheckoutFormData>({
     name: "",
@@ -40,74 +43,48 @@ export default function CheckoutPage() {
     setIsLoading(true);
 
     try {
-      // Generate payment ID using timestamp and random string (max 40 chars)
-      const randomPart = Math.random().toString(36).substring(2, 10);
-      const timestamp = Date.now().toString().slice(-10);
-      const paymentId = `ord_${timestamp}_${randomPart}`;
+      // Extract customer and payment information from form data
+      const customer: CustomerInfo = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address
+      };
       
-      // Create payment request directly
-      const paymentRequest: PaymentRequest = {
-        storeId: process.env.NEXT_PUBLIC_PORTONE_STORE_ID || "",
-        channelKey: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY || "",
-        paymentId: paymentId,
+      const payment: PaymentDetails = {
         orderName: formData.orderName,
         totalAmount: formData.totalAmount,
-        currency: "CURRENCY_KRW",
-        payMethod: formData.payMethod as PaymentRequest["payMethod"],
-        customer: {
-          fullName: formData.name,
-          email: formData.email,
-          phoneNumber: formData.phone,
-        },
-        redirectUrl: window.location.origin + '/payment/result',
+        payMethod: formData.payMethod
       };
-
-      // Request payment with Portone
-      const response = await PortOne.requestPayment(paymentRequest);
-
-      if (response?.code != null) {
-        // Error occurred
-        throw new Error(response.message || 'Payment failed');
-      }
-
-      // Payment successful, record the payment
-      // Notify server of successful payment
-      const verifyResponse = await fetch('/api/payment/complete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          paymentId: paymentId,
-          orderData: {
-            ...formData,
-            totalAmount: formData.totalAmount
-          }
-        }),
+      
+      // Request payment using the extracted function
+      const { paymentId } = await requestPayment(customer, payment);
+      
+      // Verify the payment with the backend
+      const verificationResult = await verifyPayment(paymentId, {
+        ...formData,
+        totalAmount: formData.totalAmount
       });
 
-      const verificationResult = await verifyResponse.json();
+      console.log('Payment verification response:', verificationResult);
 
       if (verificationResult.status === 'success') {
-        // Send payment data to external API
+        // Prepare payment record data
+        const paymentRecord = {
+          paymentId: paymentId,
+          amount: formData.totalAmount,
+          orderName: formData.orderName,
+          customerName: formData.name,
+          customerEmail: formData.email,
+          customerPhone: formData.phone,
+          paymentStatus: 'SUCCESS',
+          paymentMethod: formData.payMethod,
+          timestamp: new Date().toISOString()
+        };
+        
         try {
-          const externalResponse = await fetch('https://perfume-maker.pixent.co.kr/api/v3/payment/record', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              paymentId: paymentId,
-              amount: formData.totalAmount,
-              orderName: formData.orderName,
-              customerName: formData.name,
-              customerEmail: formData.email,
-              customerPhone: formData.phone,
-              paymentStatus: 'SUCCESS',
-              paymentMethod: formData.payMethod,
-              timestamp: new Date().toISOString()
-            }),
-          });
+          // Record the payment to external API
+          const externalResponse = await recordPayment(paymentRecord);
           
           if (externalResponse.ok) {
             console.log('Payment successful and recorded to external API!', {
@@ -116,6 +93,10 @@ export default function CheckoutPage() {
               orderName: formData.orderName
             });
             alert('Payment successful!');
+            // Store payment data in Zustand store
+            setPaymentResult(paymentRecord);
+            // Redirect to result page
+            router.push('/payment/result');
           } else {
             console.error('Failed to record payment to external API');
           }
