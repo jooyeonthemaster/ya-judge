@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { CheckCircle2, Circle, MessageSquare } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 interface IssuesListProps {
   issues: string[];
@@ -59,7 +60,13 @@ export const IssuesList = ({
                   ? 'text-gray-500'
                   : 'text-gray-700'
             }`}>
-              {issue}
+              <ReactMarkdown
+                components={{
+                  strong: ({children}) => <span className="font-bold text-indigo-700">{children}</span>
+                }}
+              >
+                {`${index + 1}. ${issue}`}
+              </ReactMarkdown>
             </span>
           </motion.button>
         ))}

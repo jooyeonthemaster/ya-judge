@@ -74,6 +74,8 @@ interface CourtProgressBarProps {
   roomUsers?: Array<{ id: string; username: string }>;
   // 자동 다음 단계 진행을 위한 함수 추가
   onCheckAndMoveToNextStage?: () => void;
+  // 타이머 모드 여부 추가
+  timerActive?: boolean;
 }
 
 const CourtProgressBar: React.FC<CourtProgressBarProps> = ({
@@ -86,7 +88,13 @@ const CourtProgressBar: React.FC<CourtProgressBarProps> = ({
   onRequestJudge,
   roomUsers = [],
   onCheckAndMoveToNextStage,
+  timerActive = false,
 }) => {
+  // 타이머 모드일 때는 컴포넌트를 렌더링하지 않음
+  if (timerActive) {
+    return null;
+  }
+  
   // 커스텀 스테이지가 있으면 사용, 없으면 기본 스테이지 사용
   const stages: CourtStage[] = customStages || [
     'intro', 'opening', 'issues', 'discussion', 

@@ -300,7 +300,7 @@ export default function JudgeMessageDisplay({ text, stage }: JudgeMessageDisplay
                     </div>
                     <div>
                       <h3 className="font-semibold text-amber-900 text-base">쟁점 {idx + 1}</h3>
-                      <p className="text-amber-800 mt-1.5">{issue}</p>
+                      <p className="text-amber-800 mt-1.5" dangerouslySetInnerHTML={{ __html: issue }}></p>
                     </div>
                   </div>
                 </motion.div>
