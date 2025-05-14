@@ -84,7 +84,7 @@ export default function PaymentResultPage() {
           
           try {
             // Verify payment using the payment ID from URL
-            const verificationResult = await fetch(`/api/payment/verify-by-id?paymentId=${urlPaymentId}&txId=${txId || ''}`, {
+            const verificationResult = await fetch(`/api/payment/paymentverification?paymentId=${urlPaymentId}&txId=${txId || ''}`, {
               method: 'GET',
             }).then(res => res.json());
             
@@ -102,7 +102,7 @@ export default function PaymentResultPage() {
                 customerEmail: payment.customerEmail || '',
                 customerPhone: payment.customerPhone || '',
                 paymentStatus: 'SUCCESS',
-                paymentMethod: payment.method || 'UNKNOWN',
+                paymentMethod: typeof payment.method === 'string' ? payment.method : payment.method?.type || 'CARD',
                 timestamp: new Date().toISOString()
               };
               
