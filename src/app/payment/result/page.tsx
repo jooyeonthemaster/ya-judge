@@ -18,13 +18,20 @@ interface ErrorInfo {
   timestamp: string;
 }
 
+interface DebugInfo {
+  lastMessage?: string;
+  lastData?: any;
+  timestamp?: string;
+  logs?: Array<{timestamp: string; message: string; data?: any}>;
+}
+
 export default function PaymentResultPage() {
   const paymentResult = usePaymentStore((state) => state.paymentResult);
   const setPaymentResult = usePaymentStore((state) => state.setPaymentResult);
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorInfo | null>(null);
-  const [debugInfo, setDebugInfo] = useState<any>({});
+  const [debugInfo, setDebugInfo] = useState<DebugInfo>({});
 
   // Create a debug logger helper
   function logPaymentDebug(message: string, data?: any) {
@@ -37,7 +44,7 @@ export default function PaymentResultPage() {
     localStorage.setItem('paymentDebugLogs', JSON.stringify(logs));
     
     // Update debug state
-    setDebugInfo(prev => ({
+    setDebugInfo((prev: DebugInfo) => ({
       ...prev,
       lastMessage: message,
       lastData: data,
@@ -50,6 +57,12 @@ export default function PaymentResultPage() {
   useEffect(() => {
     async function handleMobilePaymentRedirect() {
       try {
+        // Get URL parameters first
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlPaymentId = urlParams.get('paymentId');
+        const transactionType = urlParams.get('transactionType');
+        const txId = urlParams.get('txId');
+        
         // Check for pending payment data in sessionStorage
         const pendingPaymentId = sessionStorage.getItem('pendingPaymentId');
         const pendingOrderData = sessionStorage.getItem('pendingOrderData');
@@ -57,9 +70,80 @@ export default function PaymentResultPage() {
         logPaymentDebug('Payment result page loaded', { 
           hasPaymentId: !!pendingPaymentId,
           hasOrderData: !!pendingOrderData,
-          existingResult: !!paymentResult
+          existingResult: !!paymentResult,
+          urlParams: {
+            paymentId: urlPaymentId,
+            transactionType,
+            txId
+          }
         });
         
+        // Handle URL-based verification (Portone mobile redirect)
+        if (urlPaymentId && transactionType === 'PAYMENT') {
+          logPaymentDebug('Found payment ID in URL params, verifying payment', { urlPaymentId, txId });
+          
+          try {
+            // Verify payment using the payment ID from URL
+            const verificationResult = await fetch(`/api/payment/verify-by-id?paymentId=${urlPaymentId}&txId=${txId || ''}`, {
+              method: 'GET',
+            }).then(res => res.json());
+            
+            logPaymentDebug('URL-based payment verification result', verificationResult);
+            
+            if (verificationResult.status === 'success' && verificationResult.payment) {
+              const { payment } = verificationResult;
+              
+              // Prepare payment record data
+              const paymentRecord = {
+                paymentId: urlPaymentId,
+                amount: payment.amount || 0,
+                orderName: payment.orderName || 'Payment',
+                customerName: payment.customerName || '',
+                customerEmail: payment.customerEmail || '',
+                customerPhone: payment.customerPhone || '',
+                paymentStatus: 'SUCCESS',
+                paymentMethod: payment.method || 'UNKNOWN',
+                timestamp: new Date().toISOString()
+              };
+              
+              // Record the payment
+              logPaymentDebug('Recording URL-based payment', paymentRecord);
+              const externalResponse = await recordPayment(paymentRecord);
+              
+              if (externalResponse.ok) {
+                logPaymentDebug('URL-based payment completed successfully!');
+                
+                // Store payment data in Zustand store
+                setPaymentResult(paymentRecord);
+              } else {
+                const errorResponse = await externalResponse.text();
+                logPaymentDebug('Failed to record URL-based payment', { status: externalResponse.status, response: errorResponse });
+                setError({
+                  code: `HTTP_${externalResponse.status}`,
+                  message: 'Payment was processed but failed to be recorded. Please contact support.',
+                  details: { status: externalResponse.status, response: errorResponse },
+                  timestamp: new Date().toISOString()
+                });
+              }
+            } else {
+              logPaymentDebug('URL-based payment verification failed', verificationResult);
+              setError({
+                code: verificationResult.code || 'VERIFICATION_FAILED',
+                message: verificationResult.message || 'Payment verification failed',
+                details: verificationResult,
+                timestamp: new Date().toISOString()
+              });
+            }
+            
+            setLoading(false);
+            return;
+          } catch (verifyError) {
+            logPaymentDebug('Error verifying URL-based payment', verifyError);
+            // Continue to check sessionStorage as fallback
+          }
+        }
+        
+        // Handle sessionStorage-based verification (original flow)
         if (pendingPaymentId && pendingOrderData) {
           logPaymentDebug('Found pending payment data, completing mobile payment flow', { pendingPaymentId });
           
@@ -113,7 +197,7 @@ export default function PaymentResultPage() {
             } else {
               logPaymentDebug('Mobile payment verification failed', verificationResult);
               setError({
-                code: verificationResult.code || 'VERIFICATION_FAILED',
+                code: 'VERIFICATION_FAILED',
                 message: verificationResult.message || 'Payment verification failed',
                 details: verificationResult,
                 timestamp: new Date().toISOString()
@@ -128,9 +212,8 @@ export default function PaymentResultPage() {
               timestamp: new Date().toISOString()
             });
           }
-        } else {
-          // Check if we are returning from a redirect with no data
-          const urlParams = new URLSearchParams(window.location.search);
+        } else if (urlParams.has('payment_status')) {
+          // Handle explicit payment status in URL
           const paymentStatus = urlParams.get('payment_status');
           
           if (paymentStatus) {
