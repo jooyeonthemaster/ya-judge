@@ -56,10 +56,10 @@ export default function CheckoutPage() {
         totalAmount: formData.totalAmount,
         payMethod: formData.payMethod
       };
-      
+
       // Request payment using the extracted function
       const { paymentId } = await requestPayment(customer, payment);
-      
+
       // Verify the payment with the backend
       const verificationResult = await verifyPayment(paymentId, {
         ...formData,
@@ -81,7 +81,7 @@ export default function CheckoutPage() {
           paymentMethod: formData.payMethod,
           timestamp: new Date().toISOString()
         };
-        
+
         try {
           // Record the payment to external API
           const externalResponse = await recordPayment(paymentRecord);
@@ -120,7 +120,7 @@ export default function CheckoutPage() {
     <div className="min-h-screen bg-white">
       <div className="max-w-4xl mx-auto p-6 bg-white">
         <h1 className="text-3xl font-bold mb-6 text-black">결제 페이지(임시)</h1>
-        
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="bg-white p-6 rounded-lg shadow mb-6 border border-gray-200">
             <h2 className="text-xl font-semibold mb-4 text-black">결제 정보</h2>
@@ -139,7 +139,7 @@ export default function CheckoutPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
               </div>
-              
+
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-black mb-1">
                   Email
@@ -154,7 +154,7 @@ export default function CheckoutPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
               </div>
-              
+
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-black mb-1">
                   Phone Number
@@ -169,7 +169,7 @@ export default function CheckoutPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
               </div>
-              
+
               <div>
                 <label htmlFor="address" className="block text-sm font-medium text-black mb-1">
                   주소
@@ -186,7 +186,7 @@ export default function CheckoutPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white p-6 rounded-lg shadow mb-6 border border-gray-200">
             <h2 className="text-xl font-semibold mb-4 text-black">주문 정보</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -204,7 +204,7 @@ export default function CheckoutPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
               </div>
-              
+
               <div>
                 <label htmlFor="totalAmount" className="block text-sm font-medium text-black mb-1">
                   결제금액 (KRW)
@@ -222,7 +222,7 @@ export default function CheckoutPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white p-6 rounded-lg shadow mb-6 border border-gray-200">
             <h2 className="text-xl font-semibold mb-4 text-black">결제수단</h2>
             <div>
@@ -244,7 +244,7 @@ export default function CheckoutPage() {
               </select>
             </div>
           </div>
-          
+
           <div className="mt-6">
             <button
               type="submit"

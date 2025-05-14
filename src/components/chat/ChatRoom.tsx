@@ -75,7 +75,7 @@ const ProfileInitial: React.FC<{ name: string, isMine: boolean }> = ({ name, isM
   // 판사인 경우 이미지 사용
   if (name === '판사') {
     return (
-      <div className="flex-shrink-0 w-12 h-12 overflow-hidden rounded-full">
+      <div className="flex-shrink-0 w-20 h-20 overflow-hidden rounded-full border-2 border-amber-300 shadow-lg">
         <img 
           src="/images/judge.png" 
           alt="판사" 
@@ -1375,16 +1375,34 @@ export default function ChatRoom({
               return (
                 <div 
                   key={message.id || index} 
-                  className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${
+                    message.user === 'judge'
+                      ? 'flex-col items-center'
+                      : isMine 
+                        ? 'justify-end' 
+                        : 'justify-start'
+                  }`}
                 >
-                  {!isMine && message.user !== 'system' && (
-                    <ProfileInitial name={message.name} isMine={false} />
+                  {/* 판사 메시지 구분선 시작 */}
+                  {message.user === 'judge' && <div className="w-3/4 h-px bg-amber-300 mx-auto my-6" />}
+                  
+                  {/* 프로필 이미지 표시 조건 수정 */}
+                  {(message.user === 'judge' || (!isMine && message.user !== 'system')) && (
+                    <div className={message.user === 'judge' ? 'mb-2' : ''}>
+                      <ProfileInitial name={message.name} isMine={false} />
+                    </div>
                   )}
                   
-                  <div className={`mx-2 max-w-[80%] ${isMine ? 'order-1' : 'order-2'}`}>
+                  {/* 메시지 컨텐츠 컨테이너 너비 확장 */}
+                  <div className={`mx-2 ${
+                    message.user === 'judge'
+                      ? 'max-w-[95%] w-full'
+                      : 'max-w-[80%]'
+                  } ${isMine ? 'order-1' : 'order-2'}`}>
+                    {/* 메시지 정보 (이름, 시간) 중앙 정렬 */}
                     {message.user !== 'system' && (
-                      <div className="flex items-center mb-1">
-                        <span className="text-sm font-medium text-gray-700">{message.name}</span>
+                      <div className={`flex items-center mb-1 ${message.user === 'judge' ? 'justify-center' : ''}`}>
+                        <span className={`text-sm font-medium ${message.user === 'judge' ? 'text-amber-700' : 'text-gray-700'}`}>{message.name}</span>
                         {message.timestamp && (
                           <span className="text-xs text-gray-500 ml-2">
                             {formatTime(message.timestamp)}
@@ -1393,16 +1411,20 @@ export default function ChatRoom({
                       </div>
                     )}
                     
+                    {/* 메시지 말풍선 스타일 강화 */}
                     <div 
                       className={`rounded-lg px-4 py-2.5 ${
                         message.user === 'system' 
                           ? 'bg-gray-200 text-gray-800 text-sm mx-auto max-w-md' 
                           : message.user === 'judge'
-                            ? 'bg-yellow-50 border border-yellow-200 text-gray-800'
+                            ? 'bg-amber-100 border border-amber-300 text-gray-800 shadow-lg'
                             : isMine
                               ? 'bg-indigo-100 text-gray-800'
                               : 'bg-white border border-gray-200 text-gray-800'
                       }`}
+                      style={message.user === 'judge' ? {
+                        boxShadow: '0 4px 6px rgba(251, 191, 36, 0.05), 0 1px 3px rgba(251, 191, 36, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.4)'
+                      } : {}}
                     >
                       {message.user === 'system' ? (
                         <div className="flex items-center justify-center">
@@ -1417,16 +1439,16 @@ export default function ChatRoom({
                         <p className="whitespace-pre-wrap break-words">{message.text}</p>
                       )}
                       
-                      {/* 메시지 타입 표시 */}
+                      {/* 메시지 타입 표시 중앙 정렬 */}
                       {message.messageType && message.messageType !== 'normal' && (
-                        <div className="mt-1 flex items-center justify-end">
+                        <div className={`mt-1 flex items-center ${message.user === 'judge' ? 'justify-center' : 'justify-end'}`}>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
                             message.messageType === 'evidence' 
                               ? 'bg-green-100 text-green-800' 
                               : message.messageType === 'objection'
                                 ? 'bg-red-100 text-red-800'
                                 : message.messageType === 'closing'
-                                  ? 'bg-purple-100 text-purple-800'
+                                  ? 'bg-amber-100 text-amber-800'
                                   : 'bg-blue-100 text-blue-800'
                           }`}>
                             {message.messageType === 'evidence' && '증거'}
@@ -1438,6 +1460,9 @@ export default function ChatRoom({
                       )}
                     </div>
                   </div>
+                  
+                  {/* 판사 메시지 구분선 끝 */}
+                  {message.user === 'judge' && <div className="w-3/4 h-px bg-amber-300 mx-auto my-6" />}
                 </div>
               );
             })}
