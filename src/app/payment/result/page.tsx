@@ -2,20 +2,88 @@
 
 import { useEffect, useState } from "react";
 import { usePaymentStore } from "@/app/store/paymentStore";
-import { CheckCircle } from "lucide-react";
+import { verifyPayment, recordPayment } from "@/lib/portone";
+import { useRouter } from "next/navigation";
+import { CheckCircle, AlertCircle } from "lucide-react";
+
+interface PendingPayment {
+  paymentId: string;
+  orderData: any;
+}
 
 export default function PaymentResultPage() {
   const paymentResult = usePaymentStore((state) => state.paymentResult);
+  const setPaymentResult = usePaymentStore((state) => state.setPaymentResult);
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // Check for redirected mobile payment
   useEffect(() => {
-    // Just a short delay to simulate loading
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 500);
+    async function handleMobilePaymentRedirect() {
+      try {
+        // Check for pending payment data in sessionStorage
+        const pendingPaymentId = sessionStorage.getItem('pendingPaymentId');
+        const pendingOrderData = sessionStorage.getItem('pendingOrderData');
+        
+        if (pendingPaymentId && pendingOrderData) {
+          console.log('Found pending payment data, completing mobile payment flow', { pendingPaymentId });
+          
+          // Parse the order data
+          const orderData = JSON.parse(pendingOrderData);
+          
+          // Verify the payment with backend
+          const verificationResult = await verifyPayment(pendingPaymentId, orderData);
+          
+          console.log('Mobile payment verification result:', verificationResult);
+          
+          if (verificationResult.status === 'success') {
+            // Prepare payment record data
+            const paymentRecord = {
+              paymentId: pendingPaymentId,
+              amount: orderData.totalAmount,
+              orderName: orderData.orderName,
+              customerName: orderData.name,
+              customerEmail: orderData.email,
+              customerPhone: orderData.phone,
+              paymentStatus: 'SUCCESS',
+              paymentMethod: orderData.payMethod,
+              timestamp: new Date().toISOString()
+            };
+            
+            // Record the payment
+            const externalResponse = await recordPayment(paymentRecord);
+            
+            if (externalResponse.ok) {
+              console.log('Mobile payment completed successfully!');
+              
+              // Store payment data in Zustand store
+              setPaymentResult(paymentRecord);
+              
+              // Clear the pending payment data
+              sessionStorage.removeItem('pendingPaymentId');
+              sessionStorage.removeItem('pendingOrderData');
+            } else {
+              console.error('Failed to record mobile payment');
+              setError('Payment was processed but failed to be recorded. Please contact support.');
+            }
+          } else {
+            console.error('Mobile payment verification failed:', verificationResult.message);
+            setError(`Payment verification failed: ${verificationResult.message}`);
+          }
+        }
+        
+        setLoading(false);
+      } catch (err) {
+        console.error('Error processing mobile payment:', err);
+        setError('An error occurred while processing your payment. Please contact support.');
+        setLoading(false);
+      }
+    }
     
-    return () => clearTimeout(timer);
-  }, []);
+    // Execute the mobile payment handling
+    handleMobilePaymentRedirect();
+  }, [setPaymentResult]);
 
   if (loading) {
     return (
@@ -25,12 +93,45 @@ export default function PaymentResultPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex justify-center">
+        <div className="max-w-md mx-auto my-20 p-6">
+          <div className="flex justify-center mb-4">
+            <AlertCircle className="text-red-500 w-16 h-16" />
+          </div>
+          <h1 className="text-2xl font-bold mb-4 text-center text-red-600">결제 오류</h1>
+          <p className="text-center mb-6">{error}</p>
+          <div className="flex justify-center">
+            <button 
+              onClick={() => router.push('/payment/checkout')}
+              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+            >
+              다시 시도
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!paymentResult) {
     return (
       <div className="min-h-screen bg-white flex justify-center">
-        <div className="max-w-md mx-auto my-40 p-6">
-          <h1 className="text-2xl font-bold mb-4 text-center">와우 결제에 오류가 발생하셨나요?</h1>
-          <p className="text-center">갓댐~</p>
+        <div className="max-w-md mx-auto my-20 p-6">
+          <div className="flex justify-center mb-4">
+            <AlertCircle className="text-orange-500 w-16 h-16" />
+          </div>
+          <h1 className="text-2xl font-bold mb-4 text-center">결제 정보가 없습니다</h1>
+          <p className="text-center mb-6">결제 정보를 찾을 수 없습니다. 다시 시도해 주세요.</p>
+          <div className="flex justify-center">
+            <button 
+              onClick={() => router.push('/payment/checkout')}
+              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+            >
+              결제 페이지로 돌아가기
+            </button>
+          </div>
         </div>
       </div>
     );

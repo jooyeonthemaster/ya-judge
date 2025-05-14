@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePaymentStore } from "@/app/store/paymentStore";
-import { requestPayment, verifyPayment, recordPayment } from "@/lib/portone";
+import { requestPayment, verifyPayment, recordPayment, isMobileBrowser } from "@/lib/portone";
 import type { CustomerInfo, PaymentDetails } from "@/lib/portone";
 
 interface CheckoutFormData {
@@ -20,6 +20,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const setPaymentResult = usePaymentStore((state) => state.setPaymentResult);
   const [isLoading, setIsLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [formData, setFormData] = useState<CheckoutFormData>({
     name: "",
     email: "",
@@ -29,6 +30,11 @@ export default function CheckoutPage() {
     totalAmount: 1000,
     payMethod: "CARD",
   });
+
+  useEffect(() => {
+    // Check if mobile browser on client side
+    setIsMobile(isMobileBrowser());
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -57,10 +63,26 @@ export default function CheckoutPage() {
         payMethod: formData.payMethod
       };
 
+      console.log('Starting payment process...', {
+        customer,
+        payment,
+        isMobile
+      });
+
       // Request payment using the extracted function
       const { paymentId } = await requestPayment(customer, payment);
 
-      // Verify the payment with the backend
+      if (isMobile) {
+        // On mobile, we'll be redirected, so we store the necessary info in sessionStorage
+        // to be retrieved after redirection
+        sessionStorage.setItem('pendingPaymentId', paymentId);
+        sessionStorage.setItem('pendingOrderData', JSON.stringify(formData));
+        console.log('Mobile payment initiated, awaiting redirect...');
+        // The rest of the flow will continue after redirect
+        return;
+      }
+
+      // For desktop flow, continue with verification
       const verificationResult = await verifyPayment(paymentId, {
         ...formData,
         totalAmount: formData.totalAmount
@@ -118,13 +140,13 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="max-w-4xl mx-auto p-6 bg-white">
-        <h1 className="text-3xl font-bold mb-6 text-black">결제 페이지(임시)</h1>
+      <div className="max-w-4xl mx-auto p-4 sm:p-6 bg-white">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-black">결제 페이지(임시)</h1>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow mb-6 border border-gray-200">
-            <h2 className="text-xl font-semibold mb-4 text-black">결제 정보</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow mb-4 sm:mb-6 border border-gray-200">
+            <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-black">결제 정보</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-black mb-1">
                   고객명
@@ -187,9 +209,9 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow mb-6 border border-gray-200">
-            <h2 className="text-xl font-semibold mb-4 text-black">주문 정보</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow mb-4 sm:mb-6 border border-gray-200">
+            <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-black">주문 정보</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label htmlFor="orderName" className="block text-sm font-medium text-black mb-1">
                   주문명
@@ -223,8 +245,8 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow mb-6 border border-gray-200">
-            <h2 className="text-xl font-semibold mb-4 text-black">결제수단</h2>
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow mb-4 sm:mb-6 border border-gray-200">
+            <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-black">결제수단</h2>
             <div>
               <label htmlFor="payMethod" className="block text-sm font-medium text-black mb-1">
                 결제수단
@@ -245,13 +267,17 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <div className="mt-6">
+          <div className="mt-4 sm:mt-6">
             <button
               type="submit"
               disabled={isLoading}
               className={`w-full py-3 px-4 rounded-md text-white font-medium ${
-                isLoading ? 'bg-gray-400' : 'bg-purple-600 hover:bg-black'
-              }`}
+                isLoading ? 'bg-gray-400' : 'bg-purple-600 hover:bg-purple-700 active:bg-purple-800'
+              } transition-colors duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50`}
+              style={{
+                // Extra tap highlight color enhancement for mobile
+                WebkitTapHighlightColor: 'rgba(139, 92, 246, 0.5)'
+              }}
             >
               {isLoading ? 'Processing...' : 'Complete Payment'}
             </button>
