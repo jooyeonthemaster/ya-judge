@@ -11,12 +11,40 @@ interface PendingPayment {
   orderData: any;
 }
 
+interface ErrorInfo {
+  code?: string;
+  message: string;
+  details?: any;
+  timestamp: string;
+}
+
 export default function PaymentResultPage() {
   const paymentResult = usePaymentStore((state) => state.paymentResult);
   const setPaymentResult = usePaymentStore((state) => state.setPaymentResult);
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ErrorInfo | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>({});
+
+  // Create a debug logger helper
+  function logPaymentDebug(message: string, data?: any) {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] ${message}`, data);
+    
+    // Save to localStorage for persistent debugging
+    const logs = JSON.parse(localStorage.getItem('paymentDebugLogs') || '[]');
+    logs.push({ timestamp, message, data });
+    localStorage.setItem('paymentDebugLogs', JSON.stringify(logs));
+    
+    // Update debug state
+    setDebugInfo(prev => ({
+      ...prev,
+      lastMessage: message,
+      lastData: data,
+      timestamp,
+      logs: logs.slice(-5) // Keep last 5 logs in state
+    }));
+  }
 
   // Check for redirected mobile payment
   useEffect(() => {
@@ -26,64 +54,117 @@ export default function PaymentResultPage() {
         const pendingPaymentId = sessionStorage.getItem('pendingPaymentId');
         const pendingOrderData = sessionStorage.getItem('pendingOrderData');
         
+        logPaymentDebug('Payment result page loaded', { 
+          hasPaymentId: !!pendingPaymentId,
+          hasOrderData: !!pendingOrderData,
+          existingResult: !!paymentResult
+        });
+        
         if (pendingPaymentId && pendingOrderData) {
-          console.log('Found pending payment data, completing mobile payment flow', { pendingPaymentId });
+          logPaymentDebug('Found pending payment data, completing mobile payment flow', { pendingPaymentId });
           
-          // Parse the order data
-          const orderData = JSON.parse(pendingOrderData);
-          
-          // Verify the payment with backend
-          const verificationResult = await verifyPayment(pendingPaymentId, orderData);
-          
-          console.log('Mobile payment verification result:', verificationResult);
-          
-          if (verificationResult.status === 'success') {
-            // Prepare payment record data
-            const paymentRecord = {
-              paymentId: pendingPaymentId,
-              amount: orderData.totalAmount,
-              orderName: orderData.orderName,
-              customerName: orderData.name,
-              customerEmail: orderData.email,
-              customerPhone: orderData.phone,
-              paymentStatus: 'SUCCESS',
-              paymentMethod: orderData.payMethod,
-              timestamp: new Date().toISOString()
-            };
+          try {
+            // Parse the order data
+            const orderData = JSON.parse(pendingOrderData);
             
-            // Record the payment
-            const externalResponse = await recordPayment(paymentRecord);
+            // Verify the payment with backend
+            logPaymentDebug('Verifying payment with backend', { pendingPaymentId, orderData });
+            const verificationResult = await verifyPayment(pendingPaymentId, orderData);
             
-            if (externalResponse.ok) {
-              console.log('Mobile payment completed successfully!');
+            logPaymentDebug('Mobile payment verification result', verificationResult);
+            
+            if (verificationResult.status === 'success') {
+              // Prepare payment record data
+              const paymentRecord = {
+                paymentId: pendingPaymentId,
+                amount: orderData.totalAmount,
+                orderName: orderData.orderName,
+                customerName: orderData.name,
+                customerEmail: orderData.email,
+                customerPhone: orderData.phone,
+                paymentStatus: 'SUCCESS',
+                paymentMethod: orderData.payMethod,
+                timestamp: new Date().toISOString()
+              };
               
-              // Store payment data in Zustand store
-              setPaymentResult(paymentRecord);
+              // Record the payment
+              logPaymentDebug('Recording payment', paymentRecord);
+              const externalResponse = await recordPayment(paymentRecord);
               
-              // Clear the pending payment data
-              sessionStorage.removeItem('pendingPaymentId');
-              sessionStorage.removeItem('pendingOrderData');
+              if (externalResponse.ok) {
+                logPaymentDebug('Mobile payment completed successfully!');
+                
+                // Store payment data in Zustand store
+                setPaymentResult(paymentRecord);
+                
+                // Clear the pending payment data
+                sessionStorage.removeItem('pendingPaymentId');
+                sessionStorage.removeItem('pendingOrderData');
+              } else {
+                const errorResponse = await externalResponse.text();
+                logPaymentDebug('Failed to record mobile payment', { status: externalResponse.status, response: errorResponse });
+                setError({
+                  code: `HTTP_${externalResponse.status}`,
+                  message: 'Payment was processed but failed to be recorded. Please contact support.',
+                  details: { status: externalResponse.status, response: errorResponse },
+                  timestamp: new Date().toISOString()
+                });
+              }
             } else {
-              console.error('Failed to record mobile payment');
-              setError('Payment was processed but failed to be recorded. Please contact support.');
+              logPaymentDebug('Mobile payment verification failed', verificationResult);
+              setError({
+                code: verificationResult.code || 'VERIFICATION_FAILED',
+                message: verificationResult.message || 'Payment verification failed',
+                details: verificationResult,
+                timestamp: new Date().toISOString()
+              });
             }
-          } else {
-            console.error('Mobile payment verification failed:', verificationResult.message);
-            setError(`Payment verification failed: ${verificationResult.message}`);
+          } catch (parseError) {
+            logPaymentDebug('Error parsing order data', parseError);
+            setError({
+              code: 'PARSE_ERROR',
+              message: 'Failed to parse payment data',
+              details: parseError instanceof Error ? parseError.message : String(parseError),
+              timestamp: new Date().toISOString()
+            });
+          }
+        } else {
+          // Check if we are returning from a redirect with no data
+          const urlParams = new URLSearchParams(window.location.search);
+          const paymentStatus = urlParams.get('payment_status');
+          
+          if (paymentStatus) {
+            logPaymentDebug('Found payment status in URL params', { paymentStatus });
+            if (paymentStatus !== 'success') {
+              setError({
+                code: 'PAYMENT_' + paymentStatus.toUpperCase(),
+                message: `Payment ${paymentStatus}. Please try again.`,
+                details: { urlParams: Object.fromEntries(urlParams.entries()) },
+                timestamp: new Date().toISOString()
+              });
+            }
           }
         }
         
         setLoading(false);
       } catch (err) {
-        console.error('Error processing mobile payment:', err);
-        setError('An error occurred while processing your payment. Please contact support.');
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorStack = err instanceof Error ? err.stack : undefined;
+        
+        logPaymentDebug('Error processing mobile payment', { message: errorMessage, stack: errorStack });
+        setError({
+          code: 'PROCESSING_ERROR',
+          message: 'An error occurred while processing your payment. Please contact support.',
+          details: { message: errorMessage, stack: errorStack },
+          timestamp: new Date().toISOString()
+        });
         setLoading(false);
       }
     }
     
     // Execute the mobile payment handling
     handleMobilePaymentRedirect();
-  }, [setPaymentResult]);
+  }, [setPaymentResult, paymentResult]);
 
   if (loading) {
     return (
@@ -101,8 +182,23 @@ export default function PaymentResultPage() {
             <AlertCircle className="text-red-500 w-16 h-16" />
           </div>
           <h1 className="text-2xl font-bold mb-4 text-center text-red-600">결제 오류</h1>
-          <p className="text-center mb-6">{error}</p>
-          <div className="flex justify-center">
+          <p className="text-center mb-2">{error.message}</p>
+          {error.code && (
+            <p className="text-center text-sm text-gray-500 mb-6">오류 코드: {error.code}</p>
+          )}
+          
+          {/* Debug Information */}
+          <div className="mt-6 border border-gray-200 rounded-md p-3 bg-gray-50 text-xs overflow-auto">
+            <p className="font-medium mb-1">디버그 정보:</p>
+            <pre className="whitespace-pre-wrap break-words">
+              {JSON.stringify({
+                error,
+                debug: debugInfo
+              }, null, 2)}
+            </pre>
+          </div>
+          
+          <div className="flex justify-center mt-6">
             <button 
               onClick={() => router.push('/payment/checkout')}
               className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
@@ -123,8 +219,24 @@ export default function PaymentResultPage() {
             <AlertCircle className="text-orange-500 w-16 h-16" />
           </div>
           <h1 className="text-2xl font-bold mb-4 text-center">결제 정보가 없습니다</h1>
-          <p className="text-center mb-6">결제 정보를 찾을 수 없습니다. 다시 시도해 주세요.</p>
-          <div className="flex justify-center">
+          <p className="text-center mb-4">결제 정보를 찾을 수 없습니다.</p>
+          
+          {/* Debug Information */}
+          <div className="mt-4 border border-gray-200 rounded-md p-3 bg-gray-50 text-xs overflow-auto">
+            <p className="font-medium mb-1">디버그 정보:</p>
+            <pre className="whitespace-pre-wrap break-words">
+              {JSON.stringify({
+                sessionStorage: {
+                  hasPendingPaymentId: !!sessionStorage.getItem('pendingPaymentId'),
+                  hasPendingOrderData: !!sessionStorage.getItem('pendingOrderData')
+                },
+                urlParams: Object.fromEntries(new URLSearchParams(window.location.search).entries()),
+                debug: debugInfo
+              }, null, 2)}
+            </pre>
+          </div>
+          
+          <div className="flex justify-center mt-6">
             <button 
               onClick={() => router.push('/payment/checkout')}
               className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
