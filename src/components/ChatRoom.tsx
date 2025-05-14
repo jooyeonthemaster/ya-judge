@@ -11,7 +11,7 @@ interface MessageInputProps {
   loading: boolean;
 }
 
-// 임시 MessageInput 컴포넌트 (실제 구현시 분리가 필요합니다)
+// 임시 MessageInput 컴포넌트 (실제 구현은 분리가 필요합니다)
 const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage, disabled, loading }) => {
   const [text, setText] = useState('');
   
@@ -81,9 +81,9 @@ const ChatRoom: React.FC = () => {
   
   // 타이머 시작 핸들러
   const handleStartTrial = () => {
-    // 기존 대화 유지 여부 확인
+    // 기존 채팅 내용 삭제 확인
     if (messages.length > 0) {
-      if (window.confirm('기존 대화 내용을 유지하고 타이머만 시작하시겠습니까?')) {
+      if (window.confirm('기존 채팅 내용을 삭제하고 타이머만 시작하시겠습니까?')) {
         startTimerFromStore();
       } else {
         clearChat();
@@ -96,12 +96,13 @@ const ChatRoom: React.FC = () => {
       addMessage({
         user: 'judge',
         name: '판사',
-        text: '재판이 시작되었습니다. 각자의 입장을 자유롭게 설명해주세요. 저는 여러분의 대화를 지켜보다가 필요할 때 개입하겠습니다.'
+        text: '재판이 시작되었습니다. 각자의 입장을 자유롭게 설명해주세요. 만약 여러분의 논의가 필요할 때 개입하겠습니다.',
+        roomId: '' // roomId 속성 추가
       });
     }
   };
   
-  // 수동 분석 요청 핸들러
+  // 행동 분석 요청 핸들러
   const handleRequestAnalysis = () => {
     requestJudgeAnalysis();
   };
@@ -153,7 +154,8 @@ const ChatRoom: React.FC = () => {
               addMessage({
                 user: 'user-general',
                 name: '사용자', // 실제 구현에서는 현재 사용자 이름 사용
-                text
+                text,
+                roomId: '' // roomId 속성 추가
               });
             }}
             disabled={isLoading || !timerActive}
@@ -170,6 +172,16 @@ const ChatRoom: React.FC = () => {
               >
                 판사 의견 요청
               </button>
+              
+              {!timerActive && (
+                <button
+                  onClick={handleStartTrial}
+                  disabled={isLoading}
+                  className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                >
+                  재판 시작
+                </button>
+              )}
             </div>
             
             <button

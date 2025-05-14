@@ -14,7 +14,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, interventions }) =>
     <div className="space-y-4">
       {messages.map(message => {
         const isJudge = message.user === 'judge';
-        const timestamp = new Date(message.timestamp);
+        const timestamp = new Date(message.timestamp || Date.now());
         
         // 판사 메시지인 경우 개입 유형 찾기
         const intervention = isJudge 
@@ -36,7 +36,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, interventions }) =>
         // 일반 사용자 메시지
         return (
           <div 
-            key={message.id}
+            key={message.id || `message-${Date.now()}-${Math.random()}`}
             className={`message p-4 rounded-lg ${
               isJudge 
                 ? 'bg-indigo-50 border-l-4 border-indigo-500' 
@@ -48,7 +48,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, interventions }) =>
               <div className="flex items-center">
                 <span className="font-bold">
                   {message.name}
-                  {message.sender && ` → ${message.sender.username.split(' → ')[1]}`}
+                  {message.sender && ` (${message.sender.username.split(' ')[1]})`}
                 </span>
               </div>
               
