@@ -93,6 +93,20 @@ export default function PaymentResultPage() {
             if (verificationResult.status === 'success' && verificationResult.payment) {
               const { payment } = verificationResult;
               
+              // Get correct payment method string
+              const getPaymentMethodString = (method: any): string => {
+                if (typeof method === 'string') return method;
+                
+                // Map the payment method type to a simple string
+                if (method?.type === 'PaymentMethodCard') return 'CARD';
+                if (method?.type === 'PaymentMethodVirtualAccount') return 'VIRTUAL_ACCOUNT';
+                if (method?.type === 'PaymentMethodMobilePhone') return 'PHONE';
+                if (method?.type === 'PaymentMethodTransfer') return 'TRANSFER';
+                
+                // Default fallback
+                return 'CARD';
+              };
+              
               // Prepare payment record data
               const paymentRecord = {
                 paymentId: urlPaymentId,
@@ -102,7 +116,7 @@ export default function PaymentResultPage() {
                 customerEmail: payment.customerEmail || '',
                 customerPhone: payment.customerPhone || '',
                 paymentStatus: 'SUCCESS',
-                paymentMethod: typeof payment.method === 'string' ? payment.method : payment.method?.type || 'CARD',
+                paymentMethod: getPaymentMethodString(payment.method),
                 timestamp: new Date().toISOString()
               };
               
