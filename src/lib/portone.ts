@@ -28,6 +28,20 @@ export interface PaymentDetails {
   payMethod: string;
 }
 
+/**
+ * Detect if the current browser is a mobile browser
+ */
+export function isMobileBrowser(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  const userAgent = window.navigator.userAgent || window.navigator.vendor || (window as any).opera;
+  
+  // Regular expression for mobile devices
+  const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i;
+  
+  return mobileRegex.test(userAgent);
+}
+
 export async function requestPayment(
   customer: CustomerInfo,
   payment: PaymentDetails
