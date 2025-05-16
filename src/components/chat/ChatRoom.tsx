@@ -235,10 +235,10 @@ export default function ChatRoom({
   
   // Add these state variables with the other states
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
-  // const [timerDuration, setTimerDuration] = useState(5 * 60); // 5 minutes in seconds
-  // const [remainingTime, setRemainingTime] = useState(5 * 60);
-  const [timerDuration, setTimerDuration] = useState(60); // 5 minutes in seconds
-  const [remainingTime, setRemainingTime] = useState(60);
+  const [timerDuration, setTimerDuration] = useState(5 * 60); // 5 minutes in seconds
+  const [remainingTime, setRemainingTime] = useState(5 * 60);
+  // const [timerDuration, setTimerDuration] = useState(60); // test
+  // const [remainingTime, setRemainingTime] = useState(60); //test
   const [timerState, setTimerState] = useState<'idle' | 'running' | 'completed'>('idle');
   
   // Add state to track if final verdict has been triggered
