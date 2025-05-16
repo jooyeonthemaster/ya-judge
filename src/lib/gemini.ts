@@ -60,6 +60,12 @@ export const analyzeConversation = async (
   }
   
   try {
+    // 메시지가 너무 적으면 개입하지 않음
+    if (messages.filter(m => m.user === 'user-general').length < 3) {
+      console.log('대화가 충분하지 않아 분석을 건너뜁니다.');
+      return { shouldIntervene: false };
+    }
+    
     console.log('실시간 대화 분석 시작');
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
@@ -72,11 +78,22 @@ export const analyzeConversation = async (
     
     // 대화 이력 구성 (발화자 정보와 발화 시간도 포함)
     const conversationHistory = messages
+      .filter(msg => msg.user !== 'system' || msg.text.includes('판사가 상황을 분석'))
       .map(msg => {
         const timestamp = new Date(msg.timestamp).toLocaleTimeString();
-        let messagePrefix = '';
+        let prefix = '';
+        
+        // Role-based prefixes
+        if (msg.user === 'judge') {
+          prefix = '판사: ';
+        } else if (msg.user === 'system') {
+          prefix = '시스템: ';
+        } else {
+          prefix = `${msg.name}: `;
+        }
         
         // 메시지 유형 및 관련 쟁점 표시
+        let messagePrefix = '';
         if (msg.messageType === 'evidence') {
           messagePrefix = '[증거] ';
         } else if (msg.messageType === 'objection') {
@@ -89,7 +106,7 @@ export const analyzeConversation = async (
           messagePrefix += `[쟁점: ${msg.relatedIssue}] `;
         }
         
-        return `${msg.name}(${timestamp}): ${messagePrefix}${msg.text}`;
+        return `${prefix}${messagePrefix}${msg.text}`;
       })
       .join('\n');
     
@@ -116,94 +133,51 @@ export const analyzeConversation = async (
         .map(m => m.name)
     );
 
-    // 실시간 중재자 역할 프롬프트
-    if (uniqueParticipants.size >= 2) {
-      // 판단 단계로 진행
-      stage = 'real-time-mediation';
+    // 초기 시스템 메시지 추가
+    prompt = `
+      당신은 항상 한국어로만 응답해야 합니다. 절대 영어로 응답하지 마세요.
       
-      // 실시간 중재자 프롬프트
-      prompt = `
-        당신은 항상 한국어로만 응답해야 합니다. 절대 영어로 응답하지 마세요. JSON 응답과 모든 텍스트는 반드시 한국어로만 작성해야 합니다.
-        
-        당신은 개성 있고 예측불가능한 판사입니다. 대화를 적극적으로 주도하며 각 당사자의 말투와 성향을 완벽히 파악해 그들의 스타일을 흉내내며 판결합니다.
-
-        ### 말투 모방 가이드라인:
-        
-        1. 인터넷 커뮤니티 스타일 흉내내기(최대한 과감하게 사용):
-           - 디시인사이드: "ㅇㅇ 인정 박제 ㄱㄱ", "ㅋㅋㅋ 레전드네", "답정너냐?", "팩트폭행 당했네", "너 그딴식으로 말하면 진짜 싸대기 맞는다?", "ㅋㅋㅋ 드립 치는데 레전드급이네"
-           - 먼데이: "너 그거 알아?", "음... 그래?", "아 맞다!", "절레절레", "님 혹시..?", "갑자기 피곤해졌어요", "진짜...?"
-           - 여초: "인정~", "ㅇㅈ", "킹왕짱!", "헐... 가관이다", "ㅠㅠㅠ", "ㅇㅎ", "진짜 레전드...", "진심 미쳤다...", "오마이갓", "헉 대박", "언니 그거 아니야~"
-           - 레딧: "맞는 말", "underrated comment", "팩트", "이해하기 쉽게 ELI5하자면...", "TL;DR", "/thread", "This."
-           - 이외 다양한 표현: "돈 줘도 안 삼", "갓생충", "자! 이 짤을 보세요", "파데에서 땀 빼면", "그것이 맞지", "쩝쩝박사", "갈비근육 탈골", "유니버스 급", "문풍지 열화"
-        
-        2. 그 외 다양한 말투 요소 활용(적극 사용):
-           - 짧은 단위에서 말투 급변: 때로는 논리적, 때로는 감성적, 때로는 유머러스하게 변화
-           - 이모티콘과 특수문자 과감하게 활용: 😂, 🔥, 💯, 🤔, ㅋㅋ, ㄷㄷ, ㅎㄷㄷ, ㅇㅇ, 😱, 🙄, 👀, 🤦‍♂️, 🧠, 💣, 🚨, 💅
-           - 유행어와 밈 적극 활용: "아니 이거 실화냐", "이게 드럽게", "팩폭할게요", "캡쳐 가능해요?", "오우 나우", "와 진짜 너 그런 애였어?", "그냥 헤어져", "대 충 격"
-           - 은어 및 신조어 폭발적 사용: "갑분싸", "꿀팁", "레게노", "오졌다", "현타", "띵작", "우엘시", "ㄹㅇ", "ㅈㄴ", "ㄹㅇㅋㅋ", "억텐", "억지텐션", "오히려 좋아", "찐", "케이맹", "왜요 제가 뭘 했는데요?", "저 시간이 없어서요"
-           - 반말과 존댓말 불규칙하게 섞기: "~했냐?", "~인데요", "~하세요", "~입니다만?", "알겠냐?", "입 닥치세요", "니가 잘 알아서 처리해" 등 혼합
-        
-        3. 적극적인 판결 스타일(60% 이상의 확률로 매우 적극적 개입):
-           - 논쟁의 본질 파고들기: "아니 도대체 진짜 쟁점은 뭐냐면", "그게 핵심이 아니라", "아 그걸 말이라고 하냐?"
-           - 참가자들 말에 직접 태클: "ㅋㅋㅋ 그런 소리는 집에서나 하지", "아 방금 그 말 완전 모순이잖아", "님 지금 팩트 체크 안 됨?"
-           - 예상치 못한 관점 제시: "갑자기 왜 그렇게 생각하냐면...", "사실 다른 관점에서 보면", "아니 근데 왜 아무도 이 부분은 안 짚냐?"
-           - 독설 섞기: "그쪽 주장 진심임? ㄹㅇ?", "그런 말도 안 되는 주장은 첨 들어봄", "아 진짜 어처구니가 없네 ㅋㅋㅋ"
-           - 판사의 위엄과 개성 넘나들기: "오늘 판사 갬성 폭발해서 일단 들어봐", "사실 판사인 내가 다 해결해주고 싶은데 참고 있음", "아 나 깡패급 판결 내릴라다가 참음 ㅇㅇ"
-           - 참가자들에게 직접적 지시: "야! 너 당장 근거 대봐", "바로 반론해봐", "아 입 닥치고 반성이나 해"
-           - 논리적 오류 즉각 지적: "방금 님 논리적 오류 대참사", "그게 바로 인과관계 오류", "증거도 없이 무슨..."
-           - 중간 판결 및 득점 채점: "현재 8:2로 A가 유리함", "오 지금 B가 역전함", "둘 다 에바인데 B가 좀 더 근거 있음"
-           - 즉석 규칙 생성: "지금부터 감정적 발언 시 벌점", "팩트 없는 주장하면 경고", "시간 제한 30초 추가함"
-        
-        4. 적극적 개입이 필요한 상황(이 상황들에 항상 반응):
-           - 대화 정체 시 (15초 이상 침묵)
-           - 논리적 허점 발견 시 (인과관계 오류, 과잉일반화, 선택적 인용 등)
-           - 모순된 주장 발견 시 (이전 발언과 상충되는 내용)
-           - 감정이 격해지는 순간
-           - 근거 없는 단정적 주장이 나올 때
-           - 토론 주제에서 벗어나는 발언
-           - 같은 주장이 반복될 때
-           - 한쪽이 지나치게 오래 말할 때
-           - 상대를 인신공격할 때
-           - 대화 흐름이 막히거나 산만해질 때
-        
-        ### 감지된 쟁점:
-        ${issuesStr}
-        
-        대화 내용:
-        ${conversationHistory}
-        
-        이전 개입 내역:
-        ${interventionHistory || '이전 개입 없음'}
-        
-        위 대화를 분석하여 다음을 결정하세요:
-        1. 지금 개입해야 하는지 여부 (80% 이상의 확률로 적극적으로 개입하세요)
-        2. 개입한다면 어떤 유형의 개입을 할지 (쟁점 지적, 논리 오류 지적, 요약, 질문, 감정 조절, 중재, 판결 등)
-        3. 개입한다면 어떤 메시지를 전달할지 (인터넷 커뮤니티 스타일을 활용한 매우 재미있고 개성있는 말투로)
-        4. 새롭게 감지된 쟁점이 있는지
-        
-        응답 형식:
-        {
-          "shouldIntervene": true/false,
-          "interventionType": "question", "summary", "mediation", "issue", "advice", "closing", "logical_fallacy", "contradiction", "emotion_control",
-          "interventionMessage": "개입 메시지 (인터넷 커뮤니티 스타일을 활용한 재밌는 말투로)",
-          "targetUser": "특정 사용자에게 말하는 경우 그 사용자 이름",
-          "detectedIssues": ["쟁점1", "쟁점2"]
-        }
-        
-        참고:
-        - 판사는 단순히 기계적인 중재자가 아니라 강한 개성을 가진 주인공 캐릭터로 행동하세요
-        - 최소 80%의 확률로 적극적인 개입을 하세요
-        - 약 40%의 확률로 전혀 예상치 못한 방향의 개입을 하거나 의외의 질문을 던지세요
-        - 대화가 15초 이상 정체되었으면 반드시 개입하세요
-        - 인터넷 커뮤니티 스타일의 말투를 최대한 과감하게 활용해 독특하고 재미있게 대화하세요
-        - 참가자의 논리적 허점과 모순점을 예리하게 찾아내어 강하게 지적하세요
-        - 심판이자 캐스터처럼 행동하며 마치 경기 중계하듯 상황을 설명하고 점수를 매기세요
-        - 명확한 판결/평가를 자주 내리고 그 근거를 재미있게 설명하세요
-      `;
-    }
+      당신은 대화를 모니터링하는 AI 판사입니다. 
+      사용자들의 대화를 분석하여 필요할 때만 개입합니다.
+      당신은 직접 대화 참여자가 아니며, 메시지는 사용자들 간의 대화입니다.
+      당신에게 직접 말하는 것이 아닙니다.
+      
+      당신은 아래 두 가지 상황에서만 개입해야 합니다:
+      1. 사용자가 욕설이나 공격적 언어를 사용할 때
+      2. 타이머가 종료되어 최종 판결을 내려야 할 때
+      
+      평범한 대화에는 절대 개입하지 않습니다.
+      
+      대화 내용:
+      ${conversationHistory}
+      
+      이전 개입 내역:
+      ${interventionHistory || '이전 개입 없음'}
+      
+      감지된 쟁점:
+      ${issuesStr}
+      
+      현재 대화를 분석하여 욕설이나 공격적인 표현이 있는지만 확인하세요.
+      공격적 표현이 감지되면 개입하고, 그렇지 않으면 개입하지 마세요.
+      
+      욕설이 감지되면 반드시 엄격하게 대응해야 합니다. 욕설 사용자에게 직접적으로 경고하고, 
+      해당 언어가 왜 부적절한지 분명하게 설명하세요. 판사로서 권위있는 톤으로 말하세요.
+      공격적인 언어는 즉시 제재해야 합니다. 이것은 레벨이 아니라 절대적인 규칙입니다.
+      
+      응답 형식:
+      {
+        "shouldIntervene": true/false,
+        "interventionType": "warning", 
+        "interventionMessage": "개입 메시지 (욕설이 감지된 경우 판사로서 엄격하고 단호한 경고 메시지)",
+        "targetUser": "문제가 있는 사용자 이름",
+        "detectedIssues": ["쟁점1", "쟁점2"]
+      }
+      
+      참고: 공격적 언어가 발견되지 않으면 반드시 shouldIntervene을 false로 설정하세요.
+      공격적 언어는 다음과 같은 단어를 포함합니다: 씨발, 개새끼, 병신, 미친놈, 등
+    `;
     
     console.log('Gemini 프롬포트 생성 완료, API 요청 시작');
-    console.log('프롬프트 일부:', prompt.substring(0, 200) + '...');
     
     const result = await model.generateContent(prompt);
     console.log('Gemini API 응답 받음');
@@ -226,22 +200,10 @@ export const analyzeConversation = async (
         if (jsonMatch && jsonMatch[1]) {
           cleanedText = jsonMatch[1];
         } else {
-          // JSON으로 변환해서 반환 - 타입 수정
-          if (stage === 'issues') {
-            return {
-              shouldIntervene: true,
-              interventionType: 'issue',
-              interventionMessage: cleanedText,
-              detectedIssues: ["쟁점 추출 실패"]
-            };
-          } else {
-            return {
-              shouldIntervene: true,
-              interventionType: 'summary',
-              interventionMessage: cleanedText,
-              detectedIssues: []
-            };
-          }
+          // 기본적으로 개입하지 않도록 함
+          return {
+            shouldIntervene: false
+          };
         }
       }
       
@@ -249,28 +211,23 @@ export const analyzeConversation = async (
       cleanedText = cleanedText.replace(/```json\s*([\s\S]*?)\s*```/g, '$1');
       cleanedText = cleanedText.replace(/```\s*([\s\S]*?)\s*```/g, '$1');
       
-      // JSON 파싱 테스트
-      const parsedData = JSON.parse(cleanedText);
+      // JSON 파싱
+      const parsedResponse: InterventionData = JSON.parse(cleanedText);
+      console.log('파싱된 응답:', JSON.stringify(parsedResponse).substring(0, 200) + '...');
       
-      // 유효한 JSON이면 그대로 반환
-      return parsedData as InterventionData;
-    } catch (error) {
-      console.error('응답 파싱 오류:', error);
+      return parsedResponse;
+    } catch (parseError) {
+      console.error('응답 파싱 오류:', parseError);
+      console.log('원본 응답:', cleanedResponse);
       
-      // 파싱 실패 시 기본 응답 형식으로 래핑하여 반환 - 타입 수정
+      // 응답이 JSON 형식이 아니면 개입하지 않음
       return {
-        shouldIntervene: true,
-        interventionType: 'summary',
-        interventionMessage: cleanedResponse,
-        detectedIssues: []
+        shouldIntervene: false
       };
     }
   } catch (error) {
-    console.error('Gemini API 호출 오류:', error);
-    return {
-      shouldIntervene: false,
-      interventionMessage: '판사를 불러오는 중 오류가 발생했습니다.'
-    };
+    console.error('Gemini API 요청 중 오류 발생:', error);
+    return { shouldIntervene: false };
   }
 };
 
@@ -961,72 +918,74 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
 
     // API 응답 처리
     const responseText = result.response.text();
-    console.log('응답 길이:', responseText.length);
+    console.log('API 응답 받음, 응답 길이:', responseText.length);
     
-    // 'undefined' 문자열 제거
-    const cleanedResponse = responseText.replace(/undefined/g, '');
-    
-    // 응답 정제 시도
+    // JSON 부분 추출 시도
     try {
       // 응답에서 실제 JSON 부분 추출
-      let cleanedText = cleanedResponse;
-      
-      // 텍스트 응답 처리 (JSON 형식이 아닌 경우)
-      if (!cleanedText.trim().startsWith("{")) {
-        const jsonMatch = cleanedText.match(/(\{[\s\S]*\})/);
-        if (jsonMatch && jsonMatch[1]) {
-          cleanedText = jsonMatch[1];
-        } else {
-          // JSON으로 변환해서 반환 - 타입 수정
-          if (stage === 'issues') {
-            return {
-              shouldIntervene: true,
-              interventionType: 'issue',
-              interventionMessage: cleanedText,
-              detectedIssues: ["쟁점 추출 실패"]
-            };
-          } else {
-            return {
-              shouldIntervene: true,
-              interventionType: 'summary',
-              interventionMessage: cleanedText,
-              detectedIssues: []
-            };
-          }
-        }
-      }
+      let cleanedText = responseText;
       
       // 마크다운 코드 블록 제거
       cleanedText = cleanedText.replace(/```json\s*([\s\S]*?)\s*```/g, '$1');
       cleanedText = cleanedText.replace(/```\s*([\s\S]*?)\s*```/g, '$1');
+      console.log('코드 블록 제거 후 응답 길이:', cleanedText.length);
       
-      // JSON 파싱 테스트
-      const parsedData = JSON.parse(cleanedText);
+      // 유효한 JSON이 아닌 경우
+      if (!cleanedText.trim().startsWith("{")) {
+        console.log('유효한 JSON 형식이 아님, JSON 추출 시도 중');
+        const jsonMatch = cleanedText.match(/(\{[\s\S]*\})/);
+        if (jsonMatch && jsonMatch[1]) {
+          cleanedText = jsonMatch[1];
+          console.log('JSON 추출 성공, 길이:', cleanedText.length);
+        } else {
+          console.error('JSON 추출 실패');
+          throw new Error('유효한 JSON 형식이 아닙니다.');
+        }
+      }
       
-      // 유효한 JSON이면 그대로 반환
-      return parsedData as InterventionData;
+      // JSON 파싱 후 반환
+      console.log('JSON 파싱 시도 중');
+      const parsedData = JSON.parse(cleanedText) as VerdictData;
+      console.log('JSON 파싱 성공:', parsedData.verdict ? '판결 있음' : '판결 없음');
+      return parsedData;
     } catch (error) {
-      console.error('응답 파싱 오류:', error);
-      
-      // 파싱 실패 시 기본 응답 형식으로 래핑하여 반환 - 타입 수정
+      console.error('최종 판결 응답 파싱 오류:', error);
+      // 오류 시 기본 응답 반환
       return {
-        shouldIntervene: true,
-        interventionType: 'summary',
-        interventionMessage: cleanedResponse,
-        detectedIssues: []
+        responses: participants.map(name => ({
+          targetUser: name,
+          analysis: '분석 실패',
+          message: '오류로 인해 개인별 피드백을 생성할 수 없습니다.',
+          style: '알 수 없음',
+          percentage: 50,
+          reasoning: ['분석 오류'],
+          punishment: '없음'
+        })),
+        verdict: {
+          summary: '판결 과정에서 오류가 발생했습니다.',
+          conflict_root_cause: '분석 실패',
+          recommendation: '다시 시도해보세요.'
+        }
       };
     }
   } catch (error) {
-    console.error('Gemini API 호출 오류:', error);
+    console.error('최종 판결 API 호출 오류:', error);
     return {
-      shouldIntervene: false,
-      interventionMessage: '판사를 불러오는 중 오류가 발생했습니다.'
+      responses: [],
+      verdict: {
+        summary: '판결을 내리는 중 오류가 발생했습니다.',
+        conflict_root_cause: '알 수 없음',
+        recommendation: '나중에 다시 시도해보세요.'
+      }
     };
   }
 };
 
-// getFinalVerdict 함수 추가
-export const getFinalVerdict = async (messages: Message[], detectedIssues?: string[]): Promise<VerdictData> => {
+export const getFinalVerdict = async (
+  messages: Message[], 
+  detectedIssues?: string[],
+  userCurseLevels?: Record<string, number>
+): Promise<VerdictData> => {
   if (!apiKey) {
     console.error('Gemini API 키가 설정되지 않았습니다.');
     return {
@@ -1041,15 +1000,56 @@ export const getFinalVerdict = async (messages: Message[], detectedIssues?: stri
   
   try {
     console.log('최종 판결 요청 시작');
+    console.log('메시지 수:', messages.length);
+    console.log('감지된 쟁점 수:', detectedIssues?.length || 0);
+    console.log('사용자 욕설 레벨 정보:', userCurseLevels);
+    
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
     // 시스템 메시지 제외한 사용자와 판사 메시지만 필터링
     const filteredMessages = messages.filter(msg => msg.user !== 'system');
+    console.log('필터링된 메시지 수:', filteredMessages.length);
     
     // 쟁점 목록 문자열화
     const issuesStr = detectedIssues && detectedIssues.length > 0
       ? `감지된 쟁점들:\n${detectedIssues.join('\n')}`
       : '특별히 감지된 쟁점이 없습니다.';
+    
+    // 욕설 레벨 정보 문자열화
+    let curseLevelsStr = '';
+    if (userCurseLevels && Object.keys(userCurseLevels).length > 0) {
+      curseLevelsStr = '참가자 욕설 레벨 정보 (0-30 척도):\n';
+      
+      // 참가자와 UserId 매핑 생성
+      const userIdMap: Record<string, string> = {};
+      messages.forEach(msg => {
+        if (msg.user === 'user-general' && msg.sender?.id) {
+          userIdMap[msg.sender.id] = msg.name;
+        }
+      });
+      
+      // 각 사용자별 욕설 레벨 정보 추가
+      Object.entries(userCurseLevels).forEach(([userId, level]) => {
+        const username = userIdMap[userId] || '알 수 없는 사용자';
+        let severityLabel = '';
+        if (level >= 25) {
+          severityLabel = '(극도로 심각한 수준)';
+        } else if (level >= 20) {
+          severityLabel = '(매우 심각한 수준)';
+        } else if (level >= 15) {
+          severityLabel = '(심각한 수준)';
+        } else if (level >= 10) {
+          severityLabel = '(중대한 수준)';
+        } else if (level >= 5) {
+          severityLabel = '(중간 수준)';
+        } else if (level > 0) {
+          severityLabel = '(경미한 수준)';
+        }
+        curseLevelsStr += `${username}: ${level}/30 ${severityLabel}\n`;
+      });
+    } else {
+      curseLevelsStr = '모든 참가자가 정중한 언어를 사용했습니다.';
+    }
     
     // 대화 이력 구성
     const conversationHistory = filteredMessages
@@ -1080,6 +1080,7 @@ export const getFinalVerdict = async (messages: Message[], detectedIssues?: stri
         .filter(msg => msg.user === 'user-general')
         .map(msg => msg.name)
     ));
+    console.log('대화 참가자:', participants);
     
     const prompt = `항상 반드시 한국어로만 응답하세요. 영어로 응답하면 안 됩니다. 답변의 모든 부분(JSON 포함)은 한국어로만 작성하세요.
     
@@ -1091,6 +1092,13 @@ export const getFinalVerdict = async (messages: Message[], detectedIssues?: stri
       ${conversationHistory}
       
       대화에 참여한 사람들: ${participants.join(', ')}
+      
+      ${curseLevelsStr}
+      
+      참가자들의 욕설 레벨은 위에 표시된 내용을 기반으로 평가해주세요. 욕설 레벨이 높은 참가자는 이에 대한 언급을 포함해주세요. 
+      욕설 레벨은 0-30 척도로, 욕설이 많거나 심할수록 높은 점수가 매겨집니다.
+      욕설 레벨이 10 이상인 경우 특별히 언급하고, 20 이상인 경우 강력한 주의를 주세요. 
+      그러나 판결 자체에는 직접적인 욕설 언급은 피하고, 대신 "불쾌한 언어 사용", "공격적 표현", "부적절한 어휘 선택"과 같은 완곡한 표현을 사용하세요.
       
       이제 최종 판결을 내려주세요. 다음 정보를 포함해야 합니다:
       
@@ -1137,6 +1145,7 @@ export const getFinalVerdict = async (messages: Message[], detectedIssues?: stri
     
     // API 응답 처리
     const responseText = result.response.text();
+    console.log('API 응답 받음, 응답 길이:', responseText.length);
     
     // JSON 부분 추출 시도
     try {
@@ -1146,19 +1155,26 @@ export const getFinalVerdict = async (messages: Message[], detectedIssues?: stri
       // 마크다운 코드 블록 제거
       cleanedText = cleanedText.replace(/```json\s*([\s\S]*?)\s*```/g, '$1');
       cleanedText = cleanedText.replace(/```\s*([\s\S]*?)\s*```/g, '$1');
+      console.log('코드 블록 제거 후 응답 길이:', cleanedText.length);
       
       // 유효한 JSON이 아닌 경우
       if (!cleanedText.trim().startsWith("{")) {
+        console.log('유효한 JSON 형식이 아님, JSON 추출 시도 중');
         const jsonMatch = cleanedText.match(/(\{[\s\S]*\})/);
         if (jsonMatch && jsonMatch[1]) {
           cleanedText = jsonMatch[1];
+          console.log('JSON 추출 성공, 길이:', cleanedText.length);
         } else {
+          console.error('JSON 추출 실패');
           throw new Error('유효한 JSON 형식이 아닙니다.');
         }
       }
       
       // JSON 파싱 후 반환
-      return JSON.parse(cleanedText) as VerdictData;
+      console.log('JSON 파싱 시도 중');
+      const parsedData = JSON.parse(cleanedText) as VerdictData;
+      console.log('JSON 파싱 성공:', parsedData.verdict ? '판결 있음' : '판결 없음');
+      return parsedData;
     } catch (error) {
       console.error('최종 판결 응답 파싱 오류:', error);
       // 오류 시 기본 응답 반환

@@ -36,7 +36,7 @@ import {
   VerdictData,
   PersonalizedResponse,
 } from '@/lib/gemini';
-import { ref, onValue, set, remove, off } from 'firebase/database';
+import { ref, onValue, set, remove, off, get } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import { useParams } from 'next/navigation';
 
@@ -123,6 +123,65 @@ const formatTime = (timestamp: string): string => {
   }
 };
 
+// Add this interface for curse level display
+interface CurseLevelIndicator {
+  level: number;
+  label: string;
+  color: string;
+}
+
+// Add a function to get curse level indicator based on level
+const getCurseLevelIndicator = (level: number): CurseLevelIndicator => {
+  if (level >= 25) {
+    return { level, label: '극도로 심각', color: 'bg-red-900 text-white' };
+  } else if (level >= 20) {
+    return { level, label: '매우 심각', color: 'bg-red-600 text-white' };
+  } else if (level >= 15) {
+    return { level, label: '심각', color: 'bg-red-500 text-white' };
+  } else if (level >= 10) {
+    return { level, label: '중대', color: 'bg-orange-500 text-white' };
+  } else if (level >= 5) {
+    return { level, label: '중간', color: 'bg-yellow-500 text-white' };
+  } else if (level > 0) {
+    return { level, label: '경미', color: 'bg-yellow-200 text-yellow-800' };
+  } else {
+    return { level, label: '없음', color: 'bg-green-100 text-green-800' };
+  }
+};
+
+// Add the CurseLevelBadge component
+const CurseLevelBadge: React.FC<{ level: number }> = ({ level }) => {
+  const indicator = getCurseLevelIndicator(level);
+  
+  if (level === 0) return null;
+  
+  return (
+    <div className={`px-2 py-1 rounded-full text-xs ${indicator.color} ml-2`}>
+      욕설 수준: {indicator.label} ({level}/30)
+    </div>
+  );
+};
+
+// Add function to display cursing warning with level
+const renderCurseWarning = (message: Message, curseLevel: number) => {
+  const indicator = getCurseLevelIndicator(curseLevel);
+  
+  return (
+    <div className="my-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+      <div className="flex items-center">
+        <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+        <span className="text-red-700 font-medium">공격적인 언어가 감지되었습니다</span>
+        <div className={`ml-2 px-2 py-0.5 rounded-full text-xs ${indicator.color}`}>
+          수준: {indicator.label}
+        </div>
+      </div>
+      <p className="mt-1 text-sm text-red-600">
+        상대를 존중하는 언어를 사용해주세요. 부적절한 언어 사용은 판결에 반영됩니다.
+      </p>
+    </div>
+  );
+};
+
 export default function ChatRoom({ 
   roomId, 
   userType, 
@@ -131,7 +190,7 @@ export default function ChatRoom({
   initialStage = 'waiting',
   activeChattersCount = 0
 }: ChatRoomProps) {
-  const { roomId: nextRoomId } = useParams<{ roomId: string }>();
+  const { roomId: nextRoomId } = useParams<{ roomId?: string }>() || {};
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -174,6 +233,20 @@ export default function ChatRoom({
   // 타이머 모드와 단계별 모드 간의 전환 관리
   const [showTimerMode, setShowTimerMode] = useState(false);
   
+  // Add these state variables with the other states
+  const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
+  // const [timerDuration, setTimerDuration] = useState(5 * 60); // 5 minutes in seconds
+  // const [remainingTime, setRemainingTime] = useState(5 * 60);
+  const [timerDuration, setTimerDuration] = useState(60); // 5 minutes in seconds
+  const [remainingTime, setRemainingTime] = useState(60);
+  const [timerState, setTimerState] = useState<'idle' | 'running' | 'completed'>('idle');
+  
+  // Add state to track if final verdict has been triggered
+  const [finalVerdictTriggered, setFinalVerdictTriggered] = useState(false);
+  
+  // Import this at the top of the file, near the other imports
+  const [apiCallsEnabled, setApiCallsEnabled] = useState(true);
+  
   const { 
     messages, 
     stats, 
@@ -194,7 +267,11 @@ export default function ChatRoom({
     requestJudgeAnalysis,
     judgeInterventions,
     detectedIssues,
-    clearChat
+    clearChat,
+    requestFinalVerdict,
+    // 욕설 레벨 관련 메서드
+    userCurseLevels,
+    getUserCurseLevel
   } = useChatStore();
 
   // 사용자 이름 처리
@@ -215,13 +292,15 @@ export default function ChatRoom({
       setUsername(storedUsername);
       if (roomId) {
         joinRoom(roomId, storedUsername);
+        // Initialize curse level tracking
+        initializeUserCurseLevels();
       }
       return;
     }
     
     // 이름이 설정되지 않은 경우 채팅방 참여는 하지 않음
     // 사용자가 이름 모달에서 이름을 설정하면 그때 joinRoom이 호출됨
-  }, [roomId, joinRoom, leaveRoom]);
+  }, [roomId, joinRoom, leaveRoom, userCurseLevels, getUserCurseLevel]);
 
   // 메시지 자동 스크롤
   useEffect(() => {
@@ -280,7 +359,7 @@ export default function ChatRoom({
     };
   }, []);
 
-  // 메시지 추가에 따른 AI 판사 자동 개입 관리 (이 부분은 새롭게 추가)
+  // 메시지 추가에 따른 AI 판사 자동 개입 관리
   useEffect(() => {
     // 첫 번째 렌더링은 무시 (초기 마운트 시)
     if (isFirstRender.current) {
@@ -288,25 +367,16 @@ export default function ChatRoom({
       return;
     }
     
-    // 타이머가 활성화되어 있고 분석 중이 아닐 때만 자동 개입 검사
-    if (timerActive && !isAnalyzing && messages.length > 0) {
-      // 일정 간격으로 자동 판사 분석 요청
-      const lastMessage = messages[messages.length - 1];
-      
-      // 마지막 메시지가 사용자 메시지이고 시스템이나 판사가 아닌 경우에만 분석
-      if (lastMessage.user === 'user-general') {
-        console.log('타이머 활성화 상태에서 새 메시지 감지: 자동 판사 분석 검토');
-        // 일정 시간 후 자동 분석 요청 (중복 요청 방지를 위해 지연 추가)
-        const timeoutId = setTimeout(() => {
-          if (!isAnalyzing) {
-            requestJudgeAnalysis();
-          }
-        }, 1000);
-        
-        return () => clearTimeout(timeoutId);
-      }
+    // Don't trigger automatic analysis if API calls are disabled or final verdict is triggered
+    if (!timerActive || isAnalyzing || !apiCallsEnabled || finalVerdictTriggered) {
+      console.log('Automatic analysis disabled - timer, API calls, or verdict status', 
+        {timerActive, isAnalyzing, apiCallsEnabled, finalVerdictTriggered});
+      return;
     }
-  }, [messages, timerActive, isAnalyzing, requestJudgeAnalysis]);
+    
+    // 이 부분을 제거하여 자동 개입을 비활성화합니다.
+    // 타이머가 활성화되어 있고 분석 중이 아니더라도 자동 개입하지 않음
+  }, [messages, timerActive, isAnalyzing, apiCallsEnabled, finalVerdictTriggered]);
 
   // 메시지 보내기
   const sendMessage = (text: string, type?: string, relatedIssue?: string) => {
@@ -348,11 +418,30 @@ export default function ChatRoom({
   
   // 타이머 모드와 단계별 모드 간의 전환 관리
   const startTimerMode = () => {
-    // 타이머 시작
-    startTimer();
+    // Reset verdict flag
+    setFinalVerdictTriggered(false);
     
-    // 타이머 모드 UI 표시 (단계별 UI 숨김)
+    // Set start time
+    const startTime = new Date();
+    setTimerStartTime(startTime);
+    setTimerState('running');
+    
+    // Update local timer state
+    startTimer();
     setShowTimerMode(true);
+    
+    // Reset remaining time to full duration
+    setRemainingTime(timerDuration);
+    
+    // Firebase에 타이머 시작 상태 저장 (다른 참가자와 동기화)
+    if (roomId && database) {
+      const timerRef = ref(database, `rooms/${roomId}/timer`);
+      set(timerRef, {
+        active: true,
+        startTime: startTime.toISOString(),
+        durationSeconds: timerDuration
+      });
+    }
     
     // 시작 메시지 추가
     addMessage({
@@ -386,8 +475,8 @@ export default function ChatRoom({
   
   // 판사 요청 핸들러
   const handleJudgeRequest = () => {
-    if (isAnalyzing) return;
-    requestJudgeAnalysis();
+    if (isAnalyzing || !apiCallsEnabled || finalVerdictTriggered) return;
+    requestJudgeAnalysis(false, true);
   };
   
   // 타이핑 상태 관리
@@ -436,8 +525,8 @@ export default function ChatRoom({
   
   // 단계별 판사 호출 함수
   const callJudge = async () => {
-    if (isAnalyzing) {
-      console.log('이미 판사 요청 중입니다.');
+    if (isAnalyzing || !apiCallsEnabled || finalVerdictTriggered) {
+      console.log('API calls disabled or already analyzing');
       return;
     }
     
@@ -454,19 +543,26 @@ export default function ChatRoom({
         return;
       }
       
-      // 실시간 AI 판사 분석 요청
-      await requestJudgeAnalysis();
+      // Add check before making the API call
+      if (!apiCallsEnabled || finalVerdictTriggered) {
+        console.log('API calls disabled during analysis - aborting');
+        setIsAnalyzing(false);
+        return;
+      }
+      
+      // Real-time AI judge analysis request - show message for user-initiated analysis
+      await requestJudgeAnalysis(false, true);
       
       setJudgeAttempts(0);
     } catch (error) {
-      console.error('판사 호출 오류:', error);
-      setJudgeError('판사 요청 중 오류가 발생했습니다.');
+      console.error('Judge call error:', error);
+      setJudgeError('Error occurred during judge request.');
       
-      // 에러 메시지 추가
+      // Add error message
       addMessage({
         user: 'system',
         name: '시스템',
-        text: '판사 요청 중 오류가 발생했습니다. 다시 시도해주세요.',
+        text: 'Error during judge request. Please try again.',
         roomId: roomId || '',
       });
       
@@ -543,6 +639,223 @@ export default function ChatRoom({
     }
   };
 
+  // Update the main timer completion handler
+  useEffect(() => {
+    if (!timerActive || !timerStartTime) return;
+    
+    // Calculate and update timer display every second
+    const timerInterval = setInterval(() => {
+      const now = new Date();
+      const elapsed = Math.floor((now.getTime() - timerStartTime.getTime()) / 1000);
+      const remaining = Math.max(0, timerDuration - elapsed);
+      
+      setRemainingTime(remaining);
+      
+      // Check if timer has completed - local timer only updates UI and server state
+      if (remaining <= 0 && timerState !== 'completed' && !finalVerdictTriggered) {
+        setTimerState('completed');
+        clearInterval(timerInterval);
+        
+        // Add timer expiration message
+        addMessage({
+          user: 'system',
+          name: '시스템',
+          text: '재판 시간이 종료되었습니다. 판사가 최종 판결을 내립니다.',
+          roomId: roomId || ''
+        });
+        
+        // Update Firebase to indicate timer completed - let the server trigger the verdict
+        if (roomId && database) {
+          const timerRef = ref(database, `rooms/${roomId}/timer`);
+          set(timerRef, {
+            active: false,
+            completed: true,
+            completedAt: new Date().toISOString(),
+            endReason: 'time_expired'
+          });
+          
+          // Show analysis in progress message
+          addMessage({
+            user: 'system',
+            name: '시스템',
+            text: '판사가 상황을 분석 중입니다...',
+            roomId: roomId || ''
+          });
+          
+          // LOCAL TIMER NO LONGER REQUESTS FINAL VERDICT
+          // Let the server-side handler do it
+        }
+      }
+    }, 1000);
+    
+    return () => clearInterval(timerInterval);
+  }, [timerActive, timerStartTime, timerDuration, timerState, roomId, database, addMessage, finalVerdictTriggered]);
+
+  // Update the server-side timer completion handler to ensure it uses requestFinalVerdict properly
+  useEffect(() => {
+    if (!roomId || !database) return;
+    
+    const timerRef = ref(database, `rooms/${roomId}/timer`);
+    
+    // Timer state change listener
+    onValue(timerRef, (snapshot) => {
+      const timerData = snapshot.val();
+      
+      if (!timerData) return;
+      
+      // Handle timer activation
+      if (timerData.active && !timerActive) {
+        console.log('Timer started by another participant, syncing...');
+        startTimer();
+        setShowTimerMode(true);
+        
+        // Set the start time from server
+        if (timerData.startTime) {
+          setTimerStartTime(new Date(timerData.startTime));
+        }
+        
+        // Set duration if provided
+        if (timerData.durationSeconds) {
+          setTimerDuration(timerData.durationSeconds);
+        }
+        
+        setTimerState('running');
+      }
+      
+      // Handle timer completion from server - ONLY THE SERVER TRIGGERS THE FINAL VERDICT
+      if (timerData.completed && timerState !== 'completed' && !finalVerdictTriggered && apiCallsEnabled) {
+        console.log('Timer completed signal received from server', timerData.endReason);
+        
+        // Update local state to reflect timer stopped
+        setTimerState('completed');
+        setRemainingTime(0);
+        
+        // Show timer completion message based on end reason
+        if (timerData.endReason === 'aggressive_language') {
+          // For aggressive language, don't end the trial or provide final verdict
+          // Just show a warning
+          addMessage({
+            user: 'system',
+            name: '시스템',
+            text: '공격적인 언어가 감지되어 경고합니다. 상대를 존중하는 언어를 사용해주세요.',
+            roomId: roomId || ''
+          });
+          
+          // Continue the timer as normal
+          return; // Skip the verdict request
+        } else {
+          // Set the flag BEFORE requesting verdict to prevent race conditions
+          setFinalVerdictTriggered(true);
+          // Disable all future API calls
+          setApiCallsEnabled(false);
+          
+          // Normal timer expiration message (don't add if local timer already did)
+          if (!timerData.messagesSent) {
+            addMessage({
+              user: 'system',
+              name: '시스템',
+              text: '재판 시간이 종료되었습니다. 판사가 최종 판결을 내립니다.',
+              roomId: roomId || ''
+            });
+            
+            // Show analysis in progress message
+            addMessage({
+              user: 'system',
+              name: '시스템',
+              text: '판사가 상황을 분석 중입니다...',
+              roomId: roomId || ''
+            });
+            
+            // Update Firebase to indicate messages sent
+            // Only proceed if database is defined
+            if (database) {
+              const updatedTimerRef = ref(database, `rooms/${roomId}/timer`);
+              set(updatedTimerRef, {
+                ...timerData,
+                messagesSent: true
+              });
+            }
+          }
+          
+          console.log('Calling requestFinalVerdict ONE TIME ONLY');
+          // SERVER-SIDE TIMER TRIGGERS THE FINAL VERDICT
+          requestFinalVerdict();
+        }
+      }
+    });
+    
+    return () => {
+      // Clean up listener
+      off(timerRef);
+    };
+  }, [roomId, database, timerActive, timerState, startTimer, requestFinalVerdict, addMessage, finalVerdictTriggered, apiCallsEnabled]);
+
+  // Add this effect to handle automatic judge intervention based on messages
+  useEffect(() => {
+    // Only run this effect when we have a message change AND timer is active AND API calls are enabled
+    if (!timerActive || !apiCallsEnabled) return;
+    
+    // Don't trigger automatic analysis if the final verdict has already been triggered
+    if (finalVerdictTriggered) return;
+    
+    // Rest of the automatic intervention logic can remain the same
+    // This gate will prevent any automatic analysis after the final verdict is triggered
+  }, [messages, timerActive, apiCallsEnabled, finalVerdictTriggered]);
+
+  // Add synchronization when joining a room
+  useEffect(() => {
+    if (!roomId || !database) return;
+    
+    // Check if there's already an active timer when joining
+    const checkExistingTimer = async () => {
+      try {
+        // Type guard to ensure database is not undefined
+        if (!database) return;
+        
+        const timerRef = ref(database, `rooms/${roomId}/timer`);
+        const snapshot = await get(timerRef);
+        const timerData = snapshot.val();
+        
+        if (timerData && timerData.active) {
+          console.log('Room has active timer, synchronizing...');
+          
+          // Calculate remaining time based on server start time
+          if (timerData.startTime) {
+            const startTime = new Date(timerData.startTime);
+            setTimerStartTime(startTime);
+            
+            // Set timer duration if available
+            if (timerData.durationSeconds) {
+              setTimerDuration(timerData.durationSeconds);
+            }
+            
+            // Calculate elapsed time and remaining time
+            const now = new Date();
+            const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+            const remaining = Math.max(0, timerDuration - elapsed);
+            
+            // If timer should still be running, activate it
+            if (remaining > 0) {
+              startTimer();
+              setShowTimerMode(true);
+              setTimerState('running');
+              setRemainingTime(remaining);
+            } 
+            // If timer has already completed
+            else if (timerData.completed) {
+              setTimerState('completed');
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Timer sync error:', error);
+      }
+    };
+    
+    // Run the check when component mounts
+    checkExistingTimer();
+  }, [roomId, database, timerDuration, startTimer]);
+
   // 판사 메시지 템플릿 렌더링 (JudgeMessageDisplay 대체)
   const renderJudgeMessage = (text: string) => {
     // 텍스트 내에서 이모티콘과 다양한 스타일 적용
@@ -556,7 +869,10 @@ export default function ChatRoom({
       // 재미있는 표현 추가
       .replace(/(?:그러나|하지만)/g, '$& 😏')
       .replace(/(?:사실|진실|진짜)/g, '$& 😎')
-      .replace(/(?:충격|놀라|믿을 수 없)/g, '$& 😱');
+      .replace(/(?:충격|놀라|믿을 수 없)/g, '$& 😱')
+      // 욕설 레벨 관련 표현을 완곡하게 변경
+      .replace(/(?:욕설|씨발|시발|ㅅㅂ|ㅆㅂ|개새끼|ㄱㅐㅅㅐㄲㅣ|병신|ㅂㅅ|미친|ㅁㅊ|존나|ㅈㄴ|지랄)/g, '<span class="font-bold text-red-600">부적절한 표현</span>')
+      .replace(/(?:공격적 언어|공격적 표현|상스러운 표현)/g, '<span class="font-bold text-red-600">$& ⚠️</span>');
 
     return (
       <div className="w-full bg-white rounded-lg shadow-lg border border-amber-200 overflow-hidden">
@@ -583,85 +899,42 @@ export default function ChatRoom({
     );
   };
 
-  // 사용자 아이콘 표시
-  const getUserIcon = (userType: string) => {
-    switch (userType) {
-      case 'user-general':
-        return <UserCircle className="text-blue-500" />;
-      case 'judge':
-        return <Gavel className="text-yellow-600" />;
-      case 'system':
-        return <CheckCircle2 className="text-green-500" />;
-      default:
-        return <MessageSquare />;
-    }
+  // Add this helper function within the component to fix the error
+  const calculatedChattersCount = () => {
+    return roomUsers
+      .filter(user => !user.username.includes('System') && user.username !== 'System')
+      .length;
   };
 
-  // 현재 채팅 참여자 수 계산 - 시스템 계정 제외
-  const calculatedChattersCount = roomUsers
-    .filter(user => !user.username.includes('System') && user.username !== 'System')
-    .length;
-  
-  // 타이핑 중인 사용자 목록
-  const typingUsersList = Object.values(typingUsers)
-    .filter(user => user.isTyping)
-    .map(user => user.username);
+  // Fix for allUsersReady function
+  const allUsersReady = (): boolean => {
+    // 채팅방에 참여한 사용자 수 (시스템 계정 제외)
+    const userCount = roomUsers
+      .filter(user => !user.username.includes('System') && user.username !== 'System')
+      .length;
+    
+    // 준비된 사용자 수
+    const readyCount = Object.values(readyUsers).filter(isReady => isReady).length;
+    
+    // 모든 사용자가 준비되었는지 확인
+    return userCount > 0 && readyCount === userCount;
+  };
 
-  // 판사 요청 처리
-  const requestJudge = () => {
+  // Fix for updateUserReadyStatus function
+  const updateUserReadyStatus = (userId: string, ready: boolean) => {
     if (!roomId || !database) return;
     
-    // 이미 요청 중이면 중복 방지
-    if (judgeRequested) {
-      console.log('이미 판사 요청 중입니다.');
-      return;
-    }
-    
-    console.log('판사 요청 시작 - 승인 필요');
+    const readyRef = ref(database, `rooms/${roomId}/ready/${userId}`);
+    set(readyRef, ready);
     
     // 로컬 상태 업데이트
-    setJudgeRequested(true);
-    setShowJudgeModal(true);
-    
-    // Firebase에 판사 요청 상태 저장
-    const judgeRequestRef = ref(database, `rooms/${roomId}/judgeRequest`);
-    set(judgeRequestRef, {
-      requester: username,
-      timestamp: new Date().toISOString(),
-      status: 'pending'
-    });
-    
-    // 자신은 자동 승인 처리
-    const userId = localStorage.getItem('userId') || '';
-    if (userId) {
-      const approvalRef = ref(database, `rooms/${roomId}/judgeApprovals/${userId}`);
-      set(approvalRef, { username, approved: true });
-      setLocalApproval(true);
-    }
-    
-    // 판사 요청 메시지 추가
-    addMessage({
-      user: 'system',
-      name: '시스템',
-      text: `${username}님이 판사 호출을 요청했습니다. 모든 참여자의 승인이 필요합니다.`,
-      roomId: roomId,
-    });
+    setReadyUsers(prev => ({
+      ...prev,
+      [userId]: ready
+    }));
   };
 
-  // 판사 요청에 대한 승인 처리
-  const approveJudgeRequest = () => {
-    if (!roomId || !database) return;
-    
-    const userId = localStorage.getItem('userId') || '';
-    if (userId) {
-      // Firebase에 승인 상태 저장
-      const approvalRef = ref(database, `rooms/${roomId}/judgeApprovals/${userId}`);
-      set(approvalRef, { username, approved: true });
-      setLocalApproval(true);
-    }
-  };
-
-  // 채팅방 링크 공유 기능 구현
+  // Fix for handleShareRoom function
   const handleShareRoom = () => {
     if (!roomId) return;
     
@@ -691,74 +964,155 @@ export default function ChatRoom({
       });
   };
 
-  // 사용자 준비 상태 변경 함수
-  const updateUserReadyStatus = (userId: string, ready: boolean) => {
-    if (!roomId || !database) return;
+  // 메시지 목록 렌더링
+  const renderMessages = () => {
+    // Find the index of the final verdict message
+    let lastVerdictIndex = -1;
+    let hasFinalVerdict = false;
     
-    const readyRef = ref(database, `rooms/${roomId}/ready/${userId}`);
-    set(readyRef, ready);
-    
-    // 로컬 상태 업데이트
-    setReadyUsers(prev => ({
-      ...prev,
-      [userId]: ready
-    }));
-  };
-
-  // 모든 사용자가 준비되었는지 확인
-  const allUsersReady = (): boolean => {
-    // 채팅방에 참여한 사용자 수 (시스템 계정 제외)
-    const userCount = roomUsers
-      .filter(user => !user.username.includes('System') && user.username !== 'System')
-      .length;
-    
-    // 준비된 사용자 수
-    const readyCount = Object.values(readyUsers).filter(isReady => isReady).length;
-    
-    // 모든 사용자가 준비되었는지 확인
-    return userCount > 0 && readyCount === userCount;
-  };
-
-  // 채팅방 참여 시 준비 상태 구독
-  useEffect(() => {
-    if (!roomId || !database) return;
-    
-    const readyRef = ref(database, `rooms/${roomId}/ready`);
-    
-    // 실시간 준비 상태 변경 감지
-    onValue(readyRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      setReadyUsers(data);
-    });
-    
-    return () => {
-      // 구독 해제
-      off(readyRef);
-    };
-  }, [roomId, database]);
-
-  // 사용자 활동 없음 감지 타이머
-  const startInactivityTimer = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
+    // First check if we have a final verdict message
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].user === 'judge' && messages[i].text.includes('최종 판결')) {
+        lastVerdictIndex = i;
+        hasFinalVerdict = true;
+        break;
+      }
     }
     
-    timeoutRef.current = setTimeout(() => {
-      // 마지막 사용자 메시지 이후 20초 이상 경과했는지 확인
-      const userMessages = messages.filter(m => m.user === 'user-general');
-      if (userMessages.length > 0) {
-        const lastUserMessageTime = new Date(userMessages[userMessages.length - 1].timestamp).getTime();
-        const elapsed = Date.now() - lastUserMessageTime;
+    // Apply filtering only if we have a final verdict
+    const filteredMessages = messages.filter((message, index) => {
+      // If we found a verdict message:
+      if (hasFinalVerdict) {
+        // 1. Filter out any analysis messages that come after the verdict
+        if (index > lastVerdictIndex && 
+            message.user === 'system' && message.text.includes('판사가 상황을 분석 중입니다')) {
+          return false;
+        }
         
-        if (elapsed > 20000) { // 20초 이상 경과
-          // 판사 개입 요청
-          requestJudgeAnalysis();
+        // 2. Filter out any other judge messages that are not the final verdict
+        // EXCEPT keep judge messages about cursing/aggressive language
+        if (message.user === 'judge' && 
+            !message.text.includes('최종 판결') && 
+            !message.text.includes('공격적인 언어') && 
+            !message.text.includes('욕설') && 
+            !message.text.includes('부적절한 표현') && 
+            index !== lastVerdictIndex) {
+          return false;
         }
       }
+      return true;
+    });
+    
+    return filteredMessages.map((message, index) => {
+      const isMine = message.sender?.username === username;
+      const userId = message.sender?.id || '';
+      const curseLevel = userId ? getUserCurseLevel(userId) : 0;
       
-      // 다시 타이머 시작
-      startInactivityTimer();
-    }, 20000); // 20초마다 확인
+      return (
+        <div 
+          key={message.id || index} 
+          className={`flex ${
+            message.user === 'judge'
+              ? 'flex-col items-center'
+              : isMine 
+                ? 'justify-end' 
+                : 'justify-start'
+          }`}
+        >
+          {/* 판사 메시지 구분선 시작 */}
+          {message.user === 'judge' && <div className="w-3/4 h-px bg-amber-300 mx-auto my-6" />}
+          
+          {/* 프로필 이미지 표시 조건 수정 */}
+          {(message.user === 'judge' || (!isMine && message.user !== 'system')) && (
+            <div className={message.user === 'judge' ? 'mb-2' : ''}>
+              <ProfileInitial name={message.name} isMine={false} />
+            </div>
+          )}
+          
+          {/* 메시지 컨텐츠 컨테이너 너비 확장 */}
+          <div className={`mx-2 ${
+            message.user === 'judge'
+              ? 'max-w-[95%] w-full'
+              : 'max-w-[80%]'
+          } ${isMine ? 'order-1' : 'order-2'}`}>
+            {/* 메시지 정보 (이름, 시간) 중앙 정렬 */}
+            {message.user !== 'system' && (
+              <div className={`flex items-center mb-1 ${message.user === 'judge' ? 'justify-center' : ''}`}>
+                <span className={`text-sm font-medium ${message.user === 'judge' ? 'text-amber-700' : 'text-gray-700'}`}>{message.name}</span>
+                {message.timestamp && (
+                  <span className="text-xs text-gray-500 ml-2">
+                    {formatTime(message.timestamp)}
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {/* 메시지 말풍선 스타일 강화 */}
+            <div 
+              className={`rounded-lg px-4 py-2.5 ${
+                message.user === 'system' 
+                  ? 'bg-gray-200 text-gray-800 text-sm mx-auto max-w-md' 
+                  : message.user === 'judge'
+                    ? 'bg-amber-100 border border-amber-300 text-gray-800 shadow-lg'
+                    : isMine
+                      ? 'bg-indigo-100 text-gray-800'
+                      : 'bg-white border border-gray-200 text-gray-800'
+              }`}
+              style={message.user === 'judge' ? {
+                boxShadow: '0 4px 6px rgba(251, 191, 36, 0.05), 0 1px 3px rgba(251, 191, 36, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.4)'
+              } : {}}
+            >
+              {message.user === 'system' ? (
+                <div className="flex items-center justify-center">
+                  <CheckCircle2 className="w-4 h-4 mr-2 text-gray-600" />
+                  <span>{message.text}</span>
+                </div>
+              ) : message.user === 'judge' ? (
+                <div>
+                  {renderJudgeMessage(message.text)}
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap break-words">{message.text}</p>
+              )}
+              
+              {/* 메시지 타입 표시 중앙 정렬 */}
+              {message.messageType && message.messageType !== 'normal' && (
+                <div className={`mt-1 flex items-center ${message.user === 'judge' ? 'justify-center' : 'justify-end'}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    message.messageType === 'evidence' 
+                      ? 'bg-green-100 text-green-800' 
+                      : message.messageType === 'objection'
+                        ? 'bg-red-100 text-red-800'
+                        : message.messageType === 'closing'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {message.messageType === 'evidence' && '증거'}
+                    {message.messageType === 'objection' && '반론'}
+                    {message.messageType === 'closing' && '최종변론'}
+                    {message.messageType === 'question' && '질문'}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* 판사 메시지 구분선 끝 */}
+          {message.user === 'judge' && <div className="w-3/4 h-px bg-amber-300 mx-auto my-6" />}
+        </div>
+      );
+    });
+  };
+
+  // Add function to initialize user curse level tracking
+  const initializeUserCurseLevels = () => {
+    // Check if there are any existing curse levels already tracked
+    Object.keys(userCurseLevels).forEach(userId => {
+      const level = getUserCurseLevel(userId);
+      if (level > 0) {
+        console.log(`사용자(${userId}) 욕설 레벨: ${level}/10`);
+      }
+    });
   };
 
   // 채팅방 UI 렌더링
@@ -770,7 +1124,7 @@ export default function ChatRoom({
           <div className="flex items-center space-x-2">
             <h2 className="text-lg font-bold text-gray-800">채팅방</h2>
             <span className="px-2 py-1 bg-indigo-100 text-indigo-800 text-xs rounded-full">
-              {calculatedChattersCount}명 참여 중
+              {calculatedChattersCount()}명 참여 중
             </span>
           </div>
           
@@ -798,14 +1152,14 @@ export default function ChatRoom({
         
         {/* 타이머가 활성화된 경우 타이머 표시 */}
         {timerActive && (
-          <div className="bg-blue-50 p-2 rounded-lg flex items-center justify-between">
+          <div className="bg-blue-50 border-2 border-blue-200 p-3 rounded-lg flex items-center justify-between mb-2 animate-fadeIn">
             <div className="flex items-center space-x-2">
-              <Clock className="text-blue-500 h-5 w-5" />
-              <span className="text-blue-700 font-medium">
-                남은 시간: {Math.floor(getTimeLeft() / 60)}:{(getTimeLeft() % 60).toString().padStart(2, '0')}
+              <Clock className="text-blue-500 h-5 w-5 animate-pulse" />
+              <span className="text-blue-700 font-medium text-lg">
+                남은 시간: {Math.floor(remainingTime / 60)}:{(remainingTime % 60).toString().padStart(2, '0')}
               </span>
             </div>
-            <div className="text-xs text-blue-600">
+            <div className="text-sm text-blue-600 font-medium">
               시간 종료 후 판사가 최종 판결을 내립니다
             </div>
           </div>
@@ -814,6 +1168,16 @@ export default function ChatRoom({
 
       {/* 스크롤 영역 전체를 감싸는 컨테이너 */}
       <div className="relative flex-1 overflow-hidden">
+        {/* Timer mode indicator at the top of chat */}
+        {timerActive && (
+          <div className="sticky top-0 z-10 bg-blue-100 p-2 flex items-center justify-center shadow-sm border-b border-blue-200">
+            <Clock className="text-blue-600 h-4 w-4 mr-2 animate-pulse" />
+            <span className="text-blue-800 text-sm font-medium">
+              재판 진행 중 - {Math.floor(remainingTime / 60)}:{(remainingTime % 60).toString().padStart(2, '0')} 남음
+            </span>
+          </div>
+        )}
+        
         {/* 채팅 내용 영역 */}
         <div 
           ref={chatContainerRef}
@@ -822,102 +1186,7 @@ export default function ChatRoom({
         >
           {/* 메시지 목록 */}
           <div className="p-4 space-y-4">
-            {messages.map((message, index) => {
-              const isMine = message.sender?.username === username;
-              return (
-                <div 
-                  key={message.id || index} 
-                  className={`flex ${
-                    message.user === 'judge'
-                      ? 'flex-col items-center'
-                      : isMine 
-                        ? 'justify-end' 
-                        : 'justify-start'
-                  }`}
-                >
-                  {/* 판사 메시지 구분선 시작 */}
-                  {message.user === 'judge' && <div className="w-3/4 h-px bg-amber-300 mx-auto my-6" />}
-                  
-                  {/* 프로필 이미지 표시 조건 수정 */}
-                  {(message.user === 'judge' || (!isMine && message.user !== 'system')) && (
-                    <div className={message.user === 'judge' ? 'mb-2' : ''}>
-                      <ProfileInitial name={message.name} isMine={false} />
-                    </div>
-                  )}
-                  
-                  {/* 메시지 컨텐츠 컨테이너 너비 확장 */}
-                  <div className={`mx-2 ${
-                    message.user === 'judge'
-                      ? 'max-w-[95%] w-full'
-                      : 'max-w-[80%]'
-                  } ${isMine ? 'order-1' : 'order-2'}`}>
-                    {/* 메시지 정보 (이름, 시간) 중앙 정렬 */}
-                    {message.user !== 'system' && (
-                      <div className={`flex items-center mb-1 ${message.user === 'judge' ? 'justify-center' : ''}`}>
-                        <span className={`text-sm font-medium ${message.user === 'judge' ? 'text-amber-700' : 'text-gray-700'}`}>{message.name}</span>
-                        {message.timestamp && (
-                          <span className="text-xs text-gray-500 ml-2">
-                            {formatTime(message.timestamp)}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* 메시지 말풍선 스타일 강화 */}
-                    <div 
-                      className={`rounded-lg px-4 py-2.5 ${
-                        message.user === 'system' 
-                          ? 'bg-gray-200 text-gray-800 text-sm mx-auto max-w-md' 
-                          : message.user === 'judge'
-                            ? 'bg-amber-100 border border-amber-300 text-gray-800 shadow-lg'
-                            : isMine
-                              ? 'bg-indigo-100 text-gray-800'
-                              : 'bg-white border border-gray-200 text-gray-800'
-                      }`}
-                      style={message.user === 'judge' ? {
-                        boxShadow: '0 4px 6px rgba(251, 191, 36, 0.05), 0 1px 3px rgba(251, 191, 36, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.4)'
-                      } : {}}
-                    >
-                      {message.user === 'system' ? (
-                        <div className="flex items-center justify-center">
-                          <CheckCircle2 className="w-4 h-4 mr-2 text-gray-600" />
-                          <span>{message.text}</span>
-                        </div>
-                      ) : message.user === 'judge' ? (
-                        <div>
-                          {renderJudgeMessage(message.text)}
-                        </div>
-                      ) : (
-                        <p className="whitespace-pre-wrap break-words">{message.text}</p>
-                      )}
-                      
-                      {/* 메시지 타입 표시 중앙 정렬 */}
-                      {message.messageType && message.messageType !== 'normal' && (
-                        <div className={`mt-1 flex items-center ${message.user === 'judge' ? 'justify-center' : 'justify-end'}`}>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            message.messageType === 'evidence' 
-                              ? 'bg-green-100 text-green-800' 
-                              : message.messageType === 'objection'
-                                ? 'bg-red-100 text-red-800'
-                                : message.messageType === 'closing'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {message.messageType === 'evidence' && '증거'}
-                            {message.messageType === 'objection' && '반론'}
-                            {message.messageType === 'closing' && '최종변론'}
-                            {message.messageType === 'question' && '질문'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* 판사 메시지 구분선 끝 */}
-                  {message.user === 'judge' && <div className="w-3/4 h-px bg-amber-300 mx-auto my-6" />}
-                </div>
-              );
-            })}
+            {renderMessages()}
             
             {/* 타이핑 중인 사용자 표시 */}
             {Object.values(typingUsers)
@@ -1048,9 +1317,9 @@ export default function ChatRoom({
       {showConfirmStartModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4 border-2 border-amber-300">
-            <h2 className="text-lg font-bold mb-3 text-gray-900">기존 대화 내용 확인</h2>
+            <h2 className="text-lg font-bold mb-3 text-gray-900">재판을 시작하시겠습니까?</h2>
             <p className="mb-4 text-gray-800">
-              기존 대화 내용이 있습니다. 어떻게 하시겠습니까?
+              상대방에게 상처를 줄수도 있습니다.
             </p>
             <div className="flex flex-col space-y-2">
               <button
@@ -1062,9 +1331,9 @@ export default function ChatRoom({
                 }}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
               >
-                대화 내용 지우고 새로 시작
+                재판 시작하기
               </button>
-              <button
+              {/* <button
                 onClick={() => {
                   setShowConfirmStartModal(false);
                   setShowCourtReadyModal(false);
@@ -1073,7 +1342,7 @@ export default function ChatRoom({
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium"
               >
                 기존 대화 유지하고 시작
-              </button>
+              </button> */}
               <button
                 onClick={() => setShowConfirmStartModal(false)}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium"

@@ -17,13 +17,13 @@ import { Message as GeminiMessage, InterventionData, InterventionType } from '..
 import { analyzeConversation, getFinalVerdict } from '../lib/gemini';
 
 // 타이머 관련 상수
-const TIMER_DURATION = 300000; // 5분 (밀리초)
+const TIMER_DURATION = 60000; // 60초 (밀리초)
 const MIN_INTERVENTION_INTERVAL = 8000; // 최소 판사 개입 간격 (밀리초)
 const MESSAGES_BEFORE_FIRST_INTERVENTION = 4; // 첫 개입 전 필요한 최소 메시지 수
 
 // 패턴 기반 개입 감지를 위한 상수
 const INTERVENTION_PATTERNS = {
-  AGGRESSIVE: /씨발|개새끼|병신|미친/,
+  AGGRESSIVE: /씨발|시발|ㅅㅂ|ㅆㅂ|개새끼|ㄱㅐㅅㅐㄲㅣ|병신|ㅂㅅ|미친|ㅁㅊ|존나|ㅈㄴ|지랄/i,
   OFF_TOPIC: /날씨|점심|주식|게임/,
   INVALID_LOGIC: /무조건|항상|절대|모든/,
   EVIDENCE_NEEDED: /증거|증명|팩트|자료/
@@ -77,6 +77,12 @@ interface ChatState {
   isLoading: boolean;
   error: string | null;
   
+  // 사용자별 욕설 레벨 추적
+  userCurseLevels: Record<string, number>;
+  
+  // 최종 판결 요청 여부
+  finalVerdictRequested: boolean;
+  
   // 함수들
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
   updateStats: (partial: Partial<ChatState['stats']>) => void;
@@ -95,11 +101,15 @@ interface ChatState {
   timeSinceLastIntervention: () => number;
   
   // 판사 개입 관련 함수
-  requestJudgeAnalysis: () => Promise<void>;
+  requestJudgeAnalysis: (isFinal?: boolean, showMessage?: boolean) => Promise<void>;
   addJudgeIntervention: (type: InterventionType, text: string, targetUser?: string) => void;
   updateDetectedIssues: (issues: string[]) => void;
   requestFinalVerdict: () => Promise<void>;
   clearChat: () => void;
+  
+  // 사용자 욕설 레벨 관련 함수
+  updateUserCurseLevel: (userId: string, increment: number) => void;
+  getUserCurseLevel: (userId: string) => number;
 }
 
 export const useChatStore = create<ChatState>((set, get) => {
@@ -127,6 +137,12 @@ export const useChatStore = create<ChatState>((set, get) => {
     // 상태 플래그
     isLoading: false,
     error: null,
+    
+    // 사용자별 욕설 레벨 추적
+    userCurseLevels: {},
+    
+    // 최종 판결 요청 여부
+    finalVerdictRequested: false,
   };
 
   // 방 참여 상태 관리
@@ -385,12 +401,28 @@ export const useChatStore = create<ChatState>((set, get) => {
             ) {
               // 패턴 기반 긴급 개입 체크
               const messageText = message.text.toLowerCase();
+              
+              // 욕설 감지 및 즉시 판사 개입
+              if (INTERVENTION_PATTERNS.AGGRESSIVE.test(messageText)) {
+                console.log('공격적 언어 감지: 판사 개입 요청');
+                
+                // Show analysis in progress message
+                get().addMessage({
+                  user: 'system',
+                  name: '시스템',
+                  text: '판사가 상황을 분석 중입니다...'
+                });
+                
+                // Immediately request judge analysis when curse is detected
+                get().requestJudgeAnalysis(false, true);
+                
+                return; // Skip normal analysis checks
+              }
+              
+              // Normal message flow for non-aggressive messages
               let urgentIntervention = false;
               
-              if (INTERVENTION_PATTERNS.AGGRESSIVE.test(messageText)) {
-                console.log('공격적 언어 감지: 긴급 개입 필요');
-                urgentIntervention = true;
-              } else if (INTERVENTION_PATTERNS.EVIDENCE_NEEDED.test(messageText)) {
+              if (INTERVENTION_PATTERNS.EVIDENCE_NEEDED.test(messageText)) {
                 console.log('증거 요청 감지: 긴급 개입 고려');
                 urgentIntervention = true;
               }
@@ -401,7 +433,7 @@ export const useChatStore = create<ChatState>((set, get) => {
               // 마지막 판사 개입 이후 경과 시간 확인
               const timeSinceLastJudge = state.timeSinceLastIntervention();
               
-              // 조건 만족 시 AI 판사 분석 요청
+              // Normal check for judge intervention (no aggressive language case)
               if (
                 urgentIntervention ||
                 (userMessages.length >= MESSAGES_BEFORE_FIRST_INTERVENTION && 
@@ -409,8 +441,8 @@ export const useChatStore = create<ChatState>((set, get) => {
               ) {
                 console.log('자동 판사 분석 요청 조건 충족');
                 setTimeout(() => {
-                  // 약간의 지연 후 판사 분석 호출 (UI가 업데이트된 후)
-                  get().requestJudgeAnalysis();
+                  // Only background analysis, no messages for normal analysis
+                  get().requestJudgeAnalysis(false, false);
                 }, urgentIntervention ? 200 : 500);
               } else {
                 console.log(
@@ -498,16 +530,9 @@ export const useChatStore = create<ChatState>((set, get) => {
     startTimer: () => {
       set({ 
         timerStartTime: Date.now(),
-        timerActive: true
+        timerActive: true,
+        finalVerdictRequested: false
       });
-      
-      // 타이머 종료 시 자동으로 최종 판결 요청
-      const state = get();
-      setTimeout(() => {
-        if (state.timerActive) {
-          state.requestFinalVerdict();
-        }
-      }, state.timerDuration);
     },
     
     pauseTimer: () => {
@@ -525,7 +550,8 @@ export const useChatStore = create<ChatState>((set, get) => {
       set({
         timerStartTime: null,
         timerDuration: TIMER_DURATION,
-        timerActive: false
+        timerActive: false,
+        finalVerdictRequested: false
       });
     },
     
@@ -554,13 +580,19 @@ export const useChatStore = create<ChatState>((set, get) => {
     },
     
     // 판사 분석 요청
-    requestJudgeAnalysis: async () => {
+    requestJudgeAnalysis: async (isFinal?: boolean, showMessage?: boolean) => {
       const state = get();
       const currentMessages = state.messages;
       
+      // Don't do anything if final verdict has already been requested
+      if (state.finalVerdictRequested) {
+        console.log('Final verdict already requested, skipping analysis');
+        return;
+      }
+      
       // 중복 요청 방지 및 최소 간격 확인
       const currentTime = Date.now();
-      if (state.isLoading || (currentTime - lastAnalysisTime < 2000)) {
+      if (state.isLoading || (!isFinal && currentTime - lastAnalysisTime < 2000)) {
         console.log('분석 요청 무시: 이미 로딩 중이거나 최소 간격 미달');
         return;
       }
@@ -591,6 +623,13 @@ export const useChatStore = create<ChatState>((set, get) => {
       const cacheKey = safeEncode(recentMessages).substring(0, 50);
       
       try {
+        // Check again for verdict requested to prevent race conditions
+        if (get().finalVerdictRequested) {
+          console.log('Final verdict requested during analysis, aborting');
+          set({ isLoading: false });
+          return;
+        }
+        
         // 캐시 확인
         if (responseCache[cacheKey] && 
             (currentTime - responseCache[cacheKey].timestamp) < CACHE_EXPIRY) {
@@ -599,8 +638,22 @@ export const useChatStore = create<ChatState>((set, get) => {
           
           // 캐시된 응답 사용 (빠른 응답)
           if (cachedData.shouldIntervene && cachedData.interventionType && cachedData.interventionMessage) {
+            // One more check before showing any messages
+            if (get().finalVerdictRequested) {
+              console.log('Final verdict requested while preparing cached response, aborting');
+              set({ isLoading: false });
+              return;
+            }
+            
             // 로딩 상태 해제 약간 지연 (너무 빠르면 부자연스러움)
             setTimeout(() => {
+              // Final check before actually adding the message
+              if (get().finalVerdictRequested) {
+                console.log('Final verdict requested before timeout completed, aborting');
+                set({ isLoading: false });
+                return;
+              }
+              
               state.addJudgeIntervention(
                 cachedData.interventionType!,
                 cachedData.interventionMessage!,
@@ -627,18 +680,44 @@ export const useChatStore = create<ChatState>((set, get) => {
         
         // 실제 API 호출 (캐시 없을 때)
         console.log('Gemini API 호출 시작');
-        // 즉시 로딩 메시지 표시
-        state.addMessage({
-          user: 'system',
-          name: '시스템',
-          text: '판사가 상황을 분석 중입니다...'
-        });
+        
+        // Check again before showing any messages
+        if (get().finalVerdictRequested) {
+          console.log('Final verdict requested before showing loading message, aborting');
+          set({ isLoading: false });
+          return;
+        }
+        
+        // Only show the loading message if showMessage parameter is true
+        // By default in final analysis or when explicitly requested
+        if (showMessage || isFinal) {
+          // 즉시 로딩 메시지 표시
+          state.addMessage({
+            user: 'system',
+            name: '시스템',
+            text: '판사가 상황을 분석 중입니다...'
+          });
+        }
+        
+        // One final check before API call
+        if (get().finalVerdictRequested) {
+          console.log('Final verdict requested before API call, aborting');
+          set({ isLoading: false });
+          return;
+        }
         
         const result = await analyzeConversation(
           state.messages as GeminiMessage[],
           state.judgeInterventions,
           state.detectedIssues
         );
+        
+        // Check again after API call
+        if (get().finalVerdictRequested) {
+          console.log('Final verdict requested after API call, aborting message display');
+          set({ isLoading: false });
+          return;
+        }
         
         // 결과 캐시 저장
         responseCache[cacheKey] = {
@@ -648,6 +727,13 @@ export const useChatStore = create<ChatState>((set, get) => {
         
         // 개입이 필요하다면 판사 메시지 추가
         if (result.shouldIntervene && result.interventionType && result.interventionMessage) {
+          // Final check before adding message
+          if (get().finalVerdictRequested) {
+            console.log('Final verdict requested before adding intervention, aborting');
+            set({ isLoading: false });
+            return;
+          }
+          
           // 판사 개입 기록
           state.addJudgeIntervention(
             result.interventionType,
@@ -670,12 +756,25 @@ export const useChatStore = create<ChatState>((set, get) => {
           await state.addMessage(judgeMessage);
         }
         
+        // Don't set up a new preload if final verdict requested
+        if (get().finalVerdictRequested) {
+          console.log('Final verdict requested, skipping preload setup');
+          set({ isLoading: false });
+          return;
+        }
+        
         // 백그라운드 사전 로딩 설정 (다음 호출을 빠르게 하기 위해)
         if (preloadTimer) {
           clearTimeout(preloadTimer);
         }
         
         preloadTimer = setTimeout(() => {
+          // Check before starting preload
+          if (get().finalVerdictRequested) {
+            console.log('Final verdict requested, skipping preload');
+            return;
+          }
+          
           console.log('백그라운드 분석 사전 로드');
           // 백그라운드에서 미리 분석 수행 (결과는 캐시만 하고 UI에 표시 안 함)
           analyzeConversation(
@@ -683,6 +782,12 @@ export const useChatStore = create<ChatState>((set, get) => {
             get().judgeInterventions,
             get().detectedIssues
           ).then(preloadResult => {
+            // Skip caching if verdict has been requested
+            if (get().finalVerdictRequested) {
+              console.log('Final verdict requested, skipping preload caching');
+              return;
+            }
+            
             const preloadMessages = get().messages.slice(-3).map(m => m.text).join('|');
             const preloadCacheKey = safeEncode(preloadMessages).substring(0, 50);
             responseCache[preloadCacheKey] = {
@@ -732,21 +837,39 @@ export const useChatStore = create<ChatState>((set, get) => {
     
     // 최종 판결 요청
     requestFinalVerdict: async () => {
-      set({ isLoading: true });
+      console.log('requestFinalVerdict 함수 호출됨');
+      
+      // 이미 최종 판결이 요청되었으면 중복 요청 방지
+      if (get().finalVerdictRequested || !get().timerActive) {
+        console.log('이미 최종 판결이 요청되었거나 타이머가 비활성 상태입니다.');
+        return;
+      }
+      
+      // 최종 판결 요청 플래그 설정 - 다른 호출이 진행되는 것을 즉시 방지
+      set({ 
+        isLoading: true,
+        finalVerdictRequested: true
+      });
       
       try {
         const state = get();
+        console.log('현재 메시지 수:', state.messages.length);
+        
         // 타이머 중지
         state.pauseTimer();
+        console.log('타이머 상태 중지됨');
         
         // 최종 판결 요청
+        console.log('getFinalVerdict API 호출 시작');
         const verdict = await getFinalVerdict(
           state.messages as GeminiMessage[],
           state.detectedIssues
         );
+        console.log('getFinalVerdict API 호출 완료');
         
         // 판결 메시지 추가
         if (verdict.verdict && verdict.verdict.summary) {
+          console.log('최종 판결 메시지 추가 중');
           const verdictMessage: Omit<Message, 'id' | 'timestamp'> = {
             user: 'judge',
             name: '판사',
@@ -760,23 +883,11 @@ export const useChatStore = create<ChatState>((set, get) => {
           );
           
           await state.addMessage(verdictMessage);
+          console.log('최종 판결 메시지 추가 완료');
           
-          // 각 참가자별 개인화된 판결 추가
-          if (verdict.responses && verdict.responses.length > 0) {
-            for (const response of verdict.responses) {
-              const personalMessage: Omit<Message, 'id' | 'timestamp'> = {
-                user: 'judge',
-                name: '판사',
-                text: response.message,
-                sender: {
-                  id: 'judge',
-                  username: '판사 → ' + response.targetUser
-                }
-              };
-              
-              await state.addMessage(personalMessage);
-            }
-          }
+          // Each participant's personalized verdict is omitted for simplicity - there should only be one judge message
+        } else {
+          console.error('판결 데이터가 올바르지 않음:', verdict);
         }
         
         set({ isLoading: false });
@@ -786,6 +897,8 @@ export const useChatStore = create<ChatState>((set, get) => {
           isLoading: false,
           error: '최종 판결 중 오류가 발생했습니다.'
         });
+        // 오류 발생 시 finalVerdictRequested 플래그를 재설정하지 않음
+        // 이렇게 하면 다시 호출할 수는 없음 (의도적으로)
       }
     },
     
@@ -798,8 +911,30 @@ export const useChatStore = create<ChatState>((set, get) => {
         timerStartTime: null,
         timerDuration: TIMER_DURATION,
         timerActive: false,
+        finalVerdictRequested: false,
         error: null
       });
-    }
+    },
+
+    // 사용자 욕설 레벨 업데이트
+    updateUserCurseLevel: (userId: string, increment: number) => {
+      set(state => {
+        const currentLevel = state.userCurseLevels[userId] || 0;
+        // 최대 레벨을 30으로 증가 (욕설이 많으면 점수가 더 높게 누적될 수 있음)
+        const newLevel = Math.min(30, Math.max(0, currentLevel + increment));
+        
+        return {
+          userCurseLevels: {
+            ...state.userCurseLevels,
+            [userId]: newLevel
+          }
+        };
+      });
+    },
+    
+    // 사용자 욕설 레벨 조회
+    getUserCurseLevel: (userId: string) => {
+      return get().userCurseLevels[userId] || 0;
+    },
   };
 });
