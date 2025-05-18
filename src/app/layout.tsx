@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className="h-full">
-      <body className="antialiased h-full">
+      <body className="antialiased h-[100dvh] overflow-hidden">
         <header className="sticky top-0 bg-white border-b z-50 flex-shrink-0">
           <div className="container max-w-7xl mx-auto px-4 py-2 flex justify-between items-center">
             <a href="/main" className="flex items-center gap-2 font-bold text-xl text-gray-900">
@@ -23,7 +23,7 @@ export default function RootLayout({
             </a>
           </div>
         </header>
-        <div className="flex-1">
+        <div className="flex-1 overflow-hidden h-[calc(100dvh-56px)]">
           {children}
         </div>
       </body>

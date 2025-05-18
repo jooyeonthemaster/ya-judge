@@ -1144,7 +1144,7 @@ export default function ChatRoom({
 
   // 채팅방 UI 렌더링
   return (
-    <div className="flex flex-col h-full max-h-[100vh] bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
+    <div className="flex flex-col h-full max-h-[100dvh] bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
       {/* 헤더 영역 */}
       <div className="p-3 border-b border-gray-100 bg-white flex-shrink-0">
         <div className="flex items-center justify-between mb-2">
@@ -1223,6 +1223,7 @@ export default function ChatRoom({
         <div 
           ref={chatContainerRef}
           className="overflow-y-auto bg-gray-50 flex-1"
+          style={{ maxHeight: 'calc(100dvh - 200px)' }}
         >
           {/* 메시지 목록 */}
           <div className="p-3 space-y-3">
@@ -1254,29 +1255,29 @@ export default function ChatRoom({
       </div>
 
       {/* 메시지 입력 영역 */}
-      <div className={`p-3 border-t border-gray-100 bg-white flex-shrink-0 overflow-hidden ${timerActive ? 'h-[80px]' : 'h-[220px]'}`}>
+      <div className={`p-3 border-t border-gray-100 bg-white flex-shrink-0 overflow-hidden ${timerActive ? 'h-[80px]' : 'h-[220px]'} max-h-[30dvh]`}>
         {!timerActive ? (
           <div className="flex flex-col items-center justify-center h-[200px] space-y-2">
-            <h3 className="text-lg font-medium text-gray-800">재판을 시작하세요</h3>
-            <p className="text-sm text-gray-600 text-center">
+            <h3 className="text-lg font-medium text-gray-800 compact-text">재판을 시작하세요</h3>
+            <p className="text-sm text-gray-600 text-center compact-text">
               모든 참여자가 입장한 후 재판을 시작할 수 있습니다.
             </p>
             {!Object.keys(readyUsers).includes(localStorage.getItem('userId') || '') ? (
               <button
                 onClick={handleUserReady}
-                className="px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                className="px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors shadow-sm compact-btn"
               >
                 준비하기
               </button>
             ) : (
-              <div className="text-sm text-green-600 font-medium">
+              <div className="text-sm text-green-600 font-medium compact-text">
                 준비 완료! 다른 참가자를 기다리는 중...
               </div>
             )}
             <button
               onClick={initiateCourtProcess}
               disabled={!allUsersReady()}
-              className={`px-4 py-2 font-medium rounded-lg transition-colors shadow-sm ${
+              className={`px-4 py-2 font-medium rounded-lg transition-colors shadow-sm compact-btn ${
                 allUsersReady()
                   ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -1285,7 +1286,7 @@ export default function ChatRoom({
               재판 시작하기
             </button>
             {!allUsersReady() && (
-              <p className="text-xs text-amber-600">
+              <p className="text-xs text-amber-600 compact-text">
                 모든 참가자가 준비되어야 재판을 시작할 수 있습니다.
               </p>
             )}
@@ -1307,7 +1308,7 @@ export default function ChatRoom({
                 }
               }}
               disabled={isLoading || !input.trim()}
-              className={`px-4 h-[60px] rounded-lg font-medium transition-colors ${
+              className={`px-4 h-[60px] rounded-lg font-medium transition-colors compact-btn ${
                 isLoading || !input.trim()
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-indigo-600 text-white hover:bg-indigo-700'
@@ -1338,13 +1339,13 @@ export default function ChatRoom({
             <div className="flex justify-between">
               <button
                 onClick={() => setShowCourtReadyModal(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium"
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium compact-btn"
               >
                 취소
               </button>
               <button
                 onClick={handleStartTrial}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium compact-btn"
               >
                 시작하기
               </button>
@@ -1369,23 +1370,13 @@ export default function ChatRoom({
                   setShowCourtReadyModal(false);
                   startTimerMode();
                 }}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium compact-btn"
               >
                 재판 시작하기
               </button>
-              {/* <button
-                onClick={() => {
-                  setShowConfirmStartModal(false);
-                  setShowCourtReadyModal(false);
-                  startTimerMode();
-                }}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium"
-              >
-                기존 대화 유지하고 시작
-              </button> */}
               <button
                 onClick={() => setShowConfirmStartModal(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium"
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium compact-btn"
               >
                 취소
               </button>

@@ -44,3 +44,16 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #a0a0a0;
 }
+
+/* Small height screen adjustments (iPhone SE) */
+@media screen and (max-height: 667px) {
+  .compact-btn {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    font-size: 0.875rem !important;
+  }
+  
+  .compact-text {
+    font-size: 0.875rem !important;
+  }
+}
