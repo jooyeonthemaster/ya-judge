@@ -134,14 +134,14 @@ export default function RoomPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-b from-white to-gray-50">
+    <div className="flex flex-col h-[calc(100vh-50px)] overflow-hidden bg-gradient-to-b from-white to-gray-50">
       {/* 메인 컨텐츠 */}
-      <main className="flex-1 container mx-auto p-4 md:p-6">
-        <div className="w-full">
+      <main className="flex-1 container mx-auto px-2 py-1 overflow-hidden">
+        <div className="h-full w-full">
           {!isNameModalOpen && (
             <ChatRoom 
               roomId={roomId} 
-              userType={null} 
+              userType={undefined} 
               customUsername={username} 
               onShare={() => setIsShareModalOpen(true)}
             />

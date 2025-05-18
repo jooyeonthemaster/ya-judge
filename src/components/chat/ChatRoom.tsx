@@ -28,7 +28,8 @@ import {
   Share2,
   Loader2,
   Share,
-  Clock
+  Clock,
+  ChevronUp
 } from 'lucide-react';
 import { 
   getFinalVerdict,
@@ -246,6 +247,11 @@ export default function ChatRoom({
   
   // Import this at the top of the file, near the other imports
   const [apiCallsEnabled, setApiCallsEnabled] = useState(true);
+  
+  // State variables for issue notification
+  const [isIssueNotificationOpen, setIsIssueNotificationOpen] = useState(false);
+  const [hasNewIssues, setHasNewIssues] = useState(false);
+  const [previousIssuesCount, setPreviousIssuesCount] = useState(0);
   
   const { 
     messages, 
@@ -870,8 +876,12 @@ export default function ChatRoom({
       .replace(/(?:그러나|하지만)/g, '$& 😏')
       .replace(/(?:사실|진실|진짜)/g, '$& 😎')
       .replace(/(?:충격|놀라|믿을 수 없)/g, '$& 😱')
-      // 욕설 레벨 관련 표현을 완곡하게 변경
-      .replace(/(?:욕설|씨발|시발|ㅅㅂ|ㅆㅂ|개새끼|ㄱㅐㅅㅐㄲㅣ|병신|ㅂㅅ|미친|ㅁㅊ|존나|ㅈㄴ|지랄)/g, '<span class="font-bold text-red-600">부적절한 표현</span>')
+          // 욕설 레벨 관련 표현을 첫 글자만 남기고 X로 대체
+    .replace(/(?:씨발|시발|ㅅㅂ|ㅆㅂ|개새끼|ㄱㅐㅅㅐㄲㅣ|병신|ㅂㅅ|미친|ㅁㅊ|존나|ㅈㄴ|지랄)/g, (match) => {
+      const firstChar = match.charAt(0);
+      const restChars = 'X'.repeat(match.length - 1);
+      return `<span class="font-bold text-red-600">${firstChar}${restChars}</span>`;
+    })
       .replace(/(?:공격적 언어|공격적 표현|상스러운 표현)/g, '<span class="font-bold text-red-600">$& ⚠️</span>');
 
     return (
@@ -1115,6 +1125,23 @@ export default function ChatRoom({
     });
   };
 
+  // Add effect to track new issues
+  useEffect(() => {
+    const currentIssuesCount = detectedIssues.length;
+    if (currentIssuesCount > previousIssuesCount) {
+      setHasNewIssues(true);
+    }
+    setPreviousIssuesCount(currentIssuesCount);
+  }, [detectedIssues, previousIssuesCount]);
+  
+  // Update toggle function to clear new issues flag when opening
+  const toggleIssueNotification = () => {
+    setIsIssueNotificationOpen(!isIssueNotificationOpen);
+    if (!isIssueNotificationOpen) {
+      setHasNewIssues(false);
+    }
+  };
+
   // 채팅방 UI 렌더링
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
@@ -1151,7 +1178,7 @@ export default function ChatRoom({
         </div>
         
         {/* 타이머가 활성화된 경우 타이머 표시 */}
-        {timerActive && (
+        {/* {timerActive && (
           <div className="bg-blue-50 border-2 border-blue-200 p-3 rounded-lg flex items-center justify-between mb-2 animate-fadeIn">
             <div className="flex items-center space-x-2">
               <Clock className="text-blue-500 h-5 w-5 animate-pulse" />
@@ -1163,7 +1190,7 @@ export default function ChatRoom({
               시간 종료 후 판사가 최종 판결을 내립니다
             </div>
           </div>
-        )}
+        )} */}
       </div>
 
       {/* 스크롤 영역 전체를 감싸는 컨테이너 */}
@@ -1173,7 +1200,7 @@ export default function ChatRoom({
           <div className="sticky top-0 z-10 bg-blue-100 p-2 flex items-center justify-center shadow-sm border-b border-blue-200">
             <Clock className="text-blue-600 h-4 w-4 mr-2 animate-pulse" />
             <span className="text-blue-800 text-sm font-medium">
-              재판 진행 중 - {Math.floor(remainingTime / 60)}:{(remainingTime % 60).toString().padStart(2, '0')} 남음
+              재판 진행 중 - 판결까지 {Math.floor(remainingTime / 60)}:{(remainingTime % 60).toString().padStart(2, '0')} 남음
             </span>
           </div>
         )}
@@ -1181,11 +1208,11 @@ export default function ChatRoom({
         {/* 채팅 내용 영역 */}
         <div 
           ref={chatContainerRef}
-          className="overflow-y-auto bg-gray-50"
-          style={{ height: 'calc(100vh - 230px)' }}
+          className="overflow-y-auto bg-gray-50 mt-4"
+          style={{ height: 'calc(100vh - 200px)' }}
         >
           {/* 메시지 목록 */}
-          <div className="p-4 space-y-4">
+          <div className="mt-4 pt-14 pb-4 space-y-4">
             {renderMessages()}
             
             {/* 타이핑 중인 사용자 표시 */}
@@ -1214,9 +1241,9 @@ export default function ChatRoom({
       </div>
 
       {/* 메시지 입력 영역 */}
-      <div className="p-4 border-t border-gray-100 bg-white">
+      <div className={`p-3 border-t border-gray-100 bg-white flex-shrink-0 overflow-hidden ${timerActive ? 'h-[80px]' : 'h-[220px]'}`}>
         {!timerActive ? (
-          <div className="flex flex-col items-center justify-center p-4 space-y-4">
+          <div className="flex flex-col items-center justify-center h-[200px] space-y-2">
             <h3 className="text-lg font-medium text-gray-800">재판을 시작하세요</h3>
             <p className="text-sm text-gray-600 text-center">
               모든 참여자가 입장한 후 재판을 시작할 수 있습니다.
@@ -1251,13 +1278,13 @@ export default function ChatRoom({
             )}
           </div>
         ) : (
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 h-full">
             <textarea
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="메시지를 입력하세요..."
-              className="flex-1 h-10 min-h-10 max-h-32 px-3 py-2 bg-gray-100 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white resize-y"
+              className="flex-1 h-[60px] min-h-[60px] max-h-[60px] px-3 py-2 bg-gray-100 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white resize-none"
             />
             <button
               onClick={() => {
@@ -1267,7 +1294,7 @@ export default function ChatRoom({
                 }
               }}
               disabled={isLoading || !input.trim()}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-4 h-[60px] rounded-lg font-medium transition-colors ${
                 isLoading || !input.trim()
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-indigo-600 text-white hover:bg-indigo-700'
@@ -1276,7 +1303,7 @@ export default function ChatRoom({
               {isLoading ? (
                 <div className="flex items-center">
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  전송 중
+                  전송
                 </div>
               ) : (
                 '전송'
@@ -1356,15 +1383,30 @@ export default function ChatRoom({
       
       {/* 감지된 쟁점 사이드바 (타이머 모드일 때만 표시) */}
       {timerActive && detectedIssues.length > 0 && (
-        <div className="fixed right-4 top-20 w-64 bg-white shadow-lg rounded-lg p-4 border border-gray-200">
-          <h3 className="font-bold text-gray-800 mb-2">감지된 쟁점</h3>
-          <ul className="space-y-2">
-            {detectedIssues.map((issue, index) => (
-              <li key={index} className="text-sm bg-gray-50 p-2 rounded-md">
-                {issue}
-              </li>
-            ))}
-          </ul>
+        <div className={`fixed right-4 top-[180px] w-64 bg-white shadow-lg rounded-lg p-4 border ${hasNewIssues && !isIssueNotificationOpen ? 'border-indigo-500 animate-pulse' : 'border-gray-200'}`}>
+          <div 
+            className="flex items-center justify-between cursor-pointer mb-2" 
+            onClick={toggleIssueNotification}
+          >
+            <h3 className={`font-bold ${hasNewIssues && !isIssueNotificationOpen ? 'text-indigo-600' : 'text-gray-800'}`}>
+              {hasNewIssues && !isIssueNotificationOpen 
+                ? "새로운 쟁점이 감지되었습니다" 
+                : `현재 감지된 쟁점: ${detectedIssues.length}개`}
+            </h3>
+            {isIssueNotificationOpen 
+              ? <ChevronUp className="w-4 h-4 text-gray-600" /> 
+              : <ChevronDown className="w-4 h-4 text-gray-600" />}
+          </div>
+          
+          {isIssueNotificationOpen && (
+            <ul className="space-y-2">
+              {detectedIssues.map((issue, index) => (
+                <li key={index} className="text-sm bg-gray-50 p-2 rounded-md">
+                  {issue}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>
