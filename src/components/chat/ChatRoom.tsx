@@ -37,7 +37,7 @@ import {
   VerdictData,
   PersonalizedResponse,
 } from '@/lib/gemini';
-import { ref, onValue, set, remove, off, get } from 'firebase/database';
+import { ref, onValue, set, remove, off, get, onDisconnect } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import { useParams } from 'next/navigation';
 
@@ -253,6 +253,12 @@ export default function ChatRoom({
   const [hasNewIssues, setHasNewIssues] = useState(false);
   const [previousIssuesCount, setPreviousIssuesCount] = useState(0);
   
+  // Add state to track room host
+  const [isRoomHost, setIsRoomHost] = useState(false);
+  
+  // Add state for host left modal
+  const [showHostLeftModal, setShowHostLeftModal] = useState(false);
+  
   const { 
     messages, 
     stats, 
@@ -300,6 +306,9 @@ export default function ChatRoom({
         joinRoom(roomId, storedUsername);
         // Initialize curse level tracking
         initializeUserCurseLevels();
+        
+        // Check if this user is the room host
+        checkAndSetRoomHost(userId);
       }
       return;
     }
@@ -307,6 +316,28 @@ export default function ChatRoom({
     // 이름이 설정되지 않은 경우 채팅방 참여는 하지 않음
     // 사용자가 이름 모달에서 이름을 설정하면 그때 joinRoom이 호출됨
   }, [roomId, joinRoom, leaveRoom, userCurseLevels, getUserCurseLevel]);
+
+  // Add function to check and set room host
+  const checkAndSetRoomHost = (userId: string) => {
+    if (!roomId || !database) return;
+    
+    const hostRef = ref(database, `rooms/${roomId}/host`);
+    
+    // Check if a host exists
+    get(hostRef).then((snapshot) => {
+      if (!snapshot.exists()) {
+        // No host exists, set this user as host
+        set(hostRef, userId);
+        setIsRoomHost(true);
+      } else {
+        // Host exists, check if it's this user
+        const hostId = snapshot.val();
+        setIsRoomHost(hostId === userId);
+      }
+    }).catch((error) => {
+      console.error("Error checking room host:", error);
+    });
+  };
 
   // 메시지 자동 스크롤
   useEffect(() => {
@@ -1142,6 +1173,99 @@ export default function ChatRoom({
     }
   };
 
+  // Add listener for ready status changes in Firebase
+  useEffect(() => {
+    if (!roomId || !database) return;
+    
+    const readyRef = ref(database, `rooms/${roomId}/ready`);
+    
+    // Listen for ready status changes
+    onValue(readyRef, (snapshot) => {
+      const readyData = snapshot.val();
+      if (readyData) {
+        setReadyUsers(readyData);
+      }
+    });
+    
+    return () => {
+      // Clean up listener
+      off(readyRef);
+    };
+  }, [roomId, database]);
+
+  // Add listener for detected issues
+  useEffect(() => {
+    if (!roomId || !database) return;
+    
+    const issuesRef = ref(database, `rooms/${roomId}/detectedIssues`);
+    
+    // When issues are detected by any user, sync the data
+    onValue(issuesRef, (snapshot) => {
+      const issuesData = snapshot.val();
+      if (issuesData && Array.isArray(issuesData)) {
+        // Update local store with the synced issues
+        useChatStore.getState().updateDetectedIssues(issuesData);
+      }
+    });
+    
+    return () => {
+      off(issuesRef);
+    };
+  }, [roomId, database]);
+
+  // Add effect to sync detected issues to Firebase
+  useEffect(() => {
+    if (!roomId || !database || detectedIssues.length === 0) return;
+    
+    // Update Firebase with current issues
+    const issuesRef = ref(database, `rooms/${roomId}/detectedIssues`);
+    set(issuesRef, detectedIssues);
+  }, [detectedIssues, roomId, database]);
+
+  // Add effect to listen for host presence
+  useEffect(() => {
+    if (!roomId || !database) return;
+    
+    const hostRef = ref(database, `rooms/${roomId}/host`);
+    const hostPresenceRef = ref(database, `rooms/${roomId}/hostPresence`);
+    
+    // Check if host is present and update presence
+    get(hostRef).then((snapshot) => {
+      if (snapshot.exists()) {
+        const hostId = snapshot.val();
+        const userId = localStorage.getItem('userId') || '';
+        
+        // If current user is host, update presence
+        if (hostId === userId) {
+          // Set host presence with onDisconnect to detect if host leaves
+          set(hostPresenceRef, true);
+          const onDisconnectRef = onDisconnect(hostPresenceRef);
+          onDisconnectRef.set(false);
+        }
+      }
+    });
+    
+    // Listen for host presence changes
+    const hostPresenceListener = onValue(hostPresenceRef, (snapshot) => {
+      const isHostPresent = snapshot.val();
+      
+      // If host is not present and current user is not host, show modal
+      if (isHostPresent === false && !isRoomHost) {
+        setShowHostLeftModal(true);
+      }
+    });
+    
+    return () => {
+      // Remove host presence listeners
+      hostPresenceListener();
+    };
+  }, [roomId, database, isRoomHost]);
+
+  // Handle redirect to home page
+  const handleRedirectToHome = () => {
+    window.location.href = '/';
+  };
+
   // 채팅방 UI 렌더링
   return (
     <div className="flex flex-col h-full max-h-[100dvh] bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
@@ -1274,18 +1398,24 @@ export default function ChatRoom({
                 준비 완료! 다른 참가자를 기다리는 중...
               </div>
             )}
-            <button
-              onClick={initiateCourtProcess}
-              disabled={!allUsersReady()}
-              className={`px-4 py-2 font-medium rounded-lg transition-colors shadow-sm compact-btn ${
-                allUsersReady()
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              재판 시작하기
-            </button>
-            {!allUsersReady() && (
+            {isRoomHost ? (
+              <button
+                onClick={initiateCourtProcess}
+                disabled={!allUsersReady()}
+                className={`px-4 py-2 font-medium rounded-lg transition-colors shadow-sm compact-btn ${
+                  allUsersReady()
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                재판 시작하기
+              </button>
+            ) : (
+              <div className="text-sm text-amber-600 compact-text">
+                방장만 재판을 시작할 수 있습니다.
+              </div>
+            )}
+            {!allUsersReady() && isRoomHost && (
               <p className="text-xs text-amber-600 compact-text">
                 모든 참가자가 준비되어야 재판을 시작할 수 있습니다.
               </p>
@@ -1379,6 +1509,26 @@ export default function ChatRoom({
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium compact-btn"
               >
                 취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Host left modal */}
+      {showHostLeftModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4 border-2 border-red-300">
+            <h2 className="text-xl font-bold mb-4 text-red-600">호스트가 방을 나갔습니다</h2>
+            <p className="mb-5 text-gray-800">
+              방장이 채팅방을 나갔습니다. 채팅방을 종료합니다.
+            </p>
+            <div className="flex justify-center">
+              <button
+                onClick={handleRedirectToHome}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+              >
+                메인으로 돌아가기
               </button>
             </div>
           </div>
