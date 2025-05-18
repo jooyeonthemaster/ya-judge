@@ -1144,10 +1144,10 @@ export default function ChatRoom({
 
   // 채팅방 UI 렌더링
   return (
-    <div className="flex flex-col h-full bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
-      {/* 헤더 영역 (일반적으로 스크롤됨) */}
-      <div className="p-4 border-b border-gray-100 bg-white">
-        <div className="flex items-center justify-between mb-3">
+    <div className="flex flex-col h-full max-h-[100vh] bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
+      {/* 헤더 영역 */}
+      <div className="p-3 border-b border-gray-100 bg-white flex-shrink-0">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-2">
             <h2 className="text-lg font-bold text-gray-800">채팅방</h2>
             <span className="px-2 py-1 bg-indigo-100 text-indigo-800 text-xs rounded-full">
@@ -1176,28 +1176,13 @@ export default function ChatRoom({
             )}
           </div>
         </div>
-        
-        {/* 타이머가 활성화된 경우 타이머 표시 */}
-        {/* {timerActive && (
-          <div className="bg-blue-50 border-2 border-blue-200 p-3 rounded-lg flex items-center justify-between mb-2 animate-fadeIn">
-            <div className="flex items-center space-x-2">
-              <Clock className="text-blue-500 h-5 w-5 animate-pulse" />
-              <span className="text-blue-700 font-medium text-lg">
-                남은 시간: {Math.floor(remainingTime / 60)}:{(remainingTime % 60).toString().padStart(2, '0')}
-              </span>
-            </div>
-            <div className="text-sm text-blue-600 font-medium">
-              시간 종료 후 판사가 최종 판결을 내립니다
-            </div>
-          </div>
-        )} */}
       </div>
 
-      {/* 스크롤 영역 전체를 감싸는 컨테이너 */}
-      <div className="relative flex-1 overflow-hidden">
-        {/* Timer mode indicator at the top of chat */}
+      {/* 메인 컨텐츠 영역 */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* 타이머 표시 - 상단 고정 */}
         {timerActive && (
-          <div className="sticky top-0 z-10 bg-blue-100 p-2 flex items-center justify-center shadow-sm border-b border-blue-200">
+          <div className="sticky top-0 z-10 bg-blue-100 p-2 flex items-center justify-center shadow-sm border-b border-blue-200 flex-shrink-0">
             <Clock className="text-blue-600 h-4 w-4 mr-2 animate-pulse" />
             <span className="text-blue-800 text-sm font-medium">
               재판 진행 중 - 판결까지 {Math.floor(remainingTime / 60)}:{(remainingTime % 60).toString().padStart(2, '0')} 남음
@@ -1205,14 +1190,42 @@ export default function ChatRoom({
           </div>
         )}
         
+        {/* 감지된 쟁점 알림 - 타이머 바로 아래 */}
+        {timerActive && detectedIssues.length > 0 && (
+          <div className={`flex-shrink-0 mt-3 opacity-60 hover:opacity-100 transition-opacity duration-300 bg-white shadow-lg rounded-lg ${isIssueNotificationOpen ? 'p-4' : 'p-4 pb-2'} border border-gray-200 ${hasNewIssues && !isIssueNotificationOpen ? 'border-indigo-500 animate-pulse' : ''}`}>
+            <div 
+              className="flex items-center justify-between cursor-pointer mb-2" 
+              onClick={toggleIssueNotification}
+            >
+              <h3 className={`font-bold ${hasNewIssues && !isIssueNotificationOpen ? 'text-indigo-600' : 'text-gray-800'}`}>
+                {hasNewIssues && !isIssueNotificationOpen 
+                  ? "새로운 쟁점이 감지되었습니다" 
+                  : `현재 감지된 쟁점: ${detectedIssues.length}개`}
+              </h3>
+              {isIssueNotificationOpen 
+                ? <ChevronUp className="w-4 h-4 text-gray-600" /> 
+                : <ChevronDown className="w-4 h-4 text-gray-600" />}
+            </div>
+            
+            {isIssueNotificationOpen && (
+              <ul className="space-y-2 max-h-[180px] overflow-y-auto">
+                {detectedIssues.map((issue, index) => (
+                  <li key={index} className="text-sm bg-gray-50 p-2 rounded-md">
+                    {issue}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        
         {/* 채팅 내용 영역 */}
         <div 
           ref={chatContainerRef}
-          className="overflow-y-auto bg-gray-50 mt-4"
-          style={{ height: 'calc(100vh - 200px)' }}
+          className="overflow-y-auto bg-gray-50 flex-1"
         >
           {/* 메시지 목록 */}
-          <div className="mt-4 pt-14 pb-4 space-y-4">
+          <div className="p-3 space-y-3">
             {renderMessages()}
             
             {/* 타이핑 중인 사용자 표시 */}
@@ -1312,7 +1325,7 @@ export default function ChatRoom({
           </div>
         )}
       </div>
-      
+
       {/* 재판 준비 모달 */}
       {showCourtReadyModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1378,35 +1391,6 @@ export default function ChatRoom({
               </button>
             </div>
           </div>
-        </div>
-      )}
-      
-      {/* 감지된 쟁점 사이드바 (타이머 모드일 때만 표시) */}
-      {timerActive && detectedIssues.length > 0 && (
-        <div className={`fixed right-4 top-[180px] w-64 bg-white shadow-lg rounded-lg p-4 border ${hasNewIssues && !isIssueNotificationOpen ? 'border-indigo-500 animate-pulse' : 'border-gray-200'}`}>
-          <div 
-            className="flex items-center justify-between cursor-pointer mb-2" 
-            onClick={toggleIssueNotification}
-          >
-            <h3 className={`font-bold ${hasNewIssues && !isIssueNotificationOpen ? 'text-indigo-600' : 'text-gray-800'}`}>
-              {hasNewIssues && !isIssueNotificationOpen 
-                ? "새로운 쟁점이 감지되었습니다" 
-                : `현재 감지된 쟁점: ${detectedIssues.length}개`}
-            </h3>
-            {isIssueNotificationOpen 
-              ? <ChevronUp className="w-4 h-4 text-gray-600" /> 
-              : <ChevronDown className="w-4 h-4 text-gray-600" />}
-          </div>
-          
-          {isIssueNotificationOpen && (
-            <ul className="space-y-2">
-              {detectedIssues.map((issue, index) => (
-                <li key={index} className="text-sm bg-gray-50 p-2 rounded-md">
-                  {issue}
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       )}
     </div>
