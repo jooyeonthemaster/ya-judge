@@ -48,6 +48,9 @@ import MessageComposer from './MessageComposer';
 import JudgeIntervention from '../JudgeIntervention';
 import CourtReadyModal from './CourtReadyModal';
 
+// Import the timer configuration at the top of the file
+import { TIMER_DURATION_SECONDS } from '../../lib/timerConfig';
+
 interface ChatRoomProps {
   roomId: string | null;
   userType?: string;
@@ -236,8 +239,8 @@ export default function ChatRoom({
   
   // Add these state variables with the other states
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
-  const [timerDuration, setTimerDuration] = useState(5 * 60); // 5 minutes in seconds
-  const [remainingTime, setRemainingTime] = useState(5 * 60);
+  const [timerDuration, setTimerDuration] = useState(TIMER_DURATION_SECONDS); 
+  const [remainingTime, setRemainingTime] = useState(TIMER_DURATION_SECONDS);
   // const [timerDuration, setTimerDuration] = useState(60); // test
   // const [remainingTime, setRemainingTime] = useState(60); //test
   const [timerState, setTimerState] = useState<'idle' | 'running' | 'completed'>('idle');

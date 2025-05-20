@@ -15,11 +15,10 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { Message as GeminiMessage, InterventionData, InterventionType } from '../lib/gemini';
 import { analyzeConversation, getFinalVerdict } from '../lib/gemini';
+import { TIMER_DURATION_MS, MIN_INTERVENTION_INTERVAL_MS } from '../lib/timerConfig';
 
 // 타이머 관련 상수
-const TIMER_DURATION = 60000; // 60초 (밀리초)
-const MIN_INTERVENTION_INTERVAL = 8000; // 최소 판사 개입 간격 (밀리초)
-const MESSAGES_BEFORE_FIRST_INTERVENTION = 4; // 첫 개입 전 필요한 최소 메시지 수
+const MIN_MESSAGES_BEFORE_FIRST_INTERVENTION = 4; // 첫 개입 전 필요한 최소 메시지 수
 
 // 패턴 기반 개입 감지를 위한 상수
 const INTERVENTION_PATTERNS = {
@@ -53,7 +52,7 @@ export interface JudgeIntervention {
   targetUser?: string;
 }
 
-interface ChatState {
+export interface ChatState {
   messages: Message[];
   stats: {
     logicPowerA: number;
@@ -83,6 +82,9 @@ interface ChatState {
   // 최종 판결 요청 여부
   finalVerdictRequested: boolean;
   
+  // 호스트 여부 추적
+  isHost: boolean;
+  
   // 함수들
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
   updateStats: (partial: Partial<ChatState['stats']>) => void;
@@ -90,15 +92,16 @@ interface ChatState {
   clearMessages: () => void;
   setRoomUsers: (users: Array<{ id: string; username: string }>) => void;
   setTypingStatus: (userId: string, username: string, isTyping: boolean) => void;
-  joinRoom: (roomId: string, username: string) => void;
+  joinRoom: (roomId: string, username: string, asHost?: boolean) => void;
   leaveRoom: () => void;
   
-  // 타이머 관련 함수
-  startTimer: () => void;
-  pauseTimer: () => void;
-  resetTimer: () => void;
-  getTimeLeft: () => number;
-  timeSinceLastIntervention: () => number;
+      // 타이머 관련 함수
+    startTimer: () => void;
+    pauseTimer: () => void;
+    resetTimer: () => void;
+    getTimeLeft: () => number;
+    timeSinceLastIntervention: () => number;
+    onTimerEnd: () => void;
   
   // 판사 개입 관련 함수
   requestJudgeAnalysis: (isFinal?: boolean, showMessage?: boolean) => Promise<void>;
@@ -128,7 +131,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     
     // 실시간 판사 시스템 상태
     timerStartTime: null,
-    timerDuration: TIMER_DURATION,
+    timerDuration: TIMER_DURATION_MS,
     timerActive: false,
     
     detectedIssues: [],
@@ -143,12 +146,16 @@ export const useChatStore = create<ChatState>((set, get) => {
     
     // 최종 판결 요청 여부
     finalVerdictRequested: false,
+    
+    // 호스트 여부 초기값
+    isHost: false,
   };
 
   // 방 참여 상태 관리
   let currentRoomRef: DatabaseReference | null = null;
   let roomUsersRef: DatabaseReference | null = null;
   let typingRef: DatabaseReference | null = null;
+  let verdictStatusRef: DatabaseReference | null = null;
   let currentUserId: string = '';
   let db = database as Database | undefined;
   
@@ -166,13 +173,13 @@ export const useChatStore = create<ChatState>((set, get) => {
     ...initialState,  // 초기 상태 값 포함
 
     // 채팅방 참여
-    joinRoom: (roomId: string, username: string) => {
+    joinRoom: (roomId: string, username: string, asHost = false) => {
       if (!db) {
         console.error('Firebase database is not initialized');
         return;
       }
       
-      console.log(`Joining room: ${roomId} as ${username}`);
+      console.log(`Joining room: ${roomId} as ${username}${asHost ? ' (host)' : ''}`);
       
       // 이전 연결 정리
       if (currentRoomRef) {
@@ -180,12 +187,16 @@ export const useChatStore = create<ChatState>((set, get) => {
         off(currentRoomRef);
         if (roomUsersRef) off(roomUsersRef);
         if (typingRef) off(typingRef);
+        if (verdictStatusRef) off(verdictStatusRef);
       }
 
       try {
         // 사용자 ID 생성
         currentUserId = uuidv4();
         console.log(`Generated user ID: ${currentUserId}`);
+        
+        // 호스트 상태 설정
+        set({ isHost: asHost });
         
         // 방 메시지 참조
         currentRoomRef = ref(db, `rooms/${roomId}/messages`);
@@ -306,6 +317,21 @@ export const useChatStore = create<ChatState>((set, get) => {
             set({ typingUsers: {} });
           }
         });
+        
+        // 판결 상태 참조 및 리스너 설정
+        verdictStatusRef = ref(db, `rooms/${roomId}/verdictStatus`);
+        onValue(verdictStatusRef, (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            // 판결 상태 업데이트
+            const isRequested = data.finalVerdictRequested === true;
+            
+            if (isRequested && !get().finalVerdictRequested) {
+              console.log('다른 클라이언트에서 판결이 요청됨');
+              set({ finalVerdictRequested: true });
+            }
+          }
+        });
       } catch (error) {
         console.error('Error joining room:', error);
       }
@@ -325,6 +351,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         off(currentRoomRef);
         if (roomUsersRef) off(roomUsersRef);
         if (typingRef) off(typingRef);
+        if (verdictStatusRef) off(verdictStatusRef);
         
         // 사용자 제거
         if (currentUserId && roomUsersRef) {
@@ -345,6 +372,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         currentRoomRef = null;
         roomUsersRef = null;
         typingRef = null;
+        verdictStatusRef = null;
         currentUserId = '';
       } catch (error) {
         console.error('Error leaving room:', error);
@@ -436,8 +464,8 @@ export const useChatStore = create<ChatState>((set, get) => {
               // Normal check for judge intervention (no aggressive language case)
               if (
                 urgentIntervention ||
-                (userMessages.length >= MESSAGES_BEFORE_FIRST_INTERVENTION && 
-                timeSinceLastJudge >= MIN_INTERVENTION_INTERVAL)
+                (userMessages.length >= MIN_MESSAGES_BEFORE_FIRST_INTERVENTION && 
+                timeSinceLastJudge >= MIN_INTERVENTION_INTERVAL_MS)
               ) {
                 console.log('자동 판사 분석 요청 조건 충족');
                 setTimeout(() => {
@@ -447,8 +475,8 @@ export const useChatStore = create<ChatState>((set, get) => {
               } else {
                 console.log(
                   '자동 판사 분석 조건 미충족:', 
-                  `메시지 수: ${userMessages.length}/${MESSAGES_BEFORE_FIRST_INTERVENTION}, ` +
-                  `경과 시간: ${timeSinceLastJudge}/${MIN_INTERVENTION_INTERVAL}ms`
+                  `메시지 수: ${userMessages.length}/${MIN_MESSAGES_BEFORE_FIRST_INTERVENTION}, ` +
+                  `경과 시간: ${timeSinceLastJudge}/${MIN_INTERVENTION_INTERVAL_MS}ms`
                 );
               }
             }
@@ -533,9 +561,29 @@ export const useChatStore = create<ChatState>((set, get) => {
         timerActive: true,
         finalVerdictRequested: false
       });
+      
+      // 타이머가 끝나면 자동으로 최종 판결 요청
+      const timerTimeout = setTimeout(() => {
+        const state = get();
+        // 타이머가 여전히 활성 상태인지, 아직 판결이 요청되지 않았는지 확인
+        // 그리고 호스트만 타이머 종료시 최종 판결 요청 가능
+        if (state.timerActive && !state.finalVerdictRequested && state.isHost) {
+          console.log('타이머 종료: 자동으로 최종 판결 요청');
+          state.onTimerEnd();
+        }
+      }, TIMER_DURATION_MS);
+      
+      // 전역 변수로 저장하여 필요시 취소할 수 있게 함
+      (window as any).__timerTimeout = timerTimeout;
     },
     
     pauseTimer: () => {
+      // 타이머 자동 종료 이벤트 취소
+      if ((window as any).__timerTimeout) {
+        clearTimeout((window as any).__timerTimeout);
+        (window as any).__timerTimeout = null;
+      }
+      
       const state = get();
       if (state.timerStartTime) {
         const elapsedTime = Date.now() - state.timerStartTime;
@@ -547,9 +595,15 @@ export const useChatStore = create<ChatState>((set, get) => {
     },
     
     resetTimer: () => {
+      // 타이머 자동 종료 이벤트 취소
+      if ((window as any).__timerTimeout) {
+        clearTimeout((window as any).__timerTimeout);
+        (window as any).__timerTimeout = null;
+      }
+      
       set({
         timerStartTime: null,
-        timerDuration: TIMER_DURATION,
+        timerDuration: TIMER_DURATION_MS,
         timerActive: false,
         finalVerdictRequested: false
       });
@@ -563,6 +617,13 @@ export const useChatStore = create<ChatState>((set, get) => {
       
       const elapsedTime = Date.now() - state.timerStartTime;
       const timeLeft = Math.max(0, state.timerDuration - elapsedTime);
+      
+      // 시간이 0에 가까워지면 자동으로 최종 판결 요청 (호스트인 경우에만)
+      if (timeLeft <= 100 && state.timerActive && !state.finalVerdictRequested && state.isHost) {
+        console.log('타이머 종료 감지 (getTimeLeft): 최종 판결 요청');
+        state.onTimerEnd();
+      }
+      
       return Math.ceil(timeLeft / 1000); // 초 단위로 반환, 올림
     },
     
@@ -577,6 +638,34 @@ export const useChatStore = create<ChatState>((set, get) => {
       const lastIntervention = interventions[interventions.length - 1];
       const lastTime = new Date(lastIntervention.timestamp).getTime();
       return Date.now() - lastTime;
+    },
+    
+    onTimerEnd: () => {
+      // 타이머가 끝나면 자동으로 최종 판결 요청
+      const state = get();
+      
+      // 이미 최종 판결이 요청되었거나 타이머가 비활성 상태인지 확인
+      if (state.finalVerdictRequested || !state.timerActive) {
+        console.log('타이머 종료 핸들러: 이미 최종 판결이 요청되었거나 타이머가 비활성 상태입니다.');
+        return;
+      }
+      
+      // 호스트가 아니면 최종 판결 요청하지 않음
+      if (!state.isHost) {
+        console.log('호스트가 아닌 사용자의 타이머 종료 이벤트: 최종 판결 요청 건너뜀');
+        return;
+      }
+      
+      console.log('타이머 종료: 최종 판결 요청');
+      
+      // 타이머 자동 종료 이벤트 취소 (필요시)
+      if ((window as any).__timerTimeout) {
+        clearTimeout((window as any).__timerTimeout);
+        (window as any).__timerTimeout = null;
+      }
+      
+      // 최종 판결 요청
+      state.requestFinalVerdict();
     },
     
     // 판사 분석 요청
@@ -845,6 +934,12 @@ export const useChatStore = create<ChatState>((set, get) => {
         return;
       }
       
+      // 호스트가 아니면 최종 판결 요청 무시
+      if (!get().isHost) {
+        console.log('호스트가 아닌 사용자의 최종 판결 요청 무시');
+        return;
+      }
+      
       // 최종 판결 요청 플래그 설정 - 다른 호출이 진행되는 것을 즉시 방지
       set({ 
         isLoading: true,
@@ -859,46 +954,102 @@ export const useChatStore = create<ChatState>((set, get) => {
         state.pauseTimer();
         console.log('타이머 상태 중지됨');
         
+        // Firebase에 판결 상태 업데이트
+        if (verdictStatusRef && db) {
+          try {
+            await firebaseSet(verdictStatusRef, { 
+              finalVerdictRequested: true,
+              requestedAt: new Date().toISOString()
+            });
+            console.log('Firebase 판결 상태 업데이트 완료');
+          } catch (firebaseError) {
+            console.error('Firebase 판결 상태 업데이트 실패:', firebaseError);
+            // 실패해도 계속 진행
+          }
+        }
+        
+        // 모든 클라이언트에게 판결 진행 중임을 알리는 시스템 메시지 추가
+        await state.addMessage({
+          user: 'system',
+          name: '시스템',
+          text: '최종 판결을 진행 중입니다...'
+        });
+        
         // 최종 판결 요청
         console.log('getFinalVerdict API 호출 시작');
         const verdict = await getFinalVerdict(
           state.messages as GeminiMessage[],
           state.detectedIssues
         );
-        console.log('getFinalVerdict API 호출 완료');
+        console.log('getFinalVerdict API 호출 완료:', verdict);
         
         // 판결 메시지 추가
         if (verdict.verdict && verdict.verdict.summary) {
           console.log('최종 판결 메시지 추가 중');
-          const verdictMessage: Omit<Message, 'id' | 'timestamp'> = {
-            user: 'judge',
-            name: '판사',
-            text: `## 최종 판결\n\n${verdict.verdict.summary}\n\n${verdict.verdict.conflict_root_cause}\n\n${verdict.verdict.recommendation}`
-          };
           
-          // 판사 개입 기록
-          state.addJudgeIntervention(
-            'verdict',
-            verdict.verdict.summary,
-          );
-          
-          await state.addMessage(verdictMessage);
-          console.log('최종 판결 메시지 추가 완료');
-          
-          // Each participant's personalized verdict is omitted for simplicity - there should only be one judge message
+          try {
+            const verdictMessage: Omit<Message, 'id' | 'timestamp'> = {
+              user: 'judge',
+              name: '판사',
+              text: `## 최종 판결\n\n${verdict.verdict.summary}\n\n${verdict.verdict.conflict_root_cause || ''}\n\n${verdict.verdict.recommendation || ''}`,
+              messageType: 'closing'
+            };
+            
+            // 판사 개입 기록
+            state.addJudgeIntervention(
+              'verdict',
+              verdict.verdict.summary,
+            );
+            
+            // 메시지를 Firebase에 추가하여 모든 클라이언트에게 전파
+            await state.addMessage(verdictMessage);
+            console.log('최종 판결 메시지 추가 완료');
+          } catch (messageError) {
+            console.error('판결 메시지 추가 중 오류:', messageError);
+            // 오류 발생 시 더 단순한 메시지로 다시 시도
+            try {
+              await state.addMessage({
+                user: 'judge',
+                name: '판사',
+                text: `## 최종 판결\n\n${verdict.verdict.summary}`,
+                messageType: 'closing'
+              });
+            } catch (retryError) {
+              console.error('간소화된 판결 메시지 추가 중 오류:', retryError);
+            }
+          }
         } else {
           console.error('판결 데이터가 올바르지 않음:', verdict);
+          
+          // 판결 데이터 오류 시 기본 메시지 추가
+          await state.addMessage({
+            user: 'judge',
+            name: '판사',
+            text: '최종 판결을 생성하는 중 오류가 발생했습니다.',
+            messageType: 'closing'
+          });
         }
         
         set({ isLoading: false });
       } catch (error) {
         console.error('최종 판결 오류:', error);
+        
+        // 오류 발생 시 기본 메시지 추가
+        try {
+          await get().addMessage({
+            user: 'judge',
+            name: '판사',
+            text: '최종 판결을 처리하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+            messageType: 'closing'
+          });
+        } catch (msgError) {
+          console.error('오류 메시지 추가 실패:', msgError);
+        }
+        
         set({ 
           isLoading: false,
           error: '최종 판결 중 오류가 발생했습니다.'
         });
-        // 오류 발생 시 finalVerdictRequested 플래그를 재설정하지 않음
-        // 이렇게 하면 다시 호출할 수는 없음 (의도적으로)
       }
     },
     
@@ -909,10 +1060,11 @@ export const useChatStore = create<ChatState>((set, get) => {
         judgeInterventions: [],
         detectedIssues: [],
         timerStartTime: null,
-        timerDuration: TIMER_DURATION,
+        timerDuration: TIMER_DURATION_MS,
         timerActive: false,
         finalVerdictRequested: false,
-        error: null
+        error: null,
+        isHost: false
       });
     },
 

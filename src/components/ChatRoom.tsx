@@ -3,7 +3,7 @@ import { useChatStore } from '../store/chatStore';
 import MessageList from './MessageList';
 import IssuesSidebar from './IssuesSidebar';
 import ChatTimer from './ChatTimer';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Clock } from 'lucide-react';
 
 interface MessageInputProps {
   onSendMessage: (text: string) => void;
@@ -61,11 +61,24 @@ const ChatRoom: React.FC = () => {
   
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
   const [showVerdictModal, setShowVerdictModal] = useState<boolean>(false);
+  const [verdictMessage, setVerdictMessage] = useState<string>('');
   const messageEndRef = useRef<HTMLDivElement>(null);
   
   // 메시지 자동 스크롤
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+  
+  // 메시지 변경 시 최종 판결 감지
+  useEffect(() => {
+    // 최신 메시지가 판사 메시지고 "최종 판결"을 포함하는지 확인
+    const latestMessage = messages[messages.length - 1];
+    if (latestMessage && latestMessage.user === 'judge' && latestMessage.text.includes('최종 판결')) {
+      console.log('최종 판결 메시지 감지: 모달 및 컨페티 표시');
+      setVerdictMessage(latestMessage.text);
+      setShowConfetti(true);
+      setShowVerdictModal(true);
+    }
   }, [messages]);
   
   // 판결 이후 컨페티 효과 
@@ -96,7 +109,7 @@ const ChatRoom: React.FC = () => {
       addMessage({
         user: 'judge',
         name: '판사',
-        text: '재판이 시작되었습니다. 각자의 입장을 자유롭게 설명해주세요. 만약 여러분의 논의가 필요할 때 개입하겠습니다.',
+        text: '재판이 시작되었습니다. 각자의 입장을 자유롭게 설명해주세요. 만약 여러분의 논의가 필요할 때 개입하겠습니다. 타이머가 종료되면 자동으로 최종 판결이 내려집니다.',
         roomId: '' // roomId 속성 추가
       });
     }
@@ -107,7 +120,7 @@ const ChatRoom: React.FC = () => {
     requestJudgeAnalysis();
   };
   
-  // 최종 판결 요청 핸들러
+  // 최종 판결 요청 핸들러 (테스트용)
   const handleRequestVerdict = () => {
     if (window.confirm('정말 최종 판결을 요청하시겠습니까? 대화가 종료됩니다.')) {
       requestFinalVerdict();
@@ -125,7 +138,13 @@ const ChatRoom: React.FC = () => {
           <h1 className="text-xl font-bold">AI 판사 재판실</h1>
           
           {/* 타이머 영역 */}
-          <ChatTimer />
+          <div className="flex items-center">
+            <div className="mr-3 text-sm font-medium flex items-center">
+              <Clock className="w-4 h-4 mr-1" />
+              <span>타이머 종료 시 자동 판결</span>
+            </div>
+            <ChatTimer />
+          </div>
         </div>
         
         {/* 메시지 목록 */}
@@ -182,15 +201,25 @@ const ChatRoom: React.FC = () => {
                   재판 시작
                 </button>
               )}
+              
+              {timerActive && (
+                <button
+                  onClick={handleRequestVerdict}
+                  disabled={isLoading}
+                  className="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
+                  title="테스트용 최종 판결 요청"
+                >
+                  테스트: 최종 판결
+                </button>
+              )}
             </div>
             
-            <button
-              onClick={handleRequestVerdict}
-              disabled={isLoading || !timerActive}
-              className="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
-            >
-              최종 판결 요청
-            </button>
+            {timerActive && (
+              <div className="text-sm text-gray-600 italic px-3 py-1 flex items-center">
+                <Clock className="w-4 h-4 mr-1 text-gray-500" />
+                타이머 종료 시 자동으로 최종 판결이 내려집니다
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -205,9 +234,13 @@ const ChatRoom: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-4">최종 판결</h2>
-            {/* 판결 내용 표시 - 실제 구현에서는 API 응답에서 판결 데이터 사용 */}
+            {/* 판결 내용 표시 */}
             <div className="verdict-content prose">
-              <p>판결이 내려졌습니다.</p>
+              {verdictMessage ? (
+                <div dangerouslySetInnerHTML={{ __html: verdictMessage.replace(/\n/g, '<br>') }} />
+              ) : (
+                <p>판결이 내려졌습니다.</p>
+              )}
             </div>
             <button
               onClick={() => setShowVerdictModal(false)}

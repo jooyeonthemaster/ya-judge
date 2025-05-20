@@ -12,7 +12,8 @@ const ChatTimer: React.FC = () => {
     timerActive 
   } = useChatStore();
   
-  const [timeLeft, setTimeLeft] = React.useState<number>(300); // 5분 (초)
+  // 타이머 값을 상태로 관리
+  const [timeLeft, setTimeLeft] = React.useState<number>(getTimeLeft());
   
   // 타이머 업데이트 함수
   React.useEffect(() => {
