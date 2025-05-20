@@ -41,6 +41,15 @@ import {
 import { ref, onValue, set, remove, off, get, onDisconnect } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import { useParams } from 'next/navigation';
+// Import timer configurations
+import { 
+  DEFAULT_TIMER_DURATION, 
+  TEST_TIMER_DURATION, 
+  TimerState, 
+  TimerData, 
+  formatRemainingTime, 
+  getTimerDuration 
+} from '@/lib/timerConfig';
 
 // 새 컴포넌트 임포트
 import ChatTimer from '../ChatTimer';
@@ -237,14 +246,22 @@ export default function ChatRoom({
   
   // Add these state variables with the other states
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
-  const [timerDuration, setTimerDuration] = useState(5 * 60); // 5 minutes in seconds
-  const [remainingTime, setRemainingTime] = useState(5 * 60);
-  // const [timerDuration, setTimerDuration] = useState(60); // test
-  // const [remainingTime, setRemainingTime] = useState(60); //test
-  const [timerState, setTimerState] = useState<'idle' | 'running' | 'completed'>('idle');
+  // Use centralized timer config instead of hardcoded values
+  const [timerDuration, setTimerDuration] = useState(getTimerDuration());
+  const [remainingTime, setRemainingTime] = useState(getTimerDuration());
+  // Replace with timer state from timerConfig
+  const [timerState, setTimerState] = useState<TimerState>('idle');
   
   // Add state to track if final verdict has been triggered
   const [finalVerdictTriggered, setFinalVerdictTriggered] = useState(false);
+  
+  // Add state for trial ready status after verdict for non-host clients
+  const [trialReady, setTrialReady] = useState(false);
+  const [showTrialReadyButton, setShowTrialReadyButton] = useState(false);
+  
+  // Add state to track post-verdict ready status for all users
+  const [postVerdictReadyUsers, setPostVerdictReadyUsers] = useState<Record<string, boolean>>({});
+  const [showPostVerdictStartButton, setShowPostVerdictStartButton] = useState(false);
   
   // Import this at the top of the file, near the other imports
   const [apiCallsEnabled, setApiCallsEnabled] = useState(true);
@@ -474,11 +491,13 @@ export default function ChatRoom({
     // Firebase에 타이머 시작 상태 저장 (다른 참가자와 동기화)
     if (roomId && database) {
       const timerRef = ref(database, `rooms/${roomId}/timer`);
-      set(timerRef, {
+      // Using TimerData interface
+      const timerData: TimerData = {
         active: true,
         startTime: startTime.toISOString(),
         durationSeconds: timerDuration
-      });
+      };
+      set(timerRef, timerData);
     }
     
     // 시작 메시지 추가
@@ -493,7 +512,7 @@ export default function ChatRoom({
     addMessage({
       user: 'judge',
       name: '판사',
-      text: '안녕하세요, 여러분의 대화를 지켜보다가 필요할 때 개입하는 AI 판사입니다. 자유롭게 대화를 나누세요. 5분 후 최종 판결을 내리겠습니다.',
+      text: `안녕하세요, 여러분의 대화를 지켜보다가 필요할 때 개입하는 AI 판사입니다. 자유롭게 대화를 나누세요. ${Math.floor(timerDuration / 60)}분 후 최종 판결을 내리겠습니다.`,
       roomId: roomId || ''
     });
   };
@@ -705,12 +724,15 @@ export default function ChatRoom({
         // Update Firebase to indicate timer completed - let the server trigger the verdict
         if (roomId && database) {
           const timerRef = ref(database, `rooms/${roomId}/timer`);
-          set(timerRef, {
+          // Using TimerData interface
+          const timerData: TimerData = {
             active: false,
             completed: true,
             completedAt: new Date().toISOString(),
-            endReason: 'time_expired'
-          });
+            endReason: 'time_expired',
+            durationSeconds: timerDuration
+          };
+          set(timerRef, timerData);
           
           // Show analysis in progress message
           addMessage({
@@ -737,7 +759,7 @@ export default function ChatRoom({
     
     // Timer state change listener
     onValue(timerRef, (snapshot) => {
-      const timerData = snapshot.val();
+      const timerData = snapshot.val() as TimerData | null;
       
       if (!timerData) return;
       
@@ -808,16 +830,45 @@ export default function ChatRoom({
             // Only proceed if database is defined
             if (database) {
               const updatedTimerRef = ref(database, `rooms/${roomId}/timer`);
-              set(updatedTimerRef, {
+              // Using spread operator with TimerData
+              const updatedTimerData: TimerData = {
                 ...timerData,
                 messagesSent: true
-              });
+              };
+              set(updatedTimerRef, updatedTimerData);
             }
           }
           
-          console.log('Calling requestFinalVerdict ONE TIME ONLY');
-          // SERVER-SIDE TIMER TRIGGERS THE FINAL VERDICT
-          requestFinalVerdict();
+          // Only the host should call the final verdict API
+          if (isRoomHost) {
+            console.log('Host is calling requestFinalVerdict ONE TIME ONLY');
+            // SERVER-SIDE TIMER TRIGGERS THE FINAL VERDICT - ONLY FROM HOST
+            requestFinalVerdict();
+            
+            // Clear any previous trial ready status first
+            if (database) {
+              const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
+              remove(trialReadyRef);
+            }
+            
+            // Reset ready status for all clients
+            if (database) {
+              const readyRef = ref(database, `rooms/${roomId}/ready`);
+              remove(readyRef);
+            }
+            
+            // Update Firebase to indicate final verdict is in progress
+            if (database) {
+              const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
+              set(verdictStatusRef, {
+                inProgress: true,
+                startedAt: new Date().toISOString()
+              });
+            }
+          } else {
+            console.log('Non-host client, skipping final verdict API call');
+            // Non-host clients will just wait for verdict status update
+          }
         }
       }
     });
@@ -1318,9 +1369,181 @@ export default function ChatRoom({
     };
   }, [roomId, database, isRoomHost]);
 
+  // Add effect to listen for verdict status
+  useEffect(() => {
+    if (!roomId || !database) return;
+    
+    const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
+    
+    // Listen for verdict status changes
+    const verdictStatusListener = onValue(verdictStatusRef, (snapshot) => {
+      const verdictStatus = snapshot.val();
+      
+      if (verdictStatus && verdictStatus.inProgress) {
+        // Set final verdict triggered for all clients
+        setFinalVerdictTriggered(true);
+        
+        // Show ready button for non-host clients
+        if (!isRoomHost) {
+          setShowTrialReadyButton(true);
+          
+          // Add system message about verdict in progress
+          addMessage({
+            user: 'system',
+            name: '시스템',
+            text: '판사가 최종 판결을 준비 중입니다. 재판이 끝난 후 새 재판을 위해 준비 버튼을 눌러주세요.',
+            roomId: roomId || ''
+          });
+        }
+      }
+    });
+    
+    return () => {
+      // Remove verdict status listener
+      verdictStatusListener();
+    };
+  }, [roomId, database, isRoomHost, addMessage]);
+  
+  // Add effect to listen for post-verdict ready status
+  useEffect(() => {
+    if (!roomId || !database) return;
+    
+    const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
+    
+    // Listen for trial ready status changes
+    const trialReadyListener = onValue(trialReadyRef, (snapshot) => {
+      const readyData = snapshot.val() || {};
+      
+      // Update ready users state even if data is null/undefined (set to empty object)
+      setPostVerdictReadyUsers(readyData);
+      
+      // If host and there's a final verdict, show the start button
+      if (isRoomHost && finalVerdictTriggered) {
+        setShowPostVerdictStartButton(true);
+      }
+      
+      // Log for debugging
+      console.log('Post-verdict ready users updated:', readyData);
+      console.log('All users ready?', allPostVerdictUsersReady());
+    });
+    
+    return () => {
+      // Remove trial ready listener
+      off(trialReadyRef);
+    };
+  }, [roomId, database, isRoomHost, finalVerdictTriggered]);
+
   // Handle redirect to home page
   const handleRedirectToHome = () => {
     window.location.href = '/';
+  };
+
+  // Add handler for trial ready status after verdict
+  const handleTrialReady = () => {
+    if (!roomId || !database) return;
+    
+    const userId = localStorage.getItem('userId') || '';
+    if (!userId) return;
+    
+    // Update regular ready status in Firebase (this is what the host checks)
+    const readyRef = ref(database, `rooms/${roomId}/ready/${userId}`);
+    set(readyRef, true);
+    
+    // Also update the trial ready status
+    const trialReadyRef = ref(database, `rooms/${roomId}/trialReady/${userId}`);
+    set(trialReadyRef, true);
+    
+    // Update local state
+    setTrialReady(true);
+    setShowTrialReadyButton(false);
+    
+    // Add message to show user is ready
+    addMessage({
+      user: 'system',
+      name: '시스템',
+      text: '재판 준비가 완료되었습니다. 호스트가 새 재판을 시작하면 참여할 수 있습니다.',
+      roomId: roomId || ''
+    });
+    
+    console.log('Client marked as ready for new trial');
+  };
+  
+  // Helper function to check if all users are ready for a new trial after verdict
+  const allPostVerdictUsersReady = (): boolean => {
+    // Get all active users (excluding system and host)
+    const activeUsers = roomUsers.filter(user => 
+      !user.username.includes('System') && 
+      user.username !== 'System' && 
+      user.id !== localStorage.getItem('userId')
+    );
+    
+    // If there are no other users besides the host, return true
+    if (activeUsers.length === 0) return true;
+    
+    // If there are no ready users at all, definitely return false
+    if (Object.keys(postVerdictReadyUsers).length === 0) return false;
+    
+    // Debugging - log active users and their ready status
+    console.log('Active users needing to be ready:', activeUsers.map(u => u.id));
+    console.log('Current ready users:', Object.keys(postVerdictReadyUsers));
+    
+    // Check each active user explicitly
+    for (const user of activeUsers) {
+      console.log(`Checking if user ${user.id} is ready:`, postVerdictReadyUsers[user.id]);
+      if (postVerdictReadyUsers[user.id] !== true) {
+        console.log(`User ${user.id} is NOT ready, returning false`);
+        return false; // If any user is not ready, immediately return false
+      }
+    }
+    
+    console.log('All users are ready!');
+    return true; // All users are confirmed ready
+  };
+  
+  // Handle starting a new trial after verdict
+  const handleStartNewTrial = () => {
+    if (!roomId || !database) return;
+    
+    // Safety check - if not all users are ready, don't allow starting a new trial
+    if (!allPostVerdictUsersReady()) {
+      console.log('Prevented start of new trial - not all users ready');
+      // Show warning message
+      addMessage({
+        user: 'system',
+        name: '시스템',
+        text: '모든 참석자가 준비 버튼을 눌러야 새 재판을 시작할 수 있습니다.',
+        roomId: roomId || ''
+      });
+      return;
+    }
+    
+    // Reset state for new trial
+    setFinalVerdictTriggered(false);
+    setApiCallsEnabled(true);
+    setShowPostVerdictStartButton(false);
+    
+    // Clear the verdict status in Firebase
+    const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
+    remove(verdictStatusRef);
+    
+    // Clear ready status in Firebase
+    const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
+    remove(trialReadyRef);
+    
+    // Reset Timer
+    resetTimer();
+    
+    // Clear messages and start new trial
+    clearChat();
+    addMessage({
+      user: 'system',
+      name: '시스템',
+      text: '호스트가 새 재판을 시작했습니다. 모두 준비해주세요.',
+      roomId: roomId || ''
+    });
+    
+    // Show court ready modal to start a new trial
+    setShowCourtReadyModal(true);
   };
 
   // 채팅방 UI 렌더링
@@ -1371,7 +1594,7 @@ export default function ChatRoom({
           <div className="sticky top-0 z-10 bg-gradient-to-r from-pink-100 to-purple-100 p-2 flex items-center justify-center shadow-sm border-b border-pink-200 flex-shrink-0">
             <Clock className="text-pink-600 h-4 w-4 mr-2 animate-pulse" />
             <span className="text-pink-800 text-sm font-medium">
-              재판 진행 중 - 판결까지 {Math.floor(remainingTime / 60)}:{(remainingTime % 60).toString().padStart(2, '0')} 남음
+              재판 진행 중 - 판결까지 {formatRemainingTime(remainingTime)} 남음
             </span>
           </div>
         )}
@@ -1443,7 +1666,7 @@ export default function ChatRoom({
 
       {/* 메시지 입력 영역 */}
       <div className={`px-3 py-1 border-t border-pink-100 bg-gradient-to-r from-pink-50 to-purple-50 flex-shrink-0 overflow-hidden ${timerActive ? 'h-[80px]' : 'auto'}`}>
-        {!timerActive ? (
+        {!timerActive && !finalVerdictTriggered ? (
           <div className="flex flex-col items-start h-auto">
             <h3 className="text-lg font-medium text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-purple-700 flex items-center compact-text">
               <Gavel className="h-5 w-5 mr-2 text-pink-600" />
@@ -1497,7 +1720,136 @@ export default function ChatRoom({
               </p>
             )}
           </div>
+        ) : finalVerdictTriggered && !timerActive && !isRoomHost ? (
+          // Show special post-verdict disabled UI when timer is not active but verdict has been triggered - ONLY FOR NON-HOSTS
+          <div className="flex flex-col items-start h-auto">
+            <h3 className="text-lg font-medium text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-800 flex items-center compact-text">
+              <Gavel className="h-5 w-5 mr-2 text-amber-600" />
+              판결 완료
+            </h3>
+            <p className="text-sm text-gray-600 text-center compact-text">
+              이 채팅방의 최종 판결이 완료되었습니다.
+            </p>
+            
+            <div className="px-4 py-1 mt-1 font-medium rounded-lg shadow-sm compact-btn bg-gray-300 text-gray-500 cursor-not-allowed opacity-50 flex items-center">
+              <Gavel className="w-4 h-4 mr-2" />
+              재판 개시 불가
+            </div>
+            
+            <p className="text-xs text-amber-600 compact-text flex items-center mt-1">
+              <AlertTriangle className="w-3.5 h-3.5 mr-1 text-amber-600" />
+              <strong>호스트만 재판을 시작할 수 있습니다.</strong>
+            </p>
+          </div>
+        ) : finalVerdictTriggered && !timerActive && isRoomHost ? (
+          // Host version with ability to start new trial if all users are ready
+          <div className="flex flex-col items-start h-auto">
+            <h3 className="text-lg font-medium text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-800 flex items-center compact-text">
+              <Gavel className="h-5 w-5 mr-2 text-amber-600" />
+              최종 판결 완료
+            </h3>
+            <p className="text-sm text-gray-600 text-center compact-text">
+              {Object.values(readyUsers).filter(isReady => isReady).length}/{roomUsers.filter(user => !user.username.includes('System') && user.id !== localStorage.getItem('userId')).length} 참석자가 새 재판 준비를 완료했습니다.
+            </p>
+            
+            {/* Show clickable button when all users are ready */}
+            {allUsersReady() ? (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={initiateCourtProcess}
+                className="px-4 py-1 mt-1 font-medium rounded-lg transition-all shadow-lg compact-btn bg-gradient-to-r from-pink-600 to-purple-700 text-white hover:shadow-xl hover:from-pink-700 hover:to-purple-800"
+              >
+                <div className="flex items-center">
+                  <Gavel className="w-4 h-4 mr-2" />
+                  재판 개시 선언
+                </div>
+              </motion.button>
+            ) : (
+              <div className="px-4 py-1 mt-1 font-medium rounded-lg shadow-sm compact-btn bg-gray-300 text-gray-500 cursor-not-allowed opacity-50 flex items-center">
+                <Gavel className="w-4 h-4 mr-2" />
+                재판 개시 선언 (준비 중...)
+              </div>
+            )}
+            
+            {!allUsersReady() && (
+              <p className="text-xs text-amber-600 compact-text flex items-center mt-1">
+                <Scale className="w-3.5 h-3.5 mr-1 text-amber-600" />
+                <strong>모든 참석자가 준비 버튼을 눌러야 새 재판을 시작할 수 있습니다.</strong>
+              </p>
+            )}
+          </div>
+        ) : finalVerdictTriggered && isRoomHost && showPostVerdictStartButton ? (
+          // Show host controls after final verdict - button enabled when all users are ready
+          <div className="flex flex-col items-start h-auto">
+            <h3 className="text-lg font-medium text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-800 flex items-center compact-text">
+              <Gavel className="h-5 w-5 mr-2 text-amber-600" />
+              최종 판결 완료
+            </h3>
+            <p className="text-sm text-gray-600 text-center compact-text">
+              {Object.values(postVerdictReadyUsers).filter(isReady => isReady).length}/{roomUsers.filter(user => !user.username.includes('System') && user.id !== localStorage.getItem('userId')).length} 참석자가 새 재판 준비를 완료했습니다.
+            </p>
+            
+            {/* Show clickable button when all users are ready */}
+            {allPostVerdictUsersReady() ? (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleStartNewTrial}
+                className="px-4 py-1 mt-1 font-medium rounded-lg transition-all shadow-lg compact-btn bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:shadow-xl hover:from-amber-600 hover:to-amber-700"
+              >
+                <div className="flex items-center">
+                  <Gavel className="w-4 h-4 mr-2" />
+                  새 재판 개시 선언
+                </div>
+              </motion.button>
+            ) : (
+              <div className="px-4 py-1 mt-1 font-medium rounded-lg shadow-sm compact-btn bg-gray-300 text-gray-500 cursor-not-allowed opacity-50 flex items-center">
+                <Gavel className="w-4 h-4 mr-2" />
+                새 재판 개시 선언 (준비 중...)
+              </div>
+            )}
+            
+            {!allPostVerdictUsersReady() && (
+              <p className="text-xs text-amber-600 compact-text flex items-center mt-1">
+                <Scale className="w-3.5 h-3.5 mr-1 text-amber-600" />
+                <strong>모든 참석자가 준비 버튼을 눌러야 새 재판을 시작할 수 있습니다.</strong>
+              </p>
+            )}
+          </div>
+        ) : showTrialReadyButton ? (
+          // Show trial ready button for non-host clients when final verdict is triggered
+          <div className="flex items-center justify-center h-full">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleTrialReady}
+              className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-amber-600 hover:to-amber-700"
+            >
+              <div className="flex items-center">
+                <Gavel className="w-5 h-5 mr-2" />
+                재판 준비 완료
+              </div>
+            </motion.button>
+          </div>
+        ) : finalVerdictTriggered && !isRoomHost ? (
+          // Show disabled input for non-host clients when final verdict is triggered
+          <div className="flex items-center space-x-2 h-full">
+            <div className="flex-1 h-[60px] min-h-[60px] max-h-[60px] px-3 py-2 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center">
+              <span className="text-gray-500">판사가 최종 판결을 준비 중입니다...</span>
+            </div>
+            <button
+              disabled
+              className="px-4 h-[60px] rounded-lg font-medium transition-all shadow-sm bg-gray-300 text-gray-500 cursor-not-allowed"
+            >
+              <div className="flex items-center">
+                <Gavel className="w-4 h-4 mr-2" />
+                제출
+              </div>
+            </button>
+          </div>
         ) : (
+          // Normal chat input for host and non-ready clients
           <div className="flex items-center space-x-2 h-full">
             <textarea
               value={input}
@@ -1505,6 +1857,7 @@ export default function ChatRoom({
               onKeyDown={handleKeyDown}
               placeholder="변론 내용을 작성하세요..."
               className="flex-1 h-[60px] min-h-[60px] max-h-[60px] px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-200 border border-pink-200 transition-all resize-none placeholder:text-gray-400"
+              disabled={finalVerdictTriggered && !isRoomHost}
             />
             <motion.button
               whileHover={{ scale: 1.02 }}
@@ -1515,9 +1868,9 @@ export default function ChatRoom({
                   setInput('');
                 }
               }}
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || !input.trim() || (finalVerdictTriggered && !isRoomHost)}
               className={`px-4 h-[60px] rounded-lg font-medium transition-all shadow-lg ${
-                isLoading || !input.trim()
+                isLoading || !input.trim() || (finalVerdictTriggered && !isRoomHost)
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-gradient-to-r from-pink-600 to-purple-700 text-white hover:shadow-xl hover:from-pink-700 hover:to-purple-800'
               }`}
