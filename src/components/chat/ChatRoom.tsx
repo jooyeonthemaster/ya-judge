@@ -29,7 +29,8 @@ import {
   Loader2,
   Share,
   Clock,
-  ChevronUp
+  ChevronUp,
+  HelpCircle
 } from 'lucide-react';
 import { 
   getFinalVerdict,
@@ -1007,6 +1008,18 @@ export default function ChatRoom({
 
   // 메시지 목록 렌더링
   const renderMessages = () => {
+    // 메시지가 없을 경우
+    if (messages.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-80 space-y-3">
+          <Gavel className="w-12 h-12 text-pink-300" />
+          <p className="text-gray-400 text-center">
+            아직 대화 내용이 없습니다.<br/>재판이 시작되면 여기에 대화 내용이 표시됩니다.
+          </p>
+        </div>
+      );
+    }
+    
     // Find the index of the final verdict message
     let lastVerdictIndex = -1;
     let hasFinalVerdict = false;
@@ -1061,7 +1074,9 @@ export default function ChatRoom({
           }`}
         >
           {/* 판사 메시지 구분선 시작 */}
-          {message.user === 'judge' && <div className="w-3/4 h-px bg-amber-300 mx-auto my-6" />}
+          {message.user === 'judge' && (
+            <div className="w-3/4 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent mx-auto my-4" />
+          )}
           
           {/* 프로필 이미지 표시 조건 수정 */}
           {(message.user === 'judge' || (!isMine && message.user !== 'system')) && (
@@ -1070,33 +1085,52 @@ export default function ChatRoom({
             </div>
           )}
           
-          {/* 메시지 컨텐츠 컨테이너 너비 확장 */}
+          {/* 메시지 컨텐츠 컨테이너 */}
           <div className={`mx-2 ${
             message.user === 'judge'
-              ? 'max-w-[95%] w-full'
+              ? 'max-w-[90%] w-full transform transition-all duration-300 hover:scale-[1.01]'
               : 'max-w-[80%]'
           } ${isMine ? 'order-1' : 'order-2'}`}>
             {/* 메시지 정보 (이름, 시간) 중앙 정렬 */}
             {message.user !== 'system' && (
               <div className={`flex items-center mb-1 ${message.user === 'judge' ? 'justify-center' : ''}`}>
-                <span className={`text-sm font-medium ${message.user === 'judge' ? 'text-amber-700' : 'text-gray-700'}`}>{message.name}</span>
+                <span className={`text-sm font-medium ${
+                  message.user === 'judge' 
+                    ? 'text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-800' 
+                    : isMine 
+                      ? 'text-pink-700' 
+                      : 'text-purple-700'
+                }`}>
+                  {message.user === 'judge' ? (
+                    <span className="flex items-center justify-center">
+                      <Gavel className="w-4 h-4 mr-1.5 text-amber-600" />
+                      {message.name}
+                    </span>
+                  ) : (
+                    message.name
+                  )}
+                </span>
                 {message.timestamp && (
                   <span className="text-xs text-gray-500 ml-2">
                     {formatTime(message.timestamp)}
                   </span>
                 )}
+                {/* @ts-ignore - 타입 체크 무시 */}
+                {curseLevel > 0 && message.user !== 'judge' && message.user !== 'system' && (
+                  <CurseLevelBadge level={curseLevel} />
+                )}
               </div>
             )}
             
             {/* 메시지 말풍선 스타일 강화 */}
-            <div 
-              className={`rounded-lg px-4 py-2.5 ${
+            <div
+              className={`rounded-lg px-4 py-2.5 shadow-sm ${
                 message.user === 'system' 
-                  ? 'bg-gray-200 text-gray-800 text-sm mx-auto max-w-md' 
+                  ? 'bg-gray-100 text-gray-800 text-sm mx-auto max-w-md border border-gray-200' 
                   : message.user === 'judge'
-                    ? 'bg-amber-100 border border-amber-300 text-gray-800 shadow-lg'
+                    ? 'bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 text-gray-800'
                     : isMine
-                      ? 'bg-indigo-100 text-gray-800'
+                      ? 'bg-gradient-to-r from-pink-100 to-purple-100 border border-pink-200 text-gray-800'
                       : 'bg-white border border-gray-200 text-gray-800'
               }`}
               style={message.user === 'judge' ? {
@@ -1121,13 +1155,17 @@ export default function ChatRoom({
                 <div className={`mt-1 flex items-center ${message.user === 'judge' ? 'justify-center' : 'justify-end'}`}>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                     message.messageType === 'evidence' 
-                      ? 'bg-green-100 text-green-800' 
+                      ? 'bg-green-100 text-green-800 border border-green-200' 
                       : message.messageType === 'objection'
-                        ? 'bg-red-100 text-red-800'
+                        ? 'bg-red-100 text-red-800 border border-red-200'
                         : message.messageType === 'closing'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-blue-100 text-blue-800'
+                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                          : 'bg-blue-100 text-blue-800 border border-blue-200'
                   }`}>
+                    {message.messageType === 'evidence' && <Scale className="w-3 h-3 mr-1 inline" />}
+                    {message.messageType === 'objection' && <AlertTriangle className="w-3 h-3 mr-1 inline" />}
+                    {message.messageType === 'closing' && <Gavel className="w-3 h-3 mr-1 inline" />}
+                    {message.messageType === 'question' && <HelpCircle className="w-3 h-3 mr-1 inline" />}
                     {message.messageType === 'evidence' && '증거'}
                     {message.messageType === 'objection' && '반론'}
                     {message.messageType === 'closing' && '최종변론'}
@@ -1136,10 +1174,29 @@ export default function ChatRoom({
                 </div>
               )}
             </div>
+            
+            {/* 관련 쟁점 표시 */}
+            {message.relatedIssue && (
+              <div className="mt-1 ml-1">
+                <span className="text-xs flex items-center text-pink-600">
+                  <Scale className="w-3 h-3 mr-1" /> 
+                  관련 쟁점: {message.relatedIssue}
+                </span>
+              </div>
+            )}
           </div>
           
+          {/* 내 프로필 이미지 */}
+          {isMine && message.user !== 'system' && message.user !== 'judge' && (
+            <div className="order-2">
+              <ProfileInitial name={message.name || '익명'} isMine={true} />
+            </div>
+          )}
+          
           {/* 판사 메시지 구분선 끝 */}
-          {message.user === 'judge' && <div className="w-3/4 h-px bg-amber-300 mx-auto my-6" />}
+          {message.user === 'judge' && (
+            <div className="w-3/4 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent mx-auto my-4" />
+          )}
         </div>
       );
     });
@@ -1268,35 +1325,40 @@ export default function ChatRoom({
 
   // 채팅방 UI 렌더링
   return (
-    <div className="flex flex-col h-full max-h-[100dvh] bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
+    <div className="flex flex-col h-full max-h-[100dvh] bg-gradient-to-b from-white to-pink-50 rounded-lg shadow-lg overflow-hidden border border-pink-100 w-[380px] mx-auto">
       {/* 헤더 영역 */}
-      <div className="p-3 border-b border-gray-100 bg-white flex-shrink-0">
+      <div className="p-3 border-b border-pink-100 bg-gradient-to-r from-pink-50 to-purple-50 flex-shrink-0">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-2">
-            <h2 className="text-lg font-bold text-gray-800">채팅방</h2>
-            <span className="px-2 py-1 bg-indigo-100 text-indigo-800 text-xs rounded-full">
-              {calculatedChattersCount()}명 참여 중
+            <h2 className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-purple-700 flex items-center">
+              <Gavel className="h-5 w-5 mr-2 text-pink-600" />
+              재판실
+            </h2>
+            <span className="px-2 py-1 bg-pink-100 text-pink-800 text-xs rounded-full shadow-sm">
+              {calculatedChattersCount()}명 참석 중
             </span>
           </div>
           
           <div className="flex items-center space-x-2">
             {onShare && (
-              <button
+              <motion.button
+                whileTap={{ scale: 0.9 }}
                 onClick={onShare}
-                className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-full transition-colors"
-                title="채팅방 공유"
+                className="p-2 text-pink-500 hover:text-pink-700 hover:bg-pink-50 rounded-full transition-colors"
+                title="법정 참석자 소환"
               >
                 <Share2 className="w-5 h-5" />
-              </button>
+              </motion.button>
             )}
             {!onShare && (
-              <button
+              <motion.button
+                whileTap={{ scale: 0.9 }}
                 onClick={handleShareRoom}
-                className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-full transition-colors"
-                title="채팅방 링크 복사"
+                className="p-2 text-pink-500 hover:text-pink-700 hover:bg-pink-50 rounded-full transition-colors"
+                title="법정 링크 복사"
               >
                 <Share className="w-5 h-5" />
-              </button>
+              </motion.button>
             )}
           </div>
         </div>
@@ -1306,9 +1368,9 @@ export default function ChatRoom({
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 타이머 표시 - 상단 고정 */}
         {timerActive && (
-          <div className="sticky top-0 z-10 bg-blue-100 p-2 flex items-center justify-center shadow-sm border-b border-blue-200 flex-shrink-0">
-            <Clock className="text-blue-600 h-4 w-4 mr-2 animate-pulse" />
-            <span className="text-blue-800 text-sm font-medium">
+          <div className="sticky top-0 z-10 bg-gradient-to-r from-pink-100 to-purple-100 p-2 flex items-center justify-center shadow-sm border-b border-pink-200 flex-shrink-0">
+            <Clock className="text-pink-600 h-4 w-4 mr-2 animate-pulse" />
+            <span className="text-pink-800 text-sm font-medium">
               재판 진행 중 - 판결까지 {Math.floor(remainingTime / 60)}:{(remainingTime % 60).toString().padStart(2, '0')} 남음
             </span>
           </div>
@@ -1316,25 +1378,26 @@ export default function ChatRoom({
         
         {/* 감지된 쟁점 알림 - 타이머 바로 아래 */}
         {timerActive && detectedIssues.length > 0 && (
-          <div className={`flex-shrink-0 mt-3 opacity-60 hover:opacity-100 transition-opacity duration-300 bg-white shadow-lg rounded-lg ${isIssueNotificationOpen ? 'p-4' : 'p-4 pb-2'} border border-gray-200 ${hasNewIssues && !isIssueNotificationOpen ? 'border-indigo-500 animate-pulse' : ''}`}>
+          <div className={`flex-shrink-0 mt-3 opacity-60 hover:opacity-100 transition-opacity duration-300 bg-white shadow-lg rounded-lg ${isIssueNotificationOpen ? 'p-4' : 'p-4 pb-2'} border border-pink-200 mx-2 ${hasNewIssues && !isIssueNotificationOpen ? 'border-pink-500 animate-pulse' : ''}`}>
             <div 
               className="flex items-center justify-between cursor-pointer mb-2" 
               onClick={toggleIssueNotification}
             >
-              <h3 className={`font-bold ${hasNewIssues && !isIssueNotificationOpen ? 'text-indigo-600' : 'text-gray-800'}`}>
+              <h3 className={`font-bold ${hasNewIssues && !isIssueNotificationOpen ? 'text-pink-600' : 'text-gray-800'} flex items-center`}>
+                <Scale className="h-4 w-4 mr-1.5 text-pink-600" />
                 {hasNewIssues && !isIssueNotificationOpen 
-                  ? "새로운 쟁점이 감지되었습니다" 
-                  : `현재 감지된 쟁점: ${detectedIssues.length}개`}
+                  ? "새로운 쟁점이 제기되었습니다" 
+                  : `현재 쟁점 목록: ${detectedIssues.length}개`}
               </h3>
               {isIssueNotificationOpen 
-                ? <ChevronUp className="w-4 h-4 text-gray-600" /> 
-                : <ChevronDown className="w-4 h-4 text-gray-600" />}
+                ? <ChevronUp className="w-4 h-4 text-pink-600" /> 
+                : <ChevronDown className="w-4 h-4 text-pink-600" />}
             </div>
             
             {isIssueNotificationOpen && (
               <ul className="space-y-2 max-h-[180px] overflow-y-auto">
                 {detectedIssues.map((issue, index) => (
-                  <li key={index} className="text-sm bg-gray-50 p-2 rounded-md">
+                  <li key={index} className="text-sm bg-pink-50 p-2 rounded-md border border-pink-100 shadow-sm">
                     {issue}
                   </li>
                 ))}
@@ -1346,7 +1409,7 @@ export default function ChatRoom({
         {/* 채팅 내용 영역 */}
         <div 
           ref={chatContainerRef}
-          className="overflow-y-auto bg-gray-50 flex-1"
+          className="overflow-y-auto bg-gradient-to-b from-white to-pink-50 flex-1"
           style={{ maxHeight: 'calc(100dvh - 200px)' }}
         >
           {/* 메시지 목록 */}
@@ -1357,17 +1420,17 @@ export default function ChatRoom({
             {Object.values(typingUsers)
               .filter(user => user.isTyping && user.username !== username).length > 0 && (
               <div className="flex items-center space-x-2 ml-12 mt-1">
-                <div className="bg-gray-100 rounded-lg px-3 py-1.5">
+                <div className="bg-pink-100 rounded-lg px-3 py-1.5 shadow-sm">
                   <div className="flex space-x-1">
-                    <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{animationDelay: '0ms'}}></div>
-                    <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{animationDelay: '150ms'}}></div>
-                    <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{animationDelay: '300ms'}}></div>
+                    <div className="w-2 h-2 rounded-full bg-pink-400 animate-bounce" style={{animationDelay: '0ms'}}></div>
+                    <div className="w-2 h-2 rounded-full bg-pink-400 animate-bounce" style={{animationDelay: '150ms'}}></div>
+                    <div className="w-2 h-2 rounded-full bg-pink-400 animate-bounce" style={{animationDelay: '300ms'}}></div>
                   </div>
                 </div>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-pink-500">
                   {Object.values(typingUsers)
                     .filter(user => user.isTyping && user.username !== username)
-                    .map(user => user.username).join(', ')} 입력 중...
+                    .map(user => user.username).join(', ')} 변론 작성 중...
                 </span>
               </div>
             )}
@@ -1379,45 +1442,58 @@ export default function ChatRoom({
       </div>
 
       {/* 메시지 입력 영역 */}
-      <div className={`p-3 border-t border-gray-100 bg-white flex-shrink-0 overflow-hidden ${timerActive ? 'h-[80px]' : 'h-[220px]'} max-h-[30dvh]`}>
+      <div className={`px-3 py-1 border-t border-pink-100 bg-gradient-to-r from-pink-50 to-purple-50 flex-shrink-0 overflow-hidden ${timerActive ? 'h-[80px]' : 'auto'}`}>
         {!timerActive ? (
-          <div className="flex flex-col items-center justify-center h-[200px] space-y-2">
-            <h3 className="text-lg font-medium text-gray-800 compact-text">재판을 시작하세요</h3>
+          <div className="flex flex-col items-start h-auto">
+            <h3 className="text-lg font-medium text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-purple-700 flex items-center compact-text">
+              <Gavel className="h-5 w-5 mr-2 text-pink-600" />
+              재판 진행 준비
+            </h3>
             <p className="text-sm text-gray-600 text-center compact-text">
-              모든 참여자가 입장한 후 재판을 시작할 수 있습니다.
+              모든 참석자의 준비가 완료되면 재판을 시작할 수 있습니다.
             </p>
             {!Object.keys(readyUsers).includes(localStorage.getItem('userId') || '') ? (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={handleUserReady}
-                className="px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors shadow-sm compact-btn"
+                className="px-4 py-1 mt-1 bg-gradient-to-r from-pink-600 to-purple-700 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-pink-700 hover:to-purple-800 compact-btn"
               >
-                준비하기
-              </button>
+                재판 준비 완료
+              </motion.button>
             ) : (
-              <div className="text-sm text-green-600 font-medium compact-text">
-                준비 완료! 다른 참가자를 기다리는 중...
+              <div className="text-sm text-pink-600 font-medium compact-text flex items-center mt-1">
+                <CheckCircle2 className="w-4 h-4 mr-1.5 text-pink-600" />
+                준비 완료! 다른 참석자를 기다리는 중...
               </div>
             )}
             {isRoomHost ? (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={initiateCourtProcess}
                 disabled={!allUsersReady()}
-                className={`px-4 py-2 font-medium rounded-lg transition-colors shadow-sm compact-btn ${
+                className={`px-4 py-1 mt-1 font-medium rounded-lg transition-all shadow-lg compact-btn ${
                   allUsersReady()
-                    ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    ? 'bg-gradient-to-r from-pink-600 to-purple-700 text-white hover:shadow-xl hover:from-pink-700 hover:to-purple-800'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
-                재판 시작하기
-              </button>
+                <div className="flex items-center">
+                  <Gavel className="w-4 h-4 mr-2" />
+                  재판 개시 선언
+                </div>
+              </motion.button>
             ) : (
-              <div className="text-sm text-amber-600 compact-text">
+              <div className="text-sm text-amber-600 compact-text flex items-center mt-1">
+                <AlertTriangle className="h-5 w-5 mr-2 text-amber-600" />
                 방장만 재판을 시작할 수 있습니다.
               </div>
             )}
             {!allUsersReady() && isRoomHost && (
-              <p className="text-xs text-amber-600 compact-text">
-                모든 참가자가 준비되어야 재판을 시작할 수 있습니다.
+              <p className="text-xs text-amber-600 compact-text flex items-center mt-1">
+                <Scale className="w-3.5 h-3.5 mr-1 text-amber-600" />
+                모든 참석자가 준비되어야 재판을 시작할 수 있습니다.
               </p>
             )}
           </div>
@@ -1427,10 +1503,12 @@ export default function ChatRoom({
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="메시지를 입력하세요..."
-              className="flex-1 h-[60px] min-h-[60px] max-h-[60px] px-3 py-2 bg-gray-100 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white resize-none"
+              placeholder="변론 내용을 작성하세요..."
+              className="flex-1 h-[60px] min-h-[60px] max-h-[60px] px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-200 border border-pink-200 transition-all resize-none placeholder:text-gray-400"
             />
-            <button
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => {
                 if (input.trim()) {
                   sendMessage(input);
@@ -1438,100 +1516,164 @@ export default function ChatRoom({
                 }
               }}
               disabled={isLoading || !input.trim()}
-              className={`px-4 h-[60px] rounded-lg font-medium transition-colors compact-btn ${
+              className={`px-4 h-[60px] rounded-lg font-medium transition-all shadow-lg ${
                 isLoading || !input.trim()
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  : 'bg-gradient-to-r from-pink-600 to-purple-700 text-white hover:shadow-xl hover:from-pink-700 hover:to-purple-800'
               }`}
             >
               {isLoading ? (
                 <div className="flex items-center">
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  전송
+                  제출
                 </div>
               ) : (
-                '전송'
+                <div className="flex items-center">
+                  <Gavel className="w-4 h-4 mr-2" />
+                  제출
+                </div>
               )}
-            </button>
+            </motion.button>
           </div>
         )}
       </div>
 
       {/* 재판 준비 모달 */}
       {showCourtReadyModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4 border-2 border-amber-300">
-            <h2 className="text-xl font-bold mb-4 text-gray-900">실시간 AI 판사 모드</h2>
-            <p className="mb-4 text-gray-800 font-medium">
-              이 모드에서는 참가자들이 자유롭게 대화하는 동안 AI 판사가 실시간으로 개입합니다.
-              5분 타이머가 시작되며, 시간이 종료되면 AI 판사가 최종 판결을 내립니다.
-            </p>
-            <div className="flex justify-between">
-              <button
-                onClick={() => setShowCourtReadyModal(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium compact-btn"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleStartTrial}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium compact-btn"
-              >
-                시작하기
-              </button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 10 }}
+            transition={{ duration: 0.25, type: "spring", stiffness: 300 }}
+            className="bg-gradient-to-b from-white to-pink-50 rounded-2xl shadow-[0_10px_40px_-5px_rgba(217,70,219,0.2)] max-w-[350px] w-full p-6 border border-pink-100 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-40 h-40 bg-pink-200 rounded-full opacity-20 -mr-20 -mt-20 blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-40 h-40 bg-purple-200 rounded-full opacity-20 -ml-20 -mb-20 blur-3xl"></div>
+            
+            <div className="relative z-10">
+              <h2 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-purple-700 flex items-center mb-4">
+                <Gavel className="h-5 w-5 mr-2 text-pink-600" />
+                실시간 AI 판사 재판
+              </h2>
+              <p className="mb-4 text-gray-800 text-sm">
+                이 모드에서는 참석자들이 변론을 진행하는 동안 AI 판사가 공정하게 심리합니다.
+                5분 타이머가 시작되며, 시간이 종료되면 AI 판사가 최종 판결을 내립니다.
+              </p>
+              <div className="flex justify-between">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowCourtReadyModal(false)}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium compact-btn"
+                >
+                  취소
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleStartTrial}
+                  className="px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-700 text-white rounded-lg hover:from-pink-700 hover:to-purple-800 font-medium shadow-lg compact-btn"
+                >
+                  <div className="flex items-center">
+                    <Gavel className="w-4 h-4 mr-2" />
+                    재판 시작
+                  </div>
+                </motion.button>
+              </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
       
       {/* 시작 확인 모달 */}
       {showConfirmStartModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4 border-2 border-amber-300">
-            <h2 className="text-lg font-bold mb-3 text-gray-900">재판을 시작하시겠습니까?</h2>
-            <p className="mb-4 text-gray-800">
-              상대방에게 상처를 줄수도 있습니다.
-            </p>
-            <div className="flex flex-col space-y-2">
-              <button
-                onClick={() => {
-                  clearChat();
-                  setShowConfirmStartModal(false);
-                  setShowCourtReadyModal(false);
-                  startTimerMode();
-                }}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium compact-btn"
-              >
-                재판 시작하기
-              </button>
-              <button
-                onClick={() => setShowConfirmStartModal(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium compact-btn"
-              >
-                취소
-              </button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 10 }}
+            transition={{ duration: 0.25, type: "spring", stiffness: 300 }}
+            className="bg-gradient-to-b from-white to-pink-50 rounded-2xl shadow-[0_10px_40px_-5px_rgba(217,70,219,0.2)] max-w-[350px] w-full p-6 border border-pink-100 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-40 h-40 bg-pink-200 rounded-full opacity-20 -mr-20 -mt-20 blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-40 h-40 bg-purple-200 rounded-full opacity-20 -ml-20 -mb-20 blur-3xl"></div>
+            
+            <div className="relative z-10">
+              <h2 className="text-lg font-bold mb-3 text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-purple-700 flex items-center">
+                <AlertTriangle className="h-5 w-5 mr-2 text-pink-600" />
+                재판 개시 확인
+              </h2>
+              <p className="mb-4 text-gray-800 text-sm bg-pink-50 p-3 rounded-lg border border-pink-100">
+                재판 과정에서 감정이 격해질 수 있습니다. 상호 존중하는 자세로 진행해주시기 바랍니다.
+              </p>
+              <div className="flex flex-col space-y-2">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    clearChat();
+                    setShowConfirmStartModal(false);
+                    setShowCourtReadyModal(false);
+                    startTimerMode();
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-700 text-white rounded-lg hover:from-pink-700 hover:to-purple-800 font-medium shadow-lg compact-btn"
+                >
+                  <div className="flex items-center justify-center">
+                    <Gavel className="w-4 h-4 mr-2" />
+                    재판 개시를 선언합니다
+                  </div>
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowConfirmStartModal(false)}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium compact-btn"
+                >
+                  취소
+                </motion.button>
+              </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
 
       {/* Host left modal */}
       {showHostLeftModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4 border-2 border-red-300">
-            <h2 className="text-xl font-bold mb-4 text-red-600">호스트가 방을 나갔습니다</h2>
-            <p className="mb-5 text-gray-800">
-              방장이 채팅방을 나갔습니다. 채팅방을 종료합니다.
-            </p>
-            <div className="flex justify-center">
-              <button
-                onClick={handleRedirectToHome}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
-              >
-                메인으로 돌아가기
-              </button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 10 }}
+            transition={{ duration: 0.25, type: "spring", stiffness: 300 }}
+            className="bg-gradient-to-b from-white to-pink-50 rounded-2xl shadow-[0_10px_40px_-5px_rgba(217,70,219,0.2)] max-w-[350px] w-full p-6 border border-red-100 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-40 h-40 bg-red-200 rounded-full opacity-20 -mr-20 -mt-20 blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-40 h-40 bg-pink-200 rounded-full opacity-20 -ml-20 -mb-20 blur-3xl"></div>
+            
+            <div className="relative z-10">
+              <h2 className="text-xl font-bold mb-4 text-red-600 flex items-center">
+                <AlertTriangle className="h-5 w-5 mr-2 text-red-600" />
+                판사가 퇴정했습니다
+              </h2>
+              <p className="mb-5 text-gray-800 text-sm bg-red-50 p-3 rounded-lg border border-red-100">
+                방장이 법정을 나갔습니다. 더 이상 재판이 진행될 수 없습니다.
+              </p>
+              <div className="flex justify-center">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleRedirectToHome}
+                  className="px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-700 text-white rounded-lg hover:from-pink-700 hover:to-purple-800 font-medium shadow-lg"
+                >
+                  <div className="flex items-center">
+                    <Gavel className="w-4 h-4 mr-2" />
+                    메인으로 돌아가기
+                  </div>
+                </motion.button>
+              </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
     </div>
