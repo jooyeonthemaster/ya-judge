@@ -1,12 +1,4 @@
-interface TypingUser {
-  username: string;
-  isTyping: boolean;
-}
-
-interface TypingIndicatorProps {
-  typingUsers: Record<string, TypingUser>;
-  currentUsername: string;
-}
+import { TypingIndicatorProps } from '@/types/chat';
 
 export default function TypingIndicator({ typingUsers, currentUsername }: TypingIndicatorProps) {
   const typingUsersList = Object.values(typingUsers)

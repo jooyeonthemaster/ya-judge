@@ -1,8 +1,5 @@
 import { Gavel } from 'lucide-react';
-
-interface JudgeMessageDisplayProps {
-  text: string;
-}
+import { JudgeMessageDisplayProps } from '@/types/chat';
 
 export default function JudgeMessageDisplay({ text }: JudgeMessageDisplayProps) {
   // 텍스트 내에서 이모티콘과 다양한 스타일 적용

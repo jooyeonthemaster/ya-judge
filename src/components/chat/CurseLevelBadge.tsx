@@ -1,8 +1,5 @@
 import { AlertTriangle } from 'lucide-react';
-
-interface CurseLevelBadgeProps {
-  level: number;
-}
+import { CurseLevelBadgeProps } from '@/types/chat';
 
 export default function CurseLevelBadge({ level }: CurseLevelBadgeProps) {
   // Define colors based on curse level

@@ -1,19 +1,13 @@
 import { useState, useEffect } from 'react';
-import { ref, onValue, set, off, get } from 'firebase/database';
+import { ref, onValue, set, off, get, Database } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import { 
   TimerState, 
   TimerData, 
-  getTimerDuration, 
-  formatRemainingTime 
-} from '@/lib/timerConfig';
-
-interface UseCourtTimerProps {
-  roomId: string | null;
-  isRoomHost: boolean;
-  onTimerComplete: () => void;
-  addMessage: (message: any) => void;
-}
+  UseCourtTimerProps,
+  Message
+} from '@/types/chat';
+import { getTimerDuration, formatRemainingTime } from '@/lib/timerConfig';
 
 export function useCourtTimer({
   roomId, 
@@ -226,7 +220,8 @@ export function useCourtTimer({
     
     const checkExistingTimer = async () => {
       try {
-        const timerRef = ref(database, `rooms/${roomId}/timer`);
+        const db = database as Database; // Type assertion to avoid undefined
+        const timerRef = ref(db, `rooms/${roomId}/timer`);
         const snapshot = await get(timerRef);
         const timerData = snapshot.val();
         

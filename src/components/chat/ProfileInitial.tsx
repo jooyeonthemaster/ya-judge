@@ -1,7 +1,4 @@
-interface ProfileInitialProps {
-  name: string;
-  isMine: boolean;
-}
+import { ProfileInitialProps } from '@/types/chat';
 
 export function ProfileInitial({ name, isMine }: ProfileInitialProps) {
   const initial = name.charAt(0).toUpperCase();

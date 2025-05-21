@@ -1,13 +1,7 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Gavel, Loader2 } from 'lucide-react';
-
-interface MessageInputProps {
-  disabled: boolean;
-  isLoading: boolean;
-  onSendMessage: (text: string) => void;
-  onTypingStatus: (isTyping: boolean) => void;
-}
+import { MessageInputProps } from '@/types/chat';
 
 export default function MessageInput({
   disabled,

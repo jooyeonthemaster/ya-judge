@@ -1,17 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Scale, ChevronDown, ChevronUp } from 'lucide-react';
+import { IssueNotificationProps } from '@/types/chat';
 
-interface IssueNotificationProps {
-  issues: string[];
-  hasNewIssues: boolean;
-}
-
-export default function IssueNotification({ issues, hasNewIssues }: IssueNotificationProps) {
+export default function IssueNotification({ issues, hasNewIssues, onToggle }: IssueNotificationProps) {
   const [isOpen, setIsOpen] = useState(false);
   
   // Clear the new issues flag when opening
   const toggleOpen = () => {
     setIsOpen(!isOpen);
+    if (onToggle) {
+      onToggle();
+    }
   };
   
   if (issues.length === 0) return null;

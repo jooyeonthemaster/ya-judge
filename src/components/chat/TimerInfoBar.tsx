@@ -1,9 +1,5 @@
 import { Clock } from 'lucide-react';
-
-interface TimerInfoBarProps {
-  isActive: boolean;
-  remainingTimeFormatted: string;
-}
+import { TimerInfoBarProps } from '@/types/chat';
 
 export default function TimerInfoBar({ isActive, remainingTimeFormatted }: TimerInfoBarProps) {
   if (!isActive) return null;
