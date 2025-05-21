@@ -851,10 +851,13 @@ export default function ChatRoom({
               remove(trialReadyRef);
             }
             
-            // Reset ready status for all clients
+            // Reset ready status for all clients to force them to indicate readiness again
             if (database) {
               const readyRef = ref(database, `rooms/${roomId}/ready`);
               remove(readyRef);
+              
+              // Also clear local ready users state
+              setReadyUsers({});
             }
             
             // Update Firebase to indicate final verdict is in progress
@@ -1263,6 +1266,18 @@ export default function ChatRoom({
       }
     });
   };
+  
+  // Debug function to log ready status
+  const logReadyStatus = () => {
+    console.log('=================== READY STATUS DEBUG ===================');
+    console.log('Current user ID:', localStorage.getItem('userId'));
+    console.log('Is room host:', isRoomHost);
+    console.log('Ready users:', readyUsers);
+    console.log('All users ready?', allUsersReady());
+    console.log('Final verdict triggered?', finalVerdictTriggered);
+    console.log('Show trial ready button?', showTrialReadyButton);
+    console.log('=================== END DEBUG ===================');
+  };
 
   // Add effect to track new issues
   useEffect(() => {
@@ -1383,8 +1398,19 @@ export default function ChatRoom({
         // Set final verdict triggered for all clients
         setFinalVerdictTriggered(true);
         
-        // Show ready button for non-host clients
+        // For non-host clients, clear ready status and show ready button
         if (!isRoomHost) {
+          // Make sure client is marked as NOT ready
+          const userId = localStorage.getItem('userId') || '';
+          if (userId) {
+            // Clear this user's ready status in local state
+            setReadyUsers(prev => {
+              const newState = {...prev};
+              delete newState[userId];
+              return newState;
+            });
+          }
+          
           setShowTrialReadyButton(true);
           
           // Add system message about verdict in progress
@@ -1410,9 +1436,13 @@ export default function ChatRoom({
     
     const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
     
+    console.log('Setting up trialReady listener, isRoomHost:', isRoomHost);
+    
     // Listen for trial ready status changes
     const trialReadyListener = onValue(trialReadyRef, (snapshot) => {
       const readyData = snapshot.val() || {};
+      
+      console.log('DEBUG: Trial ready data updated from Firebase:', readyData);
       
       // Update ready users state even if data is null/undefined (set to empty object)
       setPostVerdictReadyUsers(readyData);
@@ -1420,11 +1450,15 @@ export default function ChatRoom({
       // If host and there's a final verdict, show the start button
       if (isRoomHost && finalVerdictTriggered) {
         setShowPostVerdictStartButton(true);
+        console.log('DEBUG: showPostVerdictStartButton set to true for host');
       }
       
-      // Log for debugging
-      console.log('Post-verdict ready users updated:', readyData);
-      console.log('All users ready?', allPostVerdictUsersReady());
+      // Force check for button condition immediately after state update
+      setTimeout(() => {
+        console.log('DEBUG: Delayed check of ready status:');
+        console.log('postVerdictReadyUsers state after update:', postVerdictReadyUsers);
+        console.log('allPostVerdictUsersReady():', allPostVerdictUsersReady());
+      }, 100);
     });
     
     return () => {
@@ -1445,73 +1479,97 @@ export default function ChatRoom({
     const userId = localStorage.getItem('userId') || '';
     if (!userId) return;
     
-    // Update regular ready status in Firebase (this is what the host checks)
-    const readyRef = ref(database, `rooms/${roomId}/ready/${userId}`);
-    set(readyRef, true);
+    console.log('SIMPLE: handleTrialReady called for user:', userId);
     
-    // Also update the trial ready status
+    // Update trial ready status in Firebase - THIS IS THE KEY PART
     const trialReadyRef = ref(database, `rooms/${roomId}/trialReady/${userId}`);
-    set(trialReadyRef, true);
     
-    // Update local state
+    // Set to true in Firebase
+    set(trialReadyRef, true)
+      .then(() => {
+        console.log('SIMPLE: Trial ready status updated in Firebase successfully');
+      })
+      .catch(error => {
+        console.error('SIMPLE: Error updating trial ready status:', error);
+      });
+    
+    // Update UI immediately
     setTrialReady(true);
     setShowTrialReadyButton(false);
     
-    // Add message to show user is ready
+    // Add message
     addMessage({
       user: 'system',
       name: '시스템',
-      text: '재판 준비가 완료되었습니다. 호스트가 새 재판을 시작하면 참여할 수 있습니다.',
+      text: '재판 준비가 완료되었습니다.',
       roomId: roomId || ''
     });
-    
-    console.log('Client marked as ready for new trial');
   };
   
   // Helper function to check if all users are ready for a new trial after verdict
   const allPostVerdictUsersReady = (): boolean => {
-    // Get all active users (excluding system and host)
-    const activeUsers = roomUsers.filter(user => 
+    // Explicitly extract non-system users using destructuring for clarity
+    const nonSystemUsers = roomUsers.filter(user => 
       !user.username.includes('System') && 
-      user.username !== 'System' && 
+      user.username !== 'System' &&
       user.id !== localStorage.getItem('userId')
     );
     
+    console.log('----- DEBUG FINAL FIX: allPostVerdictUsersReady check -----');
+    
+    // Check only for non-system, non-host users who are actually in the room
+    const activeUsersForCheck = nonSystemUsers;
+    
+    // Get current user ID for clarity
+    const currentUserId = localStorage.getItem('userId') || '';
+    
+    // Detailed logging of EXACTLY what we're checking
+    console.log('FINAL DEBUG: Current user ID (host):', currentUserId);
+    console.log('FINAL DEBUG: Active users to check:', activeUsersForCheck);
+    console.log('FINAL DEBUG: postVerdictReadyUsers state:', postVerdictReadyUsers);
+    
     // If there are no other users besides the host, return true
-    if (activeUsers.length === 0) return true;
-    
-    // If there are no ready users at all, definitely return false
-    if (Object.keys(postVerdictReadyUsers).length === 0) return false;
-    
-    // Debugging - log active users and their ready status
-    console.log('Active users needing to be ready:', activeUsers.map(u => u.id));
-    console.log('Current ready users:', Object.keys(postVerdictReadyUsers));
-    
-    // Check each active user explicitly
-    for (const user of activeUsers) {
-      console.log(`Checking if user ${user.id} is ready:`, postVerdictReadyUsers[user.id]);
-      if (postVerdictReadyUsers[user.id] !== true) {
-        console.log(`User ${user.id} is NOT ready, returning false`);
-        return false; // If any user is not ready, immediately return false
-      }
+    if (activeUsersForCheck.length === 0) {
+      console.log('FINAL DEBUG: No users to check, returning TRUE');
+      return true;
     }
     
-    console.log('All users are ready!');
-    return true; // All users are confirmed ready
+    // SPECIFIC LOG for each user's ready status 
+    const readyStatuses: Record<string, boolean> = {};
+    for (const user of activeUsersForCheck) {
+      readyStatuses[user.id] = !!postVerdictReadyUsers[user.id];
+    }
+    console.log('FINAL DEBUG: Ready status for each user:', readyStatuses);
+    
+    // FIX: Use Array.every() for cleaner code and to avoid loop issues
+    const allUsersReady = activeUsersForCheck.every(user => 
+      postVerdictReadyUsers[user.id] === true
+    );
+    
+    console.log('FINAL DEBUG: All users ready?', allUsersReady);
+    return allUsersReady;
   };
-  
+
   // Handle starting a new trial after verdict
   const handleStartNewTrial = () => {
     if (!roomId || !database) return;
     
     // Safety check - if not all users are ready, don't allow starting a new trial
-    if (!allPostVerdictUsersReady()) {
+    if (!checkAllUsersReady()) {
       console.log('Prevented start of new trial - not all users ready');
-      // Show warning message
+      
+      // Get list of users who aren't ready
+      const allRealUsers = roomUsers.filter(user => 
+        !user.username.includes('System') && 
+        user.username !== 'System'
+      );
+      const notReadyUsers = allRealUsers.filter(user => !postVerdictReadyUsers[user.id]);
+      
+      // Show warning message with specific user names
       addMessage({
         user: 'system',
         name: '시스템',
-        text: '모든 참석자가 준비 버튼을 눌러야 새 재판을 시작할 수 있습니다.',
+        text: `아직 준비되지 않은 참석자가 있습니다: ${notReadyUsers.map(u => u.username).join(', ')}`,
         roomId: roomId || ''
       });
       return;
@@ -1544,6 +1602,38 @@ export default function ChatRoom({
     
     // Show court ready modal to start a new trial
     setShowCourtReadyModal(true);
+  };
+
+  // Just check if every non-system user is ready WITHOUT excluding host
+  const checkAllUsersReady = () => {
+    // Get all users excluding system
+    const allRealUsers = roomUsers.filter(user => 
+      !user.username.includes('System') && 
+      user.username !== 'System'
+    );
+    
+    console.log('SIMPLE CHECK: All real users:', allRealUsers.map(u => u.username));
+    console.log('SIMPLE CHECK: postVerdictReadyUsers:', postVerdictReadyUsers);
+    
+    // Check if number of ready users matches number of real users
+    const readyCount = Object.keys(postVerdictReadyUsers).length;
+    const expectedCount = allRealUsers.length;
+    
+    console.log(`SIMPLE CHECK: Ready users: ${readyCount}, Expected users: ${expectedCount}`);
+    
+    if (readyCount >= expectedCount) {
+      return true;
+    }
+    
+    // Check each user directly
+    for (const user of allRealUsers) {
+      console.log(`SIMPLE CHECK: User ${user.username} (${user.id}) ready status: ${postVerdictReadyUsers[user.id]}`);
+      if (!postVerdictReadyUsers[user.id]) {
+        return false;
+      }
+    }
+    
+    return true;
   };
 
   // 채팅방 UI 렌더링
@@ -1749,49 +1839,31 @@ export default function ChatRoom({
               최종 판결 완료
             </h3>
             <p className="text-sm text-gray-600 text-center compact-text">
-              {Object.values(readyUsers).filter(isReady => isReady).length}/{roomUsers.filter(user => !user.username.includes('System') && user.id !== localStorage.getItem('userId')).length} 참석자가 새 재판 준비를 완료했습니다.
+              {Object.values(postVerdictReadyUsers).filter(isReady => isReady).length}/{roomUsers.filter(user => !user.username.includes('System')).length} 참석자가 새 재판 준비를 완료했습니다.
             </p>
             
-            {/* Show clickable button when all users are ready */}
-            {allUsersReady() ? (
+            {/* Add ready button for host */}
+            {!postVerdictReadyUsers[localStorage.getItem('userId') || ''] ? (
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={initiateCourtProcess}
-                className="px-4 py-1 mt-1 font-medium rounded-lg transition-all shadow-lg compact-btn bg-gradient-to-r from-pink-600 to-purple-700 text-white hover:shadow-xl hover:from-pink-700 hover:to-purple-800"
+                onClick={handleTrialReady}
+                className="px-4 py-1 mt-1 font-medium rounded-lg transition-all shadow-lg compact-btn bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:shadow-xl hover:from-amber-600 hover:to-amber-700"
               >
                 <div className="flex items-center">
-                  <Gavel className="w-4 h-4 mr-2" />
-                  재판 개시 선언
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  재판 준비 완료 (호스트)
                 </div>
               </motion.button>
             ) : (
-              <div className="px-4 py-1 mt-1 font-medium rounded-lg shadow-sm compact-btn bg-gray-300 text-gray-500 cursor-not-allowed opacity-50 flex items-center">
-                <Gavel className="w-4 h-4 mr-2" />
-                재판 개시 선언 (준비 중...)
+              <div className="text-sm text-amber-600 font-medium compact-text flex items-center mt-1">
+                <CheckCircle2 className="w-4 h-4 mr-1.5 text-amber-600" />
+                호스트 준비 완료! 다른 참석자를 기다리는 중...
               </div>
             )}
             
-            {!allUsersReady() && (
-              <p className="text-xs text-amber-600 compact-text flex items-center mt-1">
-                <Scale className="w-3.5 h-3.5 mr-1 text-amber-600" />
-                <strong>모든 참석자가 준비 버튼을 눌러야 새 재판을 시작할 수 있습니다.</strong>
-              </p>
-            )}
-          </div>
-        ) : finalVerdictTriggered && isRoomHost && showPostVerdictStartButton ? (
-          // Show host controls after final verdict - button enabled when all users are ready
-          <div className="flex flex-col items-start h-auto">
-            <h3 className="text-lg font-medium text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-800 flex items-center compact-text">
-              <Gavel className="h-5 w-5 mr-2 text-amber-600" />
-              최종 판결 완료
-            </h3>
-            <p className="text-sm text-gray-600 text-center compact-text">
-              {Object.values(postVerdictReadyUsers).filter(isReady => isReady).length}/{roomUsers.filter(user => !user.username.includes('System') && user.id !== localStorage.getItem('userId')).length} 참석자가 새 재판 준비를 완료했습니다.
-            </p>
-            
             {/* Show clickable button when all users are ready */}
-            {allPostVerdictUsersReady() ? (
+            {checkAllUsersReady() ? (
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -1810,12 +1882,102 @@ export default function ChatRoom({
               </div>
             )}
             
-            {!allPostVerdictUsersReady() && (
-              <p className="text-xs text-amber-600 compact-text flex items-center mt-1">
-                <Scale className="w-3.5 h-3.5 mr-1 text-amber-600" />
-                <strong>모든 참석자가 준비 버튼을 눌러야 새 재판을 시작할 수 있습니다.</strong>
-              </p>
+            {(() => {
+  // Get unready users
+  const allRealUsers = roomUsers.filter(user => 
+    !user.username.includes('System') && 
+    user.username !== 'System'
+  );
+  
+  const notReadyUsers = allRealUsers.filter(user => !postVerdictReadyUsers[user.id]);
+  
+  if (notReadyUsers.length > 0) {
+    return (
+      <p className="text-xs text-amber-600 compact-text flex items-center mt-1">
+        <Scale className="w-3.5 h-3.5 mr-1 text-amber-600" />
+        <strong>
+          아직 준비되지 않은 참석자: {notReadyUsers.map(u => u.username).join(', ')}
+        </strong>
+      </p>
+    );
+  }
+  
+  return null;
+})()}
+          </div>
+        ) : finalVerdictTriggered && isRoomHost && showPostVerdictStartButton ? (
+          // Show host controls after final verdict - button enabled when all users are ready
+          <div className="flex flex-col items-start h-auto">
+            <h3 className="text-lg font-medium text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-800 flex items-center compact-text">
+              <Gavel className="h-5 w-5 mr-2 text-amber-600" />
+              최종 판결 완료
+            </h3>
+            <p className="text-sm text-gray-600 text-center compact-text">
+              {Object.values(postVerdictReadyUsers).filter(isReady => isReady).length}/{roomUsers.filter(user => !user.username.includes('System')).length} 참석자가 새 재판 준비를 완료했습니다.
+            </p>
+            
+            {/* Add ready button for host */}
+            {postVerdictReadyUsers[localStorage.getItem('userId') || ''] !== true ? (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleTrialReady}
+                className="px-4 py-1 mt-1 font-medium rounded-lg transition-all shadow-lg compact-btn bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:shadow-xl hover:from-amber-600 hover:to-amber-700"
+              >
+                <div className="flex items-center">
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  호스트 준비 완료하기
+                </div>
+              </motion.button>
+            ) : (
+              <div className="text-sm text-amber-600 font-medium compact-text flex items-center mt-1">
+                <CheckCircle2 className="w-4 h-4 mr-1.5 text-amber-600" />
+                호스트 준비 완료! 다른 참석자를 기다리는 중...
+              </div>
             )}
+            
+            {/* Show clickable button when all users are ready */}
+            {checkAllUsersReady() ? (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleStartNewTrial}
+                className="px-4 py-1 mt-1 font-medium rounded-lg transition-all shadow-lg compact-btn bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:shadow-xl hover:from-amber-600 hover:to-amber-700"
+              >
+                <div className="flex items-center">
+                  <Gavel className="w-4 h-4 mr-2" />
+                  새 재판 개시 선언
+                </div>
+              </motion.button>
+            ) : (
+              <div className="px-4 py-1 mt-1 font-medium rounded-lg shadow-sm compact-btn bg-gray-300 text-gray-500 cursor-not-allowed opacity-50 flex items-center">
+                <Gavel className="w-4 h-4 mr-2" />
+                새 재판 개시 선언 (준비 중...)
+              </div>
+            )}
+            
+            {(() => {
+  // Get unready users
+  const allRealUsers = roomUsers.filter(user => 
+    !user.username.includes('System') && 
+    user.username !== 'System'
+  );
+  
+  const notReadyUsers = allRealUsers.filter(user => !postVerdictReadyUsers[user.id]);
+  
+  if (notReadyUsers.length > 0) {
+    return (
+      <p className="text-xs text-amber-600 compact-text flex items-center mt-1">
+        <Scale className="w-3.5 h-3.5 mr-1 text-amber-600" />
+        <strong>
+          아직 준비되지 않은 참석자: {notReadyUsers.map(u => u.username).join(', ')}
+        </strong>
+      </p>
+    );
+  }
+  
+  return null;
+})()}
           </div>
         ) : showTrialReadyButton ? (
           // Show trial ready button for non-host clients when final verdict is triggered
