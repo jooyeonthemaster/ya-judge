@@ -41,6 +41,8 @@ import {
 import { ref, onValue, set, remove, off, get, onDisconnect } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import { useParams } from 'next/navigation';
+// Import FormatTime component
+import FormatTime from '@/components/chat/FormatTime';
 // Import timer configurations
 import { 
   DEFAULT_TIMER_DURATION, 
@@ -50,6 +52,9 @@ import {
   formatRemainingTime, 
   getTimerDuration 
 } from '@/lib/timerConfig';
+// Import JudgeMessageDisplay component
+import JudgeMessageDisplay from '@/components/chat/JudgeMessageDisplay';
+import CurseLevelBadge from '@/components/chat/CurseLevelBadge';
 
 // Extend the base TimerData interface to include reset functionality
 interface TimerData extends BaseTimerData {
@@ -58,11 +63,6 @@ interface TimerData extends BaseTimerData {
 }
 
 // 새 컴포넌트 임포트
-import ChatTimer from '../ChatTimer';
-import IssuesSidebar from '../IssuesSidebar';
-import MessageComposer from './MessageComposer';
-import JudgeIntervention from '../JudgeIntervention';
-import CourtReadyModal from './CourtReadyModal';
 
 interface ChatRoomProps {
   roomId: string | null;
@@ -97,107 +97,6 @@ const ProfileInitial: React.FC<{ name: string, isMine: boolean }> = ({ name, isM
   );
 };
 
-// 시간 형식 포맷팅 함수 (ISO 문자열 -> 상대적 시간 표시)
-const formatTime = (timestamp: string): string => {
-  try {
-    // 타임스탬프가 없는 경우 빈 문자열 반환
-    if (!timestamp) return '';
-    
-    const date = new Date(timestamp);
-    const now = new Date();
-    
-    // 유효하지 않은 날짜인 경우 빈 문자열 반환
-    if (isNaN(date.getTime())) return '';
-    
-    // 모든 시간을 상대적 시간으로 표시
-    const diffMs = now.getTime() - date.getTime();
-    const diffSecs = Math.floor(diffMs / 1000);
-    
-    // 초 단위 표시 (1분 미만)
-    if (diffSecs < 60) return '방금 전';
-    
-    // 분 단위 표시 (1시간 미만)
-    const diffMins = Math.floor(diffSecs / 60);
-    if (diffMins < 60) return `${diffMins}분 전`;
-    
-    // 시간 단위 표시 (1일 미만)
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}시간 전`;
-    
-    // 일 단위 표시 (30일 미만)
-    const diffDays = Math.floor(diffHours / 24);
-    if (diffDays < 30) return `${diffDays}일 전`;
-    
-    // 그 이상은 날짜 표시
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    
-    return `${year}.${month}.${day}`;
-  } catch (error) {
-    console.error('시간 포맷팅 오류:', error);
-    return '';
-  }
-};
-
-// Add this interface for curse level display
-interface CurseLevelIndicator {
-  level: number;
-  label: string;
-  color: string;
-}
-
-// Add a function to get curse level indicator based on level
-const getCurseLevelIndicator = (level: number): CurseLevelIndicator => {
-  if (level >= 25) {
-    return { level, label: '극도로 심각', color: 'bg-red-900 text-white' };
-  } else if (level >= 20) {
-    return { level, label: '매우 심각', color: 'bg-red-600 text-white' };
-  } else if (level >= 15) {
-    return { level, label: '심각', color: 'bg-red-500 text-white' };
-  } else if (level >= 10) {
-    return { level, label: '중대', color: 'bg-orange-500 text-white' };
-  } else if (level >= 5) {
-    return { level, label: '중간', color: 'bg-yellow-500 text-white' };
-  } else if (level > 0) {
-    return { level, label: '경미', color: 'bg-yellow-200 text-yellow-800' };
-  } else {
-    return { level, label: '없음', color: 'bg-green-100 text-green-800' };
-  }
-};
-
-// Add the CurseLevelBadge component
-const CurseLevelBadge: React.FC<{ level: number }> = ({ level }) => {
-  const indicator = getCurseLevelIndicator(level);
-  
-  if (level === 0) return null;
-  
-  return (
-    <div className={`px-2 py-1 rounded-full text-xs ${indicator.color} ml-2`}>
-      욕설 수준: {indicator.label} ({level}/30)
-    </div>
-  );
-};
-
-// Add function to display cursing warning with level
-const renderCurseWarning = (message: Message, curseLevel: number) => {
-  const indicator = getCurseLevelIndicator(curseLevel);
-  
-  return (
-    <div className="my-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-      <div className="flex items-center">
-        <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
-        <span className="text-red-700 font-medium">공격적인 언어가 감지되었습니다</span>
-        <div className={`ml-2 px-2 py-0.5 rounded-full text-xs ${indicator.color}`}>
-          수준: {indicator.label}
-        </div>
-      </div>
-      <p className="mt-1 text-sm text-red-600">
-        상대를 존중하는 언어를 사용해주세요. 부적절한 언어 사용은 판결에 반영됩니다.
-      </p>
-    </div>
-  );
-};
 
 export default function ChatRoom({ 
   roomId, 
@@ -986,52 +885,8 @@ export default function ChatRoom({
     checkExistingTimer();
   }, [roomId, database, timerDuration, startTimer]);
 
-  // 판사 메시지 템플릿 렌더링 (JudgeMessageDisplay 대체)
-  const renderJudgeMessage = (text: string) => {
-    // 텍스트 내에서 이모티콘과 다양한 스타일 적용
-    const processedText = text
-      // 강조할 단어 볼드체와 컬러 강조
-      .replace(/(?:판결|결정|중요|증거|책임|잘못)/g, '<span class="font-bold text-red-600">$&</span>')
-      // 감정 표현 추가
-      .replace(/(?:아니|문제|거짓|틀림)/g, '<span class="font-bold text-red-600">$& 🤦‍♂️</span>')
-      .replace(/(?:맞|좋|옳|훌륭)/g, '<span class="font-bold text-green-600">$& 👍</span>')
-      .replace(/(?:생각해|고민해|판단해)/g, '$& 🤔')
-      // 재미있는 표현 추가
-      .replace(/(?:그러나|하지만)/g, '$& 😏')
-      .replace(/(?:사실|진실|진짜)/g, '$& 😎')
-      .replace(/(?:충격|놀라|믿을 수 없)/g, '$& 😱')
-          // 욕설 레벨 관련 표현을 첫 글자만 남기고 X로 대체
-    .replace(/(?:씨발|시발|ㅅㅂ|ㅆㅂ|개새끼|ㄱㅐㅅㅐㄲㅣ|병신|ㅂㅅ|미친|ㅁㅊ|존나|ㅈㄴ|지랄)/g, (match) => {
-      const firstChar = match.charAt(0);
-      const restChars = 'X'.repeat(match.length - 1);
-      return `<span class="font-bold text-red-600">${firstChar}${restChars}</span>`;
-    })
-      .replace(/(?:공격적 언어|공격적 표현|상스러운 표현)/g, '<span class="font-bold text-red-600">$& ⚠️</span>');
-
-    return (
-      <div className="w-full bg-white rounded-lg shadow-lg border border-amber-200 overflow-hidden">
-        <div className="p-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="bg-white/20 p-1.5 rounded-md">
-                <Gavel className="w-5 h-5 text-white animate-bounce" />
-              </div>
-              <h3 className="font-bold text-white">판사님의 폭격 💥</h3>
-            </div>
-            <div className="bg-white/20 px-2 py-1 rounded-md text-xs">
-              <span className="animate-pulse">생각 중... 🧠</span>
-            </div>
-          </div>
-        </div>
-        <div className="p-5 bg-gradient-to-b from-amber-50 to-white">
-          <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processedText }}></div>
-          <div className="mt-4 text-right">
-            <span className="text-xs text-gray-500 italic">판사님이 현명하신 판단을 내리셨습니다! 🧙‍♂️</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // 판사 메시지 템플릿 렌더링 (JudgeMessageDisplay 사용)
+  // Remove the renderJudgeMessage function since we now have a separate component
 
   // Add this helper function within the component to fix the error
   const calculatedChattersCount = () => {
@@ -1203,9 +1058,10 @@ export default function ChatRoom({
                   )}
                 </span>
                 {message.timestamp && (
-                  <span className="text-xs text-gray-500 ml-2">
-                    {formatTime(message.timestamp)}
-                  </span>
+                  <FormatTime 
+                    timestamp={message.timestamp} 
+                    className="text-xs text-gray-500 ml-2" 
+                  />
                 )}
                 {/* @ts-ignore - 타입 체크 무시 */}
                 {curseLevel > 0 && message.user !== 'judge' && message.user !== 'system' && (
@@ -1236,7 +1092,7 @@ export default function ChatRoom({
                 </div>
               ) : message.user === 'judge' ? (
                 <div>
-                  {renderJudgeMessage(message.text)}
+                  <JudgeMessageDisplay text={message.text} />
                 </div>
               ) : (
                 <p className="whitespace-pre-wrap break-words">{message.text}</p>
@@ -1305,18 +1161,6 @@ export default function ChatRoom({
     });
   };
   
-  // Debug function to log ready status
-  const logReadyStatus = () => {
-    console.log('=================== READY STATUS DEBUG ===================');
-    console.log('Current user ID:', localStorage.getItem('userId'));
-    console.log('Is room host:', isRoomHost);
-    console.log('Ready users:', readyUsers);
-    console.log('All users ready?', allUsersReady());
-    console.log('Final verdict triggered?', finalVerdictTriggered);
-    console.log('Show trial ready button?', showTrialReadyButton);
-    console.log('=================== END DEBUG ===================');
-  };
-
   // Add effect to track new issues
   useEffect(() => {
     const currentIssuesCount = detectedIssues.length;
@@ -1561,10 +1405,7 @@ export default function ChatRoom({
     // Get current user ID for clarity
     const currentUserId = localStorage.getItem('userId') || '';
     
-    // Detailed logging of EXACTLY what we're checking
-    console.log('FINAL DEBUG: Current user ID (host):', currentUserId);
-    console.log('FINAL DEBUG: Active users to check:', activeUsersForCheck);
-    console.log('FINAL DEBUG: postVerdictReadyUsers state:', postVerdictReadyUsers);
+  
     
     // If there are no other users besides the host, return true
     if (activeUsersForCheck.length === 0) {
