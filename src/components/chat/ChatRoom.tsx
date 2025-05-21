@@ -46,10 +46,16 @@ import {
   DEFAULT_TIMER_DURATION, 
   TEST_TIMER_DURATION, 
   TimerState, 
-  TimerData, 
+  TimerData as BaseTimerData, 
   formatRemainingTime, 
   getTimerDuration 
 } from '@/lib/timerConfig';
+
+// Extend the base TimerData interface to include reset functionality
+interface TimerData extends BaseTimerData {
+  reset?: boolean;
+  resetAt?: string;
+}
 
 // 새 컴포넌트 임포트
 import ChatTimer from '../ChatTimer';
@@ -473,8 +479,11 @@ export default function ChatRoom({
   
   // 타이머 모드와 단계별 모드 간의 전환 관리
   const startTimerMode = () => {
-    // Reset verdict flag
+    // Reset all verdict and trial state
     setFinalVerdictTriggered(false);
+    setApiCallsEnabled(true);
+    setShowTrialReadyButton(false);
+    setShowPostVerdictStartButton(false);
     
     // Set start time
     const startTime = new Date();
@@ -495,9 +504,19 @@ export default function ChatRoom({
       const timerData: TimerData = {
         active: true,
         startTime: startTime.toISOString(),
-        durationSeconds: timerDuration
+        durationSeconds: timerDuration,
+        completed: false,
+        reset: false // Reset the reset flag
       };
       set(timerRef, timerData);
+      
+      // Also clear any verdict status that might exist
+      const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
+      remove(verdictStatusRef);
+      
+      // Clear ready status for all clients 
+      const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
+      remove(trialReadyRef);
     }
     
     // 시작 메시지 추가
@@ -762,6 +781,25 @@ export default function ChatRoom({
       const timerData = snapshot.val() as TimerData | null;
       
       if (!timerData) return;
+      
+      // Handle timer reset from host
+      if (timerData.reset === true) {
+        console.log('Timer reset by host, syncing client state...');
+        
+        // Reset all client-side state
+        setFinalVerdictTriggered(false);
+        setApiCallsEnabled(true);
+        setShowTrialReadyButton(false);
+        setTimerState('idle');
+        setShowTimerMode(false);
+        resetTimer();
+        setRemainingTime(getTimerDuration());
+        
+        // Remove any verdict-related UI elements
+        setShowPostVerdictStartButton(false);
+        
+        return; // Exit early to prevent other handlers
+      }
       
       // Handle timer activation
       if (timerData.active && !timerActive) {
@@ -1579,6 +1617,7 @@ export default function ChatRoom({
     setFinalVerdictTriggered(false);
     setApiCallsEnabled(true);
     setShowPostVerdictStartButton(false);
+    setShowTrialReadyButton(false); // Reset ready button for clients
     
     // Clear the verdict status in Firebase
     const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
@@ -1588,8 +1627,17 @@ export default function ChatRoom({
     const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
     remove(trialReadyRef);
     
-    // Reset Timer
+    // Reset Timer locally
     resetTimer();
+    
+    // Reset timer in Firebase for all clients to sync
+    const timerRef = ref(database, `rooms/${roomId}/timer`);
+    set(timerRef, {
+      active: false,
+      completed: false,
+      reset: true,
+      resetAt: new Date().toISOString()
+    });
     
     // Clear messages and start new trial
     clearChat();
