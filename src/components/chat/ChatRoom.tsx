@@ -58,6 +58,9 @@ import MessageComposer from './MessageComposer';
 import JudgeIntervention from '../JudgeIntervention';
 import CourtReadyModal from './CourtReadyModal';
 
+// Import the timer configuration at the top of the file
+import { TIMER_DURATION_SECONDS } from '../../lib/timerConfig';
+
 interface ChatRoomProps {
   roomId: string | null;
   userType?: string;
