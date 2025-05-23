@@ -17,6 +17,8 @@ import CourtReadyModal from './modals/CourtReadyModal';
 import ConfirmStartModal from './modals/ConfirmStartModal';
 import HostLeftModal from './modals/HostLeftModal';
 import VerdictModal from './modals/VerdictModal';
+import VerdictLoadingBar from './VerdictLoadingBar';
+import InstantVerdictModal from './modals/InstantVerdictModal';
 
 // Hook imports
 import { useCourtTimer } from '@/hooks/useCourtTimer';
@@ -31,7 +33,6 @@ interface ChatRoomProps {
   roomId: string | null;
   userType?: string;
   customUsername?: string;
-  onShare?: () => void;
   initialStage?: string;
   activeChattersCount?: number;
 }
@@ -40,7 +41,6 @@ export default function ChatRoom({
   roomId, 
   userType, 
   customUsername, 
-  onShare, 
   initialStage = 'waiting',
   activeChattersCount = 0
 }: ChatRoomProps) {
@@ -69,7 +69,17 @@ export default function ChatRoom({
     latestVerdictData,
     setVerdictData,
     setVerdictDataLocal,
-    setRoomId
+    setRoomId,
+    isVerdictLoading,
+    onVerdictLoadingComplete,
+    // 즉시 판결 관련
+    instantVerdictRequested,
+    instantVerdictAgreedUsers,
+    showInstantVerdictModal,
+    requestInstantVerdict,
+    agreeToInstantVerdict,
+    setShowInstantVerdictModal,
+    checkInstantVerdictConsensus
   } = useChatStore();
 
   // Custom hooks
@@ -85,9 +95,9 @@ export default function ChatRoom({
 
   // Real-time analysis hook
   const { isAnalyzing } = useRealTimeAnalysis({
-    messages,
+    messages: messages as any[], // 임시 타입 변환
     roomId: roomId || '',
-    isEnabled: !!roomId && chatState.stage !== 'waiting' && chatState.stage !== 'ended'
+    isEnabled: !!roomId // stage 속성 제거 (존재하지 않음)
   });
 
   // Find final verdict message
@@ -149,6 +159,7 @@ export default function ChatRoom({
   // 판결 데이터 감지 및 모달 표시
   useEffect(() => {
     if (latestVerdictData && !showVerdictModal) {
+      console.log('📋 판결 데이터 감지 - 모달 표시');
       setShowVerdictModal(true);
     }
   }, [latestVerdictData, showVerdictModal]);
@@ -161,41 +172,65 @@ export default function ChatRoom({
     }
   }, [roomId, setRoomId]);
 
-  // Firebase 판결 데이터 실시간 리스너 (모든 참가자용)
+  // Firebase 로딩 상태 실시간 리스너 (모든 참가자용)
   useEffect(() => {
     if (!roomId || !database) return;
 
-    console.log(`판결 리스너 설정: ${roomId} (현재 사용자: ${chatState.username})`);
-    const verdictRef = ref(database, `rooms/${roomId}/verdict`);
+    console.log(`로딩 상태 리스너 설정: ${roomId}`);
+    const verdictLoadingRef = ref(database, `rooms/${roomId}/verdictLoading`);
     
-    const unsubscribe = onValue(verdictRef, (snapshot) => {
-      console.log('Firebase 판결 데이터 확인:', snapshot.exists());
-      
+    const loadingUnsubscribe = onValue(verdictLoadingRef, (snapshot) => {
       if (snapshot.exists()) {
-        const verdictInfo = snapshot.val();
-        console.log('Firebase에서 판결 데이터 수신:', verdictInfo);
-        console.log('현재 로컬 판결 데이터:', latestVerdictData);
+        const loadingInfo = snapshot.val();
+        console.log('Firebase 로딩 상태 수신:', loadingInfo);
         
-        // 판결 데이터가 있는 경우 로컬 상태만 직접 업데이트 (Firebase 재저장 방지)
-        if (verdictInfo.data && (!latestVerdictData || 
-            JSON.stringify(verdictInfo.data) !== JSON.stringify(latestVerdictData))) {
-          console.log('판결 데이터 로컬 업데이트 시작 (Firebase 제외)');
-          
-          // 로컬만 업데이트하는 함수 사용 (Firebase 저장 안 함)
-          setVerdictDataLocal(verdictInfo.data);
-          
-          console.log('판결 데이터 로컬 업데이트 완료');
+        // 모든 유저에게 로딩 상태 동기화
+        if (loadingInfo.isLoading !== undefined) {
+          useChatStore.setState({ isVerdictLoading: loadingInfo.isLoading });
         }
-      } else {
-        console.log('Firebase에 판결 데이터 없음');
       }
     });
 
     return () => {
-      console.log('판결 리스너 정리');
-      off(verdictRef, 'value', unsubscribe);
+      console.log('로딩 상태 리스너 정리');
+      off(verdictLoadingRef, 'value', loadingUnsubscribe);
     };
-  }, [roomId, database, chatState.username]);
+  }, [roomId, database]);
+
+  // Firebase 판결 데이터 실시간 리스너 (모든 참가자용)
+  useEffect(() => {
+    if (!roomId || !database) return;
+
+    console.log(`📡 판결 리스너 설정: ${roomId}`);
+    const verdictRef = ref(database, `rooms/${roomId}/verdict`);
+    
+    const verdictUnsubscribe = onValue(verdictRef, (snapshot) => {
+      console.log('🔍 Firebase 판결 데이터 확인:', snapshot.exists());
+      
+      if (snapshot.exists()) {
+        const verdictInfo = snapshot.val();
+        console.log('📥 Firebase에서 판결 데이터 수신:', verdictInfo);
+        
+        // 판결 데이터가 있으면 바로 로컬 상태 업데이트
+        if (verdictInfo.data && (!latestVerdictData || 
+            JSON.stringify(verdictInfo.data) !== JSON.stringify(latestVerdictData))) {
+          console.log('💾 판결 데이터 로컬 업데이트 시작');
+          
+          // 로컬만 업데이트하는 함수 사용 (Firebase 저장 안 함)
+          setVerdictDataLocal(verdictInfo.data);
+          
+          console.log('✅ 판결 데이터 로컬 업데이트 완료');
+        }
+      } else {
+        console.log('❌ Firebase에 판결 데이터 없음');
+      }
+    });
+
+    return () => {
+      console.log('🧹 판결 리스너 정리');
+      off(verdictRef, 'value', verdictUnsubscribe);
+    };
+  }, [roomId, database, latestVerdictData]);
 
   // Room host detection and Firebase listeners
   useEffect(() => {
@@ -292,6 +327,46 @@ export default function ChatRoom({
     };
   }, [roomId, database, chatState.username, chatState.isRoomHost, timerState.finalVerdictTriggered]);
 
+  // Firebase 즉시 판결 상태 실시간 리스너
+  useEffect(() => {
+    if (!roomId || !database) return;
+
+    console.log(`⚡ 즉시 판결 리스너 설정: ${roomId}`);
+    const instantVerdictRef = ref(database, `rooms/${roomId}/instantVerdict`);
+    
+    const instantVerdictUnsubscribe = onValue(instantVerdictRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const instantVerdictData = snapshot.val();
+        console.log('⚡ Firebase 즉시 판결 상태 수신:', instantVerdictData);
+        
+        // 모든 유저에게 즉시 판결 요청 상태 동기화
+        if (instantVerdictData.requested) {
+          useChatStore.setState({
+            instantVerdictRequested: true,
+            showInstantVerdictModal: true,
+            instantVerdictAgreedUsers: instantVerdictData.agreedUsers || {}
+          });
+          
+          // 동의 현황 변경 시 만장일치 체크
+          checkInstantVerdictConsensus();
+        }
+      } else {
+        // 즉시 판결 요청이 취소되었을 때
+        console.log('⚡ 즉시 판결 요청 취소됨');
+        useChatStore.setState({
+          instantVerdictRequested: false,
+          showInstantVerdictModal: false,
+          instantVerdictAgreedUsers: {}
+        });
+      }
+    });
+
+    return () => {
+      console.log('🧹 즉시 판결 리스너 정리');
+      off(instantVerdictRef, 'value', instantVerdictUnsubscribe);
+    };
+  }, [roomId, database, checkInstantVerdictConsensus]);
+
   // Message sending
   const sendMessage = (text: string, type?: string, relatedIssue?: string) => {
     if (!text.trim() || !roomId) return;
@@ -323,14 +398,25 @@ export default function ChatRoom({
   const handleShareRoom = () => {
     if (!roomId) return;
     
-    const shareUrl = `${window.location.origin}/chat/${roomId}`;
+    // 재판 중일 때는 공유 막기
+    if (timerState.timerActive) {
+      addMessage({
+        user: 'system',
+        name: '시스템',
+        text: '재판이 진행 중일 때는 링크를 공유할 수 없습니다. 재판이 끝난 후 시도해주세요.',
+        roomId: roomId
+      });
+      return;
+    }
+    
+    const shareUrl = `${window.location.origin}/room/${roomId}`;
     
     navigator.clipboard.writeText(shareUrl)
       .then(() => {
         addMessage({
           user: 'system',
           name: '시스템',
-          text: '채팅방 링크가 클립보드에 복사되었습니다! 친구들에게 공유해보세요. 👍',
+          text: '법정 링크가 복사되었습니다! 📋',
           roomId: roomId
         });
       })
@@ -339,7 +425,7 @@ export default function ChatRoom({
         addMessage({
           user: 'system',
           name: '시스템',
-          text: `채팅방 링크를 수동으로 복사해주세요: ${shareUrl}`,
+          text: `링크 복사에 실패했습니다. 수동으로 복사해주세요: ${shareUrl}`,
           roomId: roomId
         });
       });
@@ -360,7 +446,9 @@ export default function ChatRoom({
   };
 
   const handleInitiateCourt = () => {
-    chatState.setShowCourtReadyModal(true);
+    // 모달 없이 바로 재판 시작
+    clearChat();
+    timerState.startTimerMode();
   };
 
   const handleStartTrial = () => {
@@ -445,7 +533,9 @@ export default function ChatRoom({
       {/* Header */}
       <ChatRoomHeader 
         activeChattersCount={chatState.calculatedChattersCount()}
-        onShare={onShare || handleShareRoom}
+        onShare={handleShareRoom}
+        timerActive={timerState.timerActive}
+        onInstantVerdict={requestInstantVerdict}
       />
 
       {/* Main content */}
@@ -456,15 +546,21 @@ export default function ChatRoom({
           remainingTimeFormatted={timerState.remainingTimeFormatted}
         />
         
-        {/* Issues notification */}
-        {timerState.timerActive && detectedIssues.length > 0 && (
+        {/* 쟁점 알림 */}
+        {detectedIssues.length > 0 && (
           <IssueNotification 
             issues={detectedIssues}
             hasNewIssues={hasNewIssues}
             onToggle={() => setHasNewIssues(false)}
           />
         )}
-        
+
+        {/* 최종 판결 로딩 바 */}
+        <VerdictLoadingBar 
+          isVisible={isVerdictLoading} 
+          onComplete={onVerdictLoadingComplete}
+        />
+
         {/* Chat messages */}
         <div 
           ref={chatContainerRef}
@@ -503,6 +599,7 @@ export default function ChatRoom({
             onInitiateCourt={handleInitiateCourt}
             onTrialReady={handleTrialReady}
             onStartNewTrial={handleStartNewTrial}
+            onShare={handleShareRoom}
           />
         ) : (
           <MessageInput
@@ -539,6 +636,16 @@ export default function ChatRoom({
           setVerdictData(null);
         }}
         verdictData={latestVerdictData}
+      />
+      
+      <InstantVerdictModal
+        isOpen={showInstantVerdictModal}
+        onClose={() => setShowInstantVerdictModal(false)}
+        onAgree={() => agreeToInstantVerdict(chatState.username)}
+        currentUsername={chatState.username}
+        participatingUsers={roomUsers}
+        agreedUsers={instantVerdictAgreedUsers}
+        timeLeft={60}
       />
     </div>
   );

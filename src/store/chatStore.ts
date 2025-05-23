@@ -86,8 +86,16 @@ interface ChatState {
   // 최종 판결 요청 여부
   finalVerdictRequested: boolean;
   
+  // 최종 판결 로딩 상태
+  isVerdictLoading: boolean;
+  
   // 판결 데이터
   latestVerdictData: any;
+  
+  // 즉시 판결 관련 상태
+  instantVerdictRequested: boolean;
+  instantVerdictAgreedUsers: Record<string, boolean>;
+  showInstantVerdictModal: boolean;
   
   // 함수들
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
@@ -116,6 +124,7 @@ interface ChatState {
   // 판결 관련 함수
   setVerdictData: (data: any) => void;
   setVerdictDataLocal: (data: any) => void;
+  onVerdictLoadingComplete: () => void;
   
   // 사용자 욕설 레벨 관련 함수
   updateUserCurseLevel: (userId: string, increment: number) => void;
@@ -123,6 +132,12 @@ interface ChatState {
   
   // 방 정보 설정
   setRoomId: (roomId: string) => void;
+  
+  // 즉시 판결 관련 함수
+  requestInstantVerdict: () => void;
+  agreeToInstantVerdict: (username: string) => void;
+  setShowInstantVerdictModal: (show: boolean) => void;
+  checkInstantVerdictConsensus: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => {
@@ -160,8 +175,16 @@ export const useChatStore = create<ChatState>((set, get) => {
     // 최종 판결 요청 여부
     finalVerdictRequested: false,
     
+    // 최종 판결 로딩 상태
+    isVerdictLoading: false,
+    
     // 판결 데이터
     latestVerdictData: null,
+    
+    // 즉시 판결 관련 상태
+    instantVerdictRequested: false,
+    instantVerdictAgreedUsers: {},
+    showInstantVerdictModal: false,
   };
 
   // 방 참여 상태 관리
@@ -804,14 +827,29 @@ export const useChatStore = create<ChatState>((set, get) => {
         return;
       }
       
+      const state = get();
+      
       // 최종 판결 요청 플래그 설정 - 다른 호출이 진행되는 것을 즉시 방지
       set({ 
         isLoading: true,
-        finalVerdictRequested: true
+        finalVerdictRequested: true,
+        isVerdictLoading: true
       });
       
+      // Firebase에 로딩 상태 동기화 (모든 유저에게 표시)
+      if (state.roomId && database) {
+        console.log('Firebase에 판결 로딩 상태 저장');
+        const verdictLoadingRef = ref(database, `rooms/${state.roomId}/verdictLoading`);
+        firebaseSet(verdictLoadingRef, {
+          isLoading: true,
+          startTime: Date.now(),
+          timestamp: new Date().toISOString()
+        }).catch(error => {
+          console.error('판결 로딩 상태 Firebase 저장 실패:', error);
+        });
+      }
+      
       try {
-        const state = get();
         console.log('현재 메시지 수:', state.messages.length);
         
         // 타이머 중지
@@ -826,15 +864,31 @@ export const useChatStore = create<ChatState>((set, get) => {
         );
         console.log('getFinalVerdict API 호출 완료');
         
-        // 판결 데이터 저장 (모달용)
+        // 판결 데이터 저장 (모달용) - 하지만 로딩바가 끝날 때까지 모달은 표시하지 않음
         if (verdict.verdict && verdict.verdict.summary) {
           console.log('🏛️ 최종 판결 데이터 저장 중 (Firebase 동기화 포함)');
           console.log('📄 판결 데이터:', verdict);
           
-          // setVerdictData 함수를 사용하여 Firebase에도 저장
-          console.log('🔄 setVerdictData 호출 시작');
-          state.setVerdictData(verdict);
-          console.log('✅ setVerdictData 호출 완료');
+          // 판결 데이터를 임시로 저장 (모달 표시는 나중에)
+          console.log('🔄 판결 데이터 임시 저장 (로딩바 완료 대기)');
+          
+          // Firebase에 판결 데이터는 저장하되, 로딩 완료 플래그는 별도로 관리
+          if (state.roomId && database) {
+            const verdictRef = ref(database, `rooms/${state.roomId}/verdict`);
+            const verdictData = {
+              data: verdict,
+              timestamp: new Date().toISOString(),
+              isLoadingComplete: false // 로딩바 완료 전까지는 false
+            };
+            
+            firebaseSet(verdictRef, verdictData)
+              .then(() => {
+                console.log('✅ Firebase에 판결 데이터 저장 성공 (로딩 미완료 상태)');
+              })
+              .catch(error => {
+                console.error('❌ 판결 데이터 Firebase 저장 실패:', error);
+              });
+          }
           
           // 판사 개입 기록
           state.addJudgeIntervention(
@@ -849,16 +903,48 @@ export const useChatStore = create<ChatState>((set, get) => {
             text: '🏛️ 최종 판결이 완료되었습니다. 판결문을 확인해주세요.'
           });
           
-          console.log('최종 판결 데이터 저장 완료');
+          console.log('최종 판결 데이터 저장 완료 (로딩바 완료 대기 중)');
         } else {
           console.error('판결 데이터가 올바르지 않음:', verdict);
+          
+          // 오류 시 로딩 상태 해제
+          if (state.roomId && database) {
+            const verdictLoadingRef = ref(database, `rooms/${state.roomId}/verdictLoading`);
+            firebaseSet(verdictLoadingRef, {
+              isLoading: false,
+              error: true,
+              timestamp: new Date().toISOString()
+            });
+          }
+          
+          set({ 
+            isLoading: false,
+            isVerdictLoading: false,
+            error: '판결 데이터가 올바르지 않습니다.'
+          });
         }
         
-        set({ isLoading: false });
+        // API 호출은 완료되었지만 로딩바 완료는 별도로 처리
+        set({ 
+          isLoading: false
+          // isVerdictLoading은 로딩바 완료 시에 false로 설정
+        });
       } catch (error) {
         console.error('최종 판결 오류:', error);
+        
+        // 오류 시 Firebase 로딩 상태도 해제
+        if (state.roomId && database) {
+          const verdictLoadingRef = ref(database, `rooms/${state.roomId}/verdictLoading`);
+          firebaseSet(verdictLoadingRef, {
+            isLoading: false,
+            error: true,
+            timestamp: new Date().toISOString()
+          });
+        }
+        
         set({ 
           isLoading: false,
+          isVerdictLoading: false,
           error: '최종 판결 중 오류가 발생했습니다.'
         });
         // 오류 발생 시 finalVerdictRequested 플래그를 재설정하지 않음
@@ -942,6 +1028,202 @@ export const useChatStore = create<ChatState>((set, get) => {
     setRoomId: (roomId: string) => {
       console.log('🏠 roomId 설정:', roomId);
       set({ roomId });
+    },
+
+    // 로딩바 완료 처리
+    onVerdictLoadingComplete: () => {
+      console.log('🏁 로딩바 완료 - 판결 모달 바로 표시');
+      const state = get();
+      
+      // 로딩 상태 해제
+      set({ isVerdictLoading: false });
+      
+      // Firebase에 로딩 완료 상태 업데이트
+      if (state.roomId && database) {
+        console.log('🔄 Firebase 로딩 완료 상태 업데이트');
+        
+        const verdictLoadingRef = ref(database, `rooms/${state.roomId}/verdictLoading`);
+        firebaseSet(verdictLoadingRef, {
+          isLoading: false,
+          completed: true,
+          timestamp: new Date().toISOString()
+        });
+        
+        // 기존 판결 데이터 읽기 및 즉시 모달 표시
+        const verdictRef = ref(database, `rooms/${state.roomId}/verdict`);
+        
+        // Firebase에서 판결 데이터 가져오기
+        import('firebase/database').then(({ get: firebaseGet }) => {
+          firebaseGet(verdictRef).then((snapshot) => {
+            if (snapshot.exists()) {
+              const verdictData = snapshot.val();
+              console.log('📋 판결 데이터 확인:', verdictData);
+              
+              if (verdictData.data) {
+                console.log('💾 로컬 판결 데이터 즉시 업데이트 - 모달 표시');
+                // 로컬 상태 즉시 업데이트하여 모달 표시
+                state.setVerdictDataLocal(verdictData.data);
+                
+                // Firebase에도 완료 플래그 업데이트
+                const updatedVerdictData = {
+                  ...verdictData,
+                  isLoadingComplete: true,
+                  loadingCompletedAt: new Date().toISOString()
+                };
+                firebaseSet(verdictRef, updatedVerdictData);
+              }
+            } else {
+              console.error('⚠️ 판결 데이터가 존재하지 않음');
+            }
+          }).catch(error => {
+            console.error('❌ 판결 데이터 읽기 실패:', error);
+          });
+        });
+      }
+    },
+
+    // 즉시 판결 관련 함수
+    requestInstantVerdict: () => {
+      const state = get();
+      
+      if (!state.timerActive || state.finalVerdictRequested || state.instantVerdictRequested) {
+        console.log('즉시 판결 요청 불가: 타이머 비활성화 또는 이미 요청됨');
+        return;
+      }
+      
+      console.log('🚨 즉시 판결 요청 시작');
+      
+      set({ 
+        instantVerdictRequested: true,
+        showInstantVerdictModal: true,
+        instantVerdictAgreedUsers: {}
+      });
+      
+      // Firebase에 즉시 판결 요청 상태 저장
+      if (state.roomId && database) {
+        const instantVerdictRef = ref(database, `rooms/${state.roomId}/instantVerdict`);
+        firebaseSet(instantVerdictRef, {
+          requested: true,
+          requestedAt: new Date().toISOString(),
+          agreedUsers: {},
+          startedBy: 'system' // 실제로는 현재 사용자로 변경 가능
+        }).then(() => {
+          console.log('Firebase에 즉시 판결 요청 저장 완료');
+        }).catch(error => {
+          console.error('Firebase 즉시 판결 요청 저장 실패:', error);
+        });
+      }
+      
+      // 시스템 메시지 추가
+      state.addMessage({
+        user: 'system',
+        name: '시스템',
+        text: '⚡ 즉시 판결이 요청되었습니다. 모든 참가자의 동의가 필요합니다.'
+      });
+    },
+    
+    agreeToInstantVerdict: (username: string) => {
+      const state = get();
+      
+      if (!state.instantVerdictRequested) {
+        console.log('즉시 판결이 요청되지 않음');
+        return;
+      }
+      
+      console.log(`🤝 ${username}님 즉시 판결 동의`);
+      
+      set(currentState => ({
+        instantVerdictAgreedUsers: {
+          ...currentState.instantVerdictAgreedUsers,
+          [username]: true
+        }
+      }));
+      
+      // Firebase에 동의 상태 업데이트
+      if (state.roomId && database) {
+        const agreedUsersRef = ref(database, `rooms/${state.roomId}/instantVerdict/agreedUsers/${username}`);
+        firebaseSet(agreedUsersRef, true).then(() => {
+          console.log('Firebase에 즉시 판결 동의 저장 완료');
+          
+          // 동의 후 즉시 만장일치 체크
+          state.checkInstantVerdictConsensus();
+        }).catch(error => {
+          console.error('Firebase 즉시 판결 동의 저장 실패:', error);
+        });
+      }
+      
+      // 시스템 메시지 추가
+      state.addMessage({
+        user: 'system',
+        name: '시스템',
+        text: `${username}님이 즉시 판결에 동의했습니다.`
+      });
+    },
+    
+    setShowInstantVerdictModal: (show: boolean) => {
+      set({ showInstantVerdictModal: show });
+      
+      // 모달 닫을 때 요청도 취소
+      if (!show) {
+        const state = get();
+        set({ 
+          instantVerdictRequested: false,
+          instantVerdictAgreedUsers: {}
+        });
+        
+        // Firebase에서도 제거
+        if (state.roomId && database) {
+          const instantVerdictRef = ref(database, `rooms/${state.roomId}/instantVerdict`);
+          remove(instantVerdictRef).then(() => {
+            console.log('Firebase에서 즉시 판결 요청 제거 완료');
+          }).catch(error => {
+            console.error('Firebase 즉시 판결 요청 제거 실패:', error);
+          });
+        }
+      }
+    },
+    
+    checkInstantVerdictConsensus: () => {
+      const state = get();
+      
+      if (!state.instantVerdictRequested) return;
+      
+      const totalUsers = state.roomUsers.length;
+      const agreedCount = Object.keys(state.instantVerdictAgreedUsers).length;
+      
+      console.log(`즉시 판결 동의 현황: ${agreedCount}/${totalUsers}`);
+      
+      // 모든 사용자가 동의했을 때
+      if (agreedCount === totalUsers && totalUsers > 0) {
+        console.log('🎉 즉시 판결 만장일치! 판결 시작');
+        
+        // 모달 닫기
+        set({ 
+          showInstantVerdictModal: false,
+          instantVerdictRequested: false 
+        });
+        
+        // 타이머 중지
+        state.pauseTimer();
+        
+        // 시스템 메시지
+        state.addMessage({
+          user: 'system',
+          name: '시스템',
+          text: '🎉 모든 참가자가 동의했습니다! 즉시 판결을 시작합니다.'
+        });
+        
+        // 즉시 판결 실행 (기존 requestFinalVerdict 사용)
+        setTimeout(() => {
+          state.requestFinalVerdict();
+        }, 1000);
+        
+        // Firebase에서 즉시 판결 요청 제거
+        if (state.roomId && database) {
+          const instantVerdictRef = ref(database, `rooms/${state.roomId}/instantVerdict`);
+          remove(instantVerdictRef);
+        }
+      }
     },
   };
 });

@@ -9,23 +9,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { 
   Scale, 
   Gavel, 
-  MessageSquare, 
-  Copy, 
-  Crown,
-  Shield,
   AlertTriangle,
-  Brain,
-  Heart,
   UserCircle,
-  Link,
-  Bell,
-  Camera,
-  Mic,
-  ChevronDown,
-  Flame,
-  Eye,
-  Star,
-  CheckCircle2
+  Flame
 } from 'lucide-react';
 import { ref, get, set } from 'firebase/database';
 import { database } from '@/lib/firebase';
@@ -34,8 +20,6 @@ export default function RoomPage() {
   const params = useParams();
   const roomId = params?.roomId as string;
   const [userId, setUserId] = useState<string>('');
-  const [copySuccess, setCopySuccess] = useState(false);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isNameModalOpen, setIsNameModalOpen] = useState(true);
   const [username, setUsername] = useState('');
   const [nameError, setNameError] = useState('');
@@ -99,23 +83,6 @@ export default function RoomPage() {
     checkRoomCreator();
   }, [roomId]);
 
-  // 이름 설정 후 처리 - 방 생성자인 경우 공유 모달 자동 표시
-  useEffect(() => {
-    if (!isNameModalOpen && isRoomCreator) {
-      // 방 생성자가 채팅방에 입장한 경우 공유 모달 자동 표시
-      setIsShareModalOpen(true);
-    }
-  }, [isNameModalOpen, isRoomCreator]);
-
-  // 링크 복사 기능
-  const copyRoomLink = () => {
-    const url = window.location.href;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
-    });
-  };
-
   // 사용자 이름 설정 처리
   const handleSetUsername = () => {
     if (!username.trim()) {
@@ -143,7 +110,6 @@ export default function RoomPage() {
               roomId={roomId} 
               userType={undefined} 
               customUsername={username} 
-              onShare={() => setIsShareModalOpen(true)}
             />
           )}
         </div>
@@ -237,131 +203,6 @@ export default function RoomPage() {
                     <span>공정한 판결을 위해 <span className="text-pink-600 font-medium">실명 사용</span>을 권장합니다</span>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* 공유 모달 */}
-      <AnimatePresence>
-        {isShareModalOpen && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              transition={{ duration: 0.25, type: "spring", stiffness: 300 }}
-              className="bg-gradient-to-b from-white to-pink-50 rounded-2xl shadow-[0_10px_40px_-5px_rgba(217,70,219,0.2)] max-w-md w-full p-6 border border-pink-100 relative overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-40 h-40 bg-pink-200 rounded-full opacity-20 -mr-20 -mt-20 blur-3xl"></div>
-              <div className="absolute bottom-0 left-0 w-40 h-40 bg-purple-200 rounded-full opacity-20 -ml-20 -mb-20 blur-3xl"></div>
-              
-              <div className="relative z-10">
-                <div className="flex justify-between items-center mb-5">
-                  <h2 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-purple-700 flex items-center">
-                    <Link className="h-5 w-5 text-pink-600 mr-2" />
-                    법정 참석자 초대
-                  </h2>
-                  <motion.button
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setIsShareModalOpen(false)}
-                    className="text-pink-500 hover:text-pink-700 hover:bg-pink-50 p-1.5 rounded-full transition-all"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </motion.button>
-                </div>
-                
-                {isRoomCreator ? (
-                  <div className="mb-5">
-                    <div className="bg-gradient-to-r from-pink-50 to-purple-50 border-l-4 border-pink-500 rounded-lg p-4 mb-4 shadow-sm">
-                      <h3 className="text-pink-800 font-bold flex items-center mb-2 text-base">
-                        <Gavel className="h-5 w-5 mr-2 text-pink-600" />
-                        재판 시작 전 피고인 출석 요청
-                      </h3>
-                      <p className="text-gray-700 text-sm leading-relaxed">
-                        법정 링크를 피고인에게 공유하고 입장을 확인한 후 재판을 시작하세요.
-                        공정한 심리를 위해 양측 당사자의 참석이 필요합니다.
-                      </p>
-                    </div>
-                    <p className="text-gray-700 font-medium flex items-center">
-                      <Scale className="h-4 w-4 mr-2 text-pink-600" />
-                      아래 링크로 상대방을 법정에 소환하세요:
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-gray-700 mb-4 flex items-center">
-                    <MessageSquare className="h-4 w-4 mr-2 text-pink-600" />
-                    아래 링크를 복사해 다른 참석자를 법정에 초대하세요.
-                  </p>
-                )}
-                
-                <div className="flex items-center mb-5 group">
-                  <input
-                    type="text"
-                    readOnly
-                    value={typeof window !== 'undefined' ? window.location.href : ''}
-                    className="flex-1 border border-pink-200 group-hover:border-pink-300 rounded-l-lg px-3 py-2.5 bg-white/80 focus:outline-none text-gray-700 font-mono text-sm transition-colors backdrop-blur-sm"
-                  />
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={copyRoomLink}
-                    className={`px-3 py-2.5 rounded-r-lg transition-all ${
-                      copySuccess 
-                        ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' 
-                        : 'bg-gradient-to-r from-pink-600 to-purple-700 hover:from-pink-700 hover:to-purple-800'
-                    } text-white shadow-md hover:shadow-lg`}
-                  >
-                    {copySuccess ? (
-                      <div className="flex items-center">
-                        <CheckCircle2 className="h-5 w-5 mr-1" />
-                        <span className="text-sm font-medium">복사됨</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <Copy className="h-5 w-5 mr-1" />
-                        <span className="text-sm font-medium">복사</span>
-                      </div>
-                    )}
-                  </motion.button>
-                </div>
-                
-                <div className="mt-5 pt-4 border-t border-pink-100">
-                  <h3 className="font-bold mb-3 text-gray-800 flex items-center">
-                    <Gavel className="h-4 w-4 text-pink-600 mr-1.5" />
-                    법정 진행 규칙
-                  </h3>
-                  <ul className="text-sm text-gray-700 space-y-2 bg-gradient-to-r from-pink-50 to-white p-4 rounded-lg border border-pink-100 shadow-sm">
-                    <li className="flex items-start">
-                      <Scale className="h-4 w-4 text-pink-600 mr-2 mt-0.5 flex-shrink-0" />
-                      <span>상대방의 의견을 존중하고 증거에 기반한 주장을 펼치세요</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Brain className="h-4 w-4 text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
-                      <span>감정적 발언보다 논리적 근거를 제시하는 것이 유리합니다</span>
-                    </li>
-                  </ul>
-                </div>
-                
-                {isRoomCreator && (
-                  <div className="mt-5 pt-4 border-t border-pink-100">
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setIsShareModalOpen(false)}
-                      className="w-full px-4 py-3.5 bg-gradient-to-r from-pink-600 to-purple-700 text-white font-bold rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-pink-700 hover:to-purple-800 relative overflow-hidden group"
-                    >
-                      <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-pink-500 to-pink-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                      <div className="relative flex items-center justify-center">
-                        <Gavel className="h-5 w-5 mr-2" />
-                        재판 개정을 선언합니다
-                      </div>
-                    </motion.button>
-                  </div>
-                )}
               </div>
             </motion.div>
           </div>

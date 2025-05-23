@@ -108,7 +108,7 @@ export const analyzeConversation = async (
         return {
           shouldIntervene: true,
           type: 'sexual_harassment',
-          message: `🚨🚨 ${msg.name}님, 성적 괴롭힘이나 동의 없는 신체 접촉을 암시하는 발언이 감지되었습니다. 이는 매우 심각한 범죄 행위입니다. 즉시 해당 발언을 철회하고 사과하시기 바랍니다. 계속될 경우 법적 조치가 취해질 수 있습니다.`,
+          message: `🚨 ${msg.name}님! 성적 괴롭힘 발언 감지! 즉시 중단하세요!`,
           targetUser: msg.name,
           detectedIssues: [`${msg.name}님의 성적 괴롭힘 의심 발언`],
           confidence: 0.98,
@@ -139,7 +139,7 @@ export const analyzeConversation = async (
         return {
           shouldIntervene: true,
           type: 'warning',
-          message: `⚠️ ${msg.name}님, 심각한 욕설이 감지되었습니다! 🛑 감정이 격해진 건 이해하지만, 이런 언어는 상황을 더 악화시킬 뿐이에요. 잠깐 심호흡하고 좀 더 차분하게 얘기해보시겠어요? 💨`,
+          message: `⚠️ ${msg.name}님! 욕설 그만! 진정하세요! 🛑`,
           targetUser: msg.name,
           detectedIssues: [`${msg.name}님의 심각한 욕설 사용`],
           confidence: 0.92,
@@ -218,10 +218,10 @@ ${existingIssues}
 }
 
 예시 개입 메시지들 (친근하고 효과적인 말투로):
-- evidence_request: "📋 잠깐! [사용자명]님이 방금 말씀하신 '[구체적 주장]' 부분에 대해서 좀 더 구체적인 근거를 들어볼 수 있을까요? 🤔"
-- topic_deviation: "🎯 어? 잠깐만요~ 지금 원래 얘기에서 좀 벗어나고 있는 것 같은데, 다시 '[주제]' 얘기로 돌아가 볼까요? 😊"
-- logical_fallacy: "⚖️ 음... 방금 논리에 좀 문제가 있는 것 같아요. [구체적 오류]로 보이는데, 다시 설명해 주실 수 있나요? 🧐"
-- warning: "⚠️ 어어, 분위기가 좀 험악해지고 있네요! 😅 다들 한 번 숨 고르고 차분하게 대화해보시겠어요?"
+- evidence_request: "📋 [사용자명]님, '[구체적 주장]'에 대한 근거 부탁드려요! 🤔"
+- topic_deviation: "🎯 잠깐! 원래 주제로 돌아가 볼까요? 😊"
+- logical_fallacy: "⚖️ 논리에 문제가 있어 보이네요. 다시 설명해 주세요! 🧐"
+- warning: "⚠️ 감정 좀 가라앉히고 차분하게 해봐요! 💨"
 
 confidence가 0.3 이상이면 개입하는 것으로 기준을 낮추세요. 너무 신중하지 말고 적극적으로 개입하세요.`;
 

@@ -1,27 +1,29 @@
 import { motion } from 'framer-motion';
-import { Gavel, Share2, Share } from 'lucide-react';
+import { Gavel, Share, Users, Clock } from 'lucide-react';
 
 interface ChatRoomHeaderProps {
   activeChattersCount: number;
-  onShare?: () => void;
-  showShareButton?: boolean;
+  onShare: () => void;
+  timerActive: boolean;
+  onInstantVerdict?: () => void;
 }
 
 export default function ChatRoomHeader({ 
-  activeChattersCount, 
+  activeChattersCount,
   onShare,
-  showShareButton = true 
+  timerActive = false,
+  onInstantVerdict
 }: ChatRoomHeaderProps) {
   
   const handleShareRoom = () => {
     if (onShare) {
       onShare();
     } else {
-      // 기본 공유 동작
+      // 기본 공유 동작 - 링크 복사
       const roomId = window.location.pathname.split('/').pop();
       if (!roomId) return;
       
-      const shareUrl = `${window.location.origin}/chat/${roomId}`;
+      const shareUrl = `${window.location.origin}/room/${roomId}`;
       
       navigator.clipboard.writeText(shareUrl)
         .then(() => {
@@ -46,29 +48,27 @@ export default function ChatRoomHeader({
           </span>
         </div>
         
-        {showShareButton && (
-          <div className="flex items-center space-x-2">
-            {onShare ? (
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                onClick={onShare}
-                className="p-2 text-pink-500 hover:text-pink-700 hover:bg-pink-50 rounded-full transition-colors"
-                title="법정 참석자 소환"
-              >
-                <Share2 className="w-5 h-5" />
-              </motion.button>
-            ) : (
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                onClick={handleShareRoom}
-                className="p-2 text-pink-500 hover:text-pink-700 hover:bg-pink-50 rounded-full transition-colors"
-                title="법정 링크 복사"
-              >
-                <Share className="w-5 h-5" />
-              </motion.button>
-            )}
-          </div>
-        )}
+        <div className="flex items-center space-x-2">
+          {/* 즉시 판결받기 버튼 (재판 중일 때만 표시) */}
+          {timerActive && onInstantVerdict && (
+            <button
+              onClick={onInstantVerdict}
+              className="flex items-center space-x-1 px-3 py-2 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg hover:from-red-600 hover:to-orange-600 transition-all duration-200 shadow-md text-sm font-medium"
+            >
+              <span>⚡</span>
+              <span>즉시 판결</span>
+            </button>
+          )}
+          
+          {/* 공유하기 버튼 */}
+          <button
+            onClick={onShare}
+            className="flex items-center space-x-1 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-200 shadow-md text-sm font-medium"
+          >
+            <Share className="w-4 h-4" />
+            <span>공유</span>
+          </button>
+        </div>
       </div>
     </div>
   );

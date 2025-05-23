@@ -1,6 +1,5 @@
 import { ReactNode, RefObject } from 'react';
 import { Database } from 'firebase/database';
-import { RefObject } from 'react';
 
 // Message Types
 export interface MessageSender {
@@ -50,6 +49,7 @@ export interface TimerData {
 export interface ProfileInitialProps {
   name: string;
   isMine: boolean;
+  isWarning?: boolean;
 }
 
 export interface MessageListProps {

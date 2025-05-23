@@ -65,38 +65,37 @@ export default function MessageList({
         const isSystemMessage = message.user === 'system';
         const isJudgeMessage = message.user === 'judge';
         
+        // 판사 경고 메시지 감지
+        const isJudgeWarning = isJudgeMessage && (
+          message.text.includes('🚨') || 
+          message.text.includes('⚠️') || 
+          message.text.includes('욕설') ||
+          message.text.includes('경고') ||
+          message.text.includes('그만') ||
+          message.text.includes('중단')
+        );
+        
         return (
           <div 
             key={message.id || index} 
-            className={`flex ${
-              isJudgeMessage
-                ? 'flex-col items-center'
-                : isMine 
-                  ? 'justify-end' 
-                  : 'justify-start'
-            }`}
+            className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
           >
-            {/* 판사 메시지 구분선 시작 */}
-            {isJudgeMessage && (
-              <div className="w-3/4 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent mx-auto my-4" />
-            )}
-            
             {/* 프로필 이미지 표시 조건 수정 */}
-            {(isJudgeMessage || (!isMine && !isSystemMessage)) && (
-              <div className={isJudgeMessage ? 'mb-2' : ''}>
-                <ProfileInitial name={message.name} isMine={false} />
+            {(!isMine && !isSystemMessage) && (
+              <div>
+                <ProfileInitial 
+                  name={message.name} 
+                  isMine={false} 
+                  isWarning={isJudgeWarning}
+                />
               </div>
             )}
             
             {/* 메시지 컨텐츠 컨테이너 */}
-            <div className={`mx-2 ${
-              isJudgeMessage
-                ? 'max-w-[90%] w-full transform transition-all duration-300 hover:scale-[1.01]'
-                : 'max-w-[80%]'
-            } ${isMine ? 'order-1' : 'order-2'}`}>
-              {/* 메시지 정보 (이름, 시간) 중앙 정렬 */}
+            <div className={`max-w-[80%] ${isMine ? 'order-1' : 'order-2'}`}>
+              {/* 메시지 정보 (이름, 시간) */}
               {!isSystemMessage && (
-                <div className={`flex items-center mb-1 ${isJudgeMessage ? 'justify-center' : ''}`}>
+                <div className="flex items-center mb-1">
                   <span className={`text-sm font-medium ${
                     isJudgeMessage 
                       ? 'text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-800' 
@@ -105,7 +104,7 @@ export default function MessageList({
                         : 'text-purple-700'
                   }`}>
                     {isJudgeMessage ? (
-                      <span className="flex items-center justify-center">
+                      <span className="flex items-center">
                         <Gavel className="w-4 h-4 mr-1.5 text-amber-600" />
                         {message.name}
                       </span>
@@ -125,7 +124,7 @@ export default function MessageList({
                 </div>
               )}
               
-              {/* 메시지 말풍선 스타일 강화 */}
+              {/* 메시지 말풍선 */}
               <div
                 className={`rounded-lg px-4 py-2.5 shadow-sm ${
                   isSystemMessage 
@@ -136,9 +135,6 @@ export default function MessageList({
                         ? 'bg-gradient-to-r from-pink-100 to-purple-100 border border-pink-200 text-gray-800'
                         : 'bg-white border border-gray-200 text-gray-800'
                 }`}
-                style={isJudgeMessage ? {
-                  boxShadow: '0 4px 6px rgba(251, 191, 36, 0.05), 0 1px 3px rgba(251, 191, 36, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.4)'
-                } : {}}
               >
                 {isSystemMessage ? (
                   <div className="flex items-center justify-center">
@@ -146,16 +142,16 @@ export default function MessageList({
                     <span>{message.text}</span>
                   </div>
                 ) : isJudgeMessage ? (
-                  <div>
-                    <JudgeMessageDisplay text={message.text} />
-                  </div>
+                  <p className="whitespace-pre-wrap break-words">
+                    {message.text.replace(/\s*\[#[a-zA-Z0-9_]+\]$/, '')}
+                  </p>
                 ) : (
                   <p className="whitespace-pre-wrap break-words">{message.text}</p>
                 )}
                 
-                {/* 메시지 타입 표시 중앙 정렬 */}
+                {/* 메시지 타입 표시 */}
                 {message.messageType && message.messageType !== 'normal' && (
-                  <div className={`mt-1 flex items-center ${isJudgeMessage ? 'justify-center' : 'justify-end'}`}>
+                  <div className="mt-1 flex items-center justify-end">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                       message.messageType === 'evidence' 
                         ? 'bg-green-100 text-green-800 border border-green-200' 
@@ -194,11 +190,6 @@ export default function MessageList({
               <div className="order-2">
                 <ProfileInitial name={message.name || '익명'} isMine={true} />
               </div>
-            )}
-            
-            {/* 판사 메시지 구분선 끝 */}
-            {isJudgeMessage && (
-              <div className="w-3/4 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent mx-auto my-4" />
             )}
           </div>
         );
