@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Scale, ChevronDown, ChevronUp } from 'lucide-react';
 import { IssueNotificationProps } from '@/types/chat';
 

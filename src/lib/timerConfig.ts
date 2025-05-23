@@ -7,7 +7,7 @@
 
 // Timer duration in seconds
 export const DEFAULT_TIMER_DURATION = 5 * 60; // 5 minutes
-export const TEST_TIMER_DURATION = 10; // 1 minute for testing
+export const TEST_TIMER_DURATION = 50; // 1 minute for testing
 
 // Timer state types
 export type TimerState = 'idle' | 'running' | 'completed';
@@ -21,6 +21,8 @@ export interface TimerData {
   completedAt?: string; // ISO string
   endReason?: 'time_expired' | 'aggressive_language' | 'user_ended' | 'other';
   messagesSent?: boolean;
+  reset?: boolean;
+  resetAt?: string; // ISO string
 }
 
 // Function to format remaining time

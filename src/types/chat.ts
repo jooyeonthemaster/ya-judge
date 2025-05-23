@@ -1,5 +1,6 @@
 import { ReactNode, RefObject } from 'react';
 import { Database } from 'firebase/database';
+import { RefObject } from 'react';
 
 // Message Types
 export interface MessageSender {
@@ -13,7 +14,7 @@ export interface Message {
   name: string;
   text: string;
   timestamp?: string | number;
-  roomId: string;
+  roomId?: string;
   sender?: MessageSender;
   messageType?: 'normal' | 'evidence' | 'objection' | 'closing' | 'question';
   relatedIssue?: string;
@@ -54,7 +55,7 @@ export interface ProfileInitialProps {
 export interface MessageListProps {
   messages: Message[];
   username: string;
-  messagesEndRef: RefObject<HTMLDivElement>;
+  messagesEndRef: RefObject<HTMLDivElement | null>;
   getUserCurseLevel: (userId: string) => number;
   hasFinalVerdict: boolean;
   lastVerdictIndex: number;

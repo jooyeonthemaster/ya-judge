@@ -1,63 +1,78 @@
-import { useState, useEffect } from 'react';
-import { ref, onValue, set, off, get, Database } from 'firebase/database';
+import { useState, useEffect, useRef } from 'react';
+import { ref, onValue, set, remove, off, get, onDisconnect } from 'firebase/database';
 import { database } from '@/lib/firebase';
+import { useChatStore } from '@/store/chatStore';
 import { 
+  getTimerDuration, 
+  formatRemainingTime, 
   TimerState, 
-  TimerData, 
-  UseCourtTimerProps,
-  Message
-} from '@/types/chat';
-import { getTimerDuration, formatRemainingTime } from '@/lib/timerConfig';
+  TimerData 
+} from '@/lib/timerConfig';
+import { Message } from '@/types/chat';
 
-export function useCourtTimer({
+interface UseCourtTimerProps {
+  roomId: string | null;
+  isRoomHost: boolean;
+  onTimerComplete: () => void;
+  addMessage: (message: Message) => void;
+}
+
+interface UseCourtTimerReturn {
+  // 타이머 상태
+  timerActive: boolean;
+  timerState: TimerState;
+  remainingTime: number;
+  remainingTimeFormatted: string;
+  timerStartTime: Date | null;
+  timerDuration: number;
+  finalVerdictTriggered: boolean;
+  apiCallsEnabled: boolean;
+  
+  // 타이머 제어 함수들
+  startTimerMode: () => void;
+  resetTimerMode: () => void;
+  setFinalVerdictTriggered: (value: boolean) => void;
+  setApiCallsEnabled: (value: boolean) => void;
+}
+
+export function useCourtTimer({ 
   roomId, 
   isRoomHost, 
   onTimerComplete,
-  addMessage
-}: UseCourtTimerProps) {
+  addMessage 
+}: UseCourtTimerProps): UseCourtTimerReturn {
+  
+  const { startTimer, resetTimer, timerActive, requestFinalVerdict } = useChatStore();
+  
+  // 타이머 상태
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
   const [timerDuration, setTimerDuration] = useState(getTimerDuration());
   const [remainingTime, setRemainingTime] = useState(getTimerDuration());
   const [timerState, setTimerState] = useState<TimerState>('idle');
-  const [timerActive, setTimerActive] = useState(false);
   const [finalVerdictTriggered, setFinalVerdictTriggered] = useState(false);
+  const [apiCallsEnabled, setApiCallsEnabled] = useState(true);
 
-  // Start timer locally
-  const startTimer = () => {
-    setTimerActive(true);
-  };
+  // 남은 시간 포맷팅
+  const remainingTimeFormatted = formatRemainingTime(remainingTime);
 
-  // Reset timer locally
-  const resetTimer = () => {
-    setTimerActive(false);
-    setTimerState('idle');
-    setRemainingTime(getTimerDuration());
-    setTimerStartTime(null);
-    setFinalVerdictTriggered(false);
-  };
-
-  // Calculate time left
-  const getTimeLeft = () => {
-    return remainingTime;
-  };
-
-  // Start timer mode with Firebase sync
+  // 타이머 모드 시작
   const startTimerMode = () => {
-    // Reset all verdict and trial state
+    // 상태 초기화
     setFinalVerdictTriggered(false);
+    setApiCallsEnabled(true);
     
-    // Set start time
+    // 시작 시간 설정
     const startTime = new Date();
     setTimerStartTime(startTime);
     setTimerState('running');
     
-    // Update local timer state
+    // 로컬 타이머 시작
     startTimer();
     
-    // Reset remaining time to full duration
+    // 남은 시간 초기화
     setRemainingTime(timerDuration);
     
-    // Firebase에 타이머 시작 상태 저장 (다른 참가자와 동기화)
+    // Firebase에 타이머 시작 상태 저장
     if (roomId && database) {
       const timerRef = ref(database, `rooms/${roomId}/timer`);
       const timerData: TimerData = {
@@ -69,13 +84,13 @@ export function useCourtTimer({
       };
       set(timerRef, timerData);
       
-      // Also clear any verdict status that might exist
+      // 이전 판결 상태 제거
       const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
-      set(verdictStatusRef, null);
+      remove(verdictStatusRef);
       
-      // Clear ready status for all clients 
+      // 준비 상태 제거
       const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
-      set(trialReadyRef, null);
+      remove(trialReadyRef);
     }
     
     // 시작 메시지 추가
@@ -95,11 +110,30 @@ export function useCourtTimer({
     });
   };
 
-  // Update the main timer logic
+  // 타이머 모드 리셋
+  const resetTimerMode = () => {
+    setFinalVerdictTriggered(false);
+    setApiCallsEnabled(true);
+    setTimerState('idle');
+    resetTimer();
+    setRemainingTime(getTimerDuration());
+    
+    // Firebase에서 타이머 리셋
+    if (roomId && database) {
+      const timerRef = ref(database, `rooms/${roomId}/timer`);
+      set(timerRef, {
+        active: false,
+        completed: false,
+        reset: true,
+        resetAt: new Date().toISOString()
+      });
+    }
+  };
+
+  // 로컬 타이머 업데이트 (매초)
   useEffect(() => {
     if (!timerActive || !timerStartTime) return;
     
-    // Calculate and update timer display every second
     const timerInterval = setInterval(() => {
       const now = new Date();
       const elapsed = Math.floor((now.getTime() - timerStartTime.getTime()) / 1000);
@@ -107,12 +141,12 @@ export function useCourtTimer({
       
       setRemainingTime(remaining);
       
-      // Check if timer has completed
+      // 타이머 완료 체크
       if (remaining <= 0 && timerState !== 'completed' && !finalVerdictTriggered) {
         setTimerState('completed');
         clearInterval(timerInterval);
         
-        // Add timer expiration message
+        // 타이머 완료 메시지
         addMessage({
           user: 'system',
           name: '시스템',
@@ -120,7 +154,7 @@ export function useCourtTimer({
           roomId: roomId || ''
         });
         
-        // Update Firebase to indicate timer completed
+        // Firebase 업데이트
         if (roomId && database) {
           const timerRef = ref(database, `rooms/${roomId}/timer`);
           const timerData: TimerData = {
@@ -132,7 +166,6 @@ export function useCourtTimer({
           };
           set(timerRef, timerData);
           
-          // Show analysis in progress message
           addMessage({
             user: 'system',
             name: '시스템',
@@ -140,46 +173,45 @@ export function useCourtTimer({
             roomId: roomId || ''
           });
         }
-        
-        // Trigger final verdict only if host
-        if (isRoomHost) {
-          setFinalVerdictTriggered(true);
-          onTimerComplete();
-        }
       }
     }, 1000);
     
     return () => clearInterval(timerInterval);
-  }, [timerActive, timerStartTime, timerDuration, timerState, roomId, database, addMessage, finalVerdictTriggered, isRoomHost, onTimerComplete]);
+  }, [timerActive, timerStartTime, timerDuration, timerState, roomId, database, addMessage, finalVerdictTriggered]);
 
-  // Sync with Firebase timer status
+  // 서버 타이머 상태 동기화
   useEffect(() => {
     if (!roomId || !database) return;
     
     const timerRef = ref(database, `rooms/${roomId}/timer`);
     
-    // Timer state change listener
-    const unsubscribe = onValue(timerRef, (snapshot) => {
+    const timerListener = onValue(timerRef, (snapshot) => {
       const timerData = snapshot.val() as TimerData | null;
       
       if (!timerData) return;
       
-      // Handle timer reset from host
+      // 타이머 리셋 처리
       if (timerData.reset === true) {
+        console.log('Timer reset by host, syncing client state...');
+        
+        setFinalVerdictTriggered(false);
+        setApiCallsEnabled(true);
+        setTimerState('idle');
         resetTimer();
+        setRemainingTime(getTimerDuration());
+        
         return;
       }
       
-      // Handle timer activation
+      // 타이머 활성화 동기화
       if (timerData.active && !timerActive) {
+        console.log('Timer started by another participant, syncing...');
         startTimer();
         
-        // Set the start time from server
         if (timerData.startTime) {
           setTimerStartTime(new Date(timerData.startTime));
         }
         
-        // Set duration if provided
         if (timerData.durationSeconds) {
           setTimerDuration(timerData.durationSeconds);
         }
@@ -187,24 +219,70 @@ export function useCourtTimer({
         setTimerState('running');
       }
       
-      // Handle timer completion from server - only trigger if host
-      if (timerData.completed && timerState !== 'completed' && !finalVerdictTriggered) {
+      // 타이머 완료 처리
+      if (timerData.completed && timerState !== 'completed' && !finalVerdictTriggered && apiCallsEnabled) {
+        console.log('Timer completed signal received from server', timerData.endReason);
+        
         setTimerState('completed');
         setRemainingTime(0);
         
         if (timerData.endReason === 'aggressive_language') {
-          // For aggressive language, don't end the trial
           addMessage({
             user: 'system',
             name: '시스템',
             text: '공격적인 언어가 감지되어 경고합니다. 상대를 존중하는 언어를 사용해주세요.',
             roomId: roomId || ''
           });
+          
           return;
-        } else if (isRoomHost) {
-          // Only host calls onTimerComplete
+        } else {
           setFinalVerdictTriggered(true);
-          onTimerComplete();
+          setApiCallsEnabled(false);
+          
+          if (!timerData.messagesSent) {
+            addMessage({
+              user: 'system',
+              name: '시스템',
+              text: '재판 시간이 종료되었습니다. 판사가 최종 판결을 내립니다.',
+              roomId: roomId || ''
+            });
+            
+            addMessage({
+              user: 'system',
+              name: '시스템',
+              text: '판사가 상황을 분석 중입니다...',
+              roomId: roomId || ''
+            });
+            
+            if (database) {
+              const updatedTimerRef = ref(database, `rooms/${roomId}/timer`);
+              const updatedTimerData: TimerData = {
+                ...timerData,
+                messagesSent: true
+              };
+              set(updatedTimerRef, updatedTimerData);
+            }
+          }
+          
+          // 호스트만 최종 판결 요청
+          if (isRoomHost) {
+            console.log('Host is calling requestFinalVerdict ONE TIME ONLY');
+            requestFinalVerdict();
+            
+            if (database) {
+              const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
+              remove(trialReadyRef);
+              
+              const readyRef = ref(database, `rooms/${roomId}/ready`);
+              remove(readyRef);
+              
+              const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
+              set(verdictStatusRef, {
+                inProgress: true,
+                startedAt: new Date().toISOString()
+              });
+            }
+          }
         }
       }
     });
@@ -212,21 +290,23 @@ export function useCourtTimer({
     return () => {
       off(timerRef);
     };
-  }, [roomId, database, timerActive, timerState, startTimer, resetTimer, finalVerdictTriggered, isRoomHost, addMessage, onTimerComplete]);
+  }, [roomId, database, timerActive, timerState, startTimer, requestFinalVerdict, addMessage, finalVerdictTriggered, apiCallsEnabled, isRoomHost]);
 
-  // Check for existing timer when joining
+  // 기존 타이머 동기화 (방 참여 시)
   useEffect(() => {
     if (!roomId || !database) return;
     
     const checkExistingTimer = async () => {
       try {
-        const db = database as Database; // Type assertion to avoid undefined
-        const timerRef = ref(db, `rooms/${roomId}/timer`);
+        if (!database) return;
+        
+        const timerRef = ref(database, `rooms/${roomId}/timer`);
         const snapshot = await get(timerRef);
         const timerData = snapshot.val();
         
         if (timerData && timerData.active) {
-          // Sync with active timer
+          console.log('Room has active timer, synchronizing...');
+          
           if (timerData.startTime) {
             const startTime = new Date(timerData.startTime);
             setTimerStartTime(startTime);
@@ -235,19 +315,15 @@ export function useCourtTimer({
               setTimerDuration(timerData.durationSeconds);
             }
             
-            // Calculate elapsed time and remaining time
             const now = new Date();
             const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000);
             const remaining = Math.max(0, timerDuration - elapsed);
             
-            // If timer should still be running
             if (remaining > 0) {
               startTimer();
               setTimerState('running');
               setRemainingTime(remaining);
-            } 
-            // If timer has already completed
-            else if (timerData.completed) {
+            } else if (timerData.completed) {
               setTimerState('completed');
             }
           }
@@ -257,19 +333,24 @@ export function useCourtTimer({
       }
     };
     
-    // Run the check when component mounts
     checkExistingTimer();
   }, [roomId, database, timerDuration, startTimer]);
 
   return {
+    // 타이머 상태
     timerActive,
-    remainingTime,
     timerState,
-    startTimer,
-    resetTimer,
-    getTimeLeft,
-    formatRemainingTime,
+    remainingTime,
+    remainingTimeFormatted,
+    timerStartTime,
+    timerDuration,
+    finalVerdictTriggered,
+    apiCallsEnabled,
+    
+    // 타이머 제어 함수들
     startTimerMode,
-    finalVerdictTriggered
+    resetTimerMode,
+    setFinalVerdictTriggered,
+    setApiCallsEnabled
   };
 } 

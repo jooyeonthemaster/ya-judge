@@ -65,6 +65,9 @@ interface ChatState {
   roomUsers: Array<{ id: string; username: string }>;
   typingUsers: Record<string, { username: string, isTyping: boolean }>;
   
+  // 방 정보
+  roomId: string | null;
+  
   // 실시간 판사 시스템
   timerStartTime: number | null;
   timerDuration: number;
@@ -82,6 +85,9 @@ interface ChatState {
   
   // 최종 판결 요청 여부
   finalVerdictRequested: boolean;
+  
+  // 판결 데이터
+  latestVerdictData: any;
   
   // 함수들
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
@@ -107,9 +113,16 @@ interface ChatState {
   requestFinalVerdict: () => Promise<void>;
   clearChat: () => void;
   
+  // 판결 관련 함수
+  setVerdictData: (data: any) => void;
+  setVerdictDataLocal: (data: any) => void;
+  
   // 사용자 욕설 레벨 관련 함수
   updateUserCurseLevel: (userId: string, increment: number) => void;
   getUserCurseLevel: (userId: string) => number;
+  
+  // 방 정보 설정
+  setRoomId: (roomId: string) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => {
@@ -125,6 +138,9 @@ export const useChatStore = create<ChatState>((set, get) => {
     currentUser: null,
     roomUsers: [],
     typingUsers: {},
+    
+    // 방 정보
+    roomId: null,
     
     // 실시간 판사 시스템 상태
     timerStartTime: null,
@@ -143,6 +159,9 @@ export const useChatStore = create<ChatState>((set, get) => {
     
     // 최종 판결 요청 여부
     finalVerdictRequested: false,
+    
+    // 판결 데이터
+    latestVerdictData: null,
   };
 
   // 방 참여 상태 관리
@@ -390,68 +409,8 @@ export const useChatStore = create<ChatState>((set, get) => {
               };
             });
             
-            // 메시지 추가 후 자동 판사 분석 호출 로직 추가
-            const state = get();
-            
-            // 사용자 메시지이고 타이머가 활성화된 경우에만 판사 분석 고려
-            if (
-              message.user === 'user-general' && 
-              state.timerActive && 
-              !state.isLoading
-            ) {
-              // 패턴 기반 긴급 개입 체크
-              const messageText = message.text.toLowerCase();
-              
-              // 욕설 감지 및 즉시 판사 개입
-              if (INTERVENTION_PATTERNS.AGGRESSIVE.test(messageText)) {
-                console.log('공격적 언어 감지: 판사 개입 요청');
-                
-                // Show analysis in progress message
-                get().addMessage({
-                  user: 'system',
-                  name: '시스템',
-                  text: '판사가 상황을 분석 중입니다...'
-                });
-                
-                // Immediately request judge analysis when curse is detected
-                get().requestJudgeAnalysis(false, true);
-                
-                return; // Skip normal analysis checks
-              }
-              
-              // Normal message flow for non-aggressive messages
-              let urgentIntervention = false;
-              
-              if (INTERVENTION_PATTERNS.EVIDENCE_NEEDED.test(messageText)) {
-                console.log('증거 요청 감지: 긴급 개입 고려');
-                urgentIntervention = true;
-              }
-              
-              // 메시지 개수가 최소 개입 기준 이상인지 확인
-              const userMessages = state.messages.filter(msg => msg.user === 'user-general');
-              
-              // 마지막 판사 개입 이후 경과 시간 확인
-              const timeSinceLastJudge = state.timeSinceLastIntervention();
-              
-              // Normal check for judge intervention (no aggressive language case)
-              if (
-                urgentIntervention ||
-                (userMessages.length >= MESSAGES_BEFORE_FIRST_INTERVENTION && 
-                timeSinceLastJudge >= MIN_INTERVENTION_INTERVAL)
-              ) {
-                console.log('자동 판사 분석 요청 조건 충족');
-                setTimeout(() => {
-                  // Only background analysis, no messages for normal analysis
-                  get().requestJudgeAnalysis(false, false);
-                }, urgentIntervention ? 200 : 500);
-              } else {
-                console.log(
-                  '자동 판사 분석 조건 미충족:', 
-                  `메시지 수: ${userMessages.length}/${MESSAGES_BEFORE_FIRST_INTERVENTION}, ` +
-                  `경과 시간: ${timeSinceLastJudge}/${MIN_INTERVENTION_INTERVAL}ms`
-                );
-              }
-            }
+            // 실시간 판사 분석은 useRealTimeAnalysis 훅에서 전담하므로 여기서는 제거
+            console.log('메시지 추가 완료 - 실시간 분석은 useRealTimeAnalysis에서 처리됩니다.');
           })
           .catch(err => console.error('Failed to send message:', err));
       } catch (error) {
@@ -637,7 +596,7 @@ export const useChatStore = create<ChatState>((set, get) => {
           const cachedData = responseCache[cacheKey].interventionData;
           
           // 캐시된 응답 사용 (빠른 응답)
-          if (cachedData.shouldIntervene && cachedData.interventionType && cachedData.interventionMessage) {
+          if (cachedData.shouldIntervene && cachedData.type && cachedData.message) {
             // One more check before showing any messages
             if (get().finalVerdictRequested) {
               console.log('Final verdict requested while preparing cached response, aborting');
@@ -655,8 +614,8 @@ export const useChatStore = create<ChatState>((set, get) => {
               }
               
               state.addJudgeIntervention(
-                cachedData.interventionType!,
-                cachedData.interventionMessage!,
+                cachedData.type!,
+                cachedData.message!,
                 cachedData.targetUser
               );
               
@@ -669,7 +628,7 @@ export const useChatStore = create<ChatState>((set, get) => {
               state.addMessage({
                 user: 'judge',
                 name: '판사',
-                text: cachedData.interventionMessage!
+                text: cachedData.message!
               });
               
               set({ isLoading: false });
@@ -726,7 +685,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         };
         
         // 개입이 필요하다면 판사 메시지 추가
-        if (result.shouldIntervene && result.interventionType && result.interventionMessage) {
+        if (result.shouldIntervene && result.type && result.message) {
           // Final check before adding message
           if (get().finalVerdictRequested) {
             console.log('Final verdict requested before adding intervention, aborting');
@@ -736,8 +695,8 @@ export const useChatStore = create<ChatState>((set, get) => {
           
           // 판사 개입 기록
           state.addJudgeIntervention(
-            result.interventionType,
-            result.interventionMessage,
+            result.type,
+            result.message,
             result.targetUser
           );
           
@@ -745,7 +704,7 @@ export const useChatStore = create<ChatState>((set, get) => {
           const judgeMessage: Omit<Message, 'id' | 'timestamp'> = {
             user: 'judge',
             name: '판사',
-            text: result.interventionMessage
+            text: result.message
           };
           
           // 쟁점 업데이트
@@ -867,14 +826,15 @@ export const useChatStore = create<ChatState>((set, get) => {
         );
         console.log('getFinalVerdict API 호출 완료');
         
-        // 판결 메시지 추가
+        // 판결 데이터 저장 (모달용)
         if (verdict.verdict && verdict.verdict.summary) {
-          console.log('최종 판결 메시지 추가 중');
-          const verdictMessage: Omit<Message, 'id' | 'timestamp'> = {
-            user: 'judge',
-            name: '판사',
-            text: `## 최종 판결\n\n${verdict.verdict.summary}\n\n${verdict.verdict.conflict_root_cause}\n\n${verdict.verdict.recommendation}`
-          };
+          console.log('🏛️ 최종 판결 데이터 저장 중 (Firebase 동기화 포함)');
+          console.log('📄 판결 데이터:', verdict);
+          
+          // setVerdictData 함수를 사용하여 Firebase에도 저장
+          console.log('🔄 setVerdictData 호출 시작');
+          state.setVerdictData(verdict);
+          console.log('✅ setVerdictData 호출 완료');
           
           // 판사 개입 기록
           state.addJudgeIntervention(
@@ -882,10 +842,14 @@ export const useChatStore = create<ChatState>((set, get) => {
             verdict.verdict.summary,
           );
           
-          await state.addMessage(verdictMessage);
-          console.log('최종 판결 메시지 추가 완료');
+          // 시스템 메시지로 판결 완료 알림
+          await state.addMessage({
+            user: 'system',
+            name: '시스템',
+            text: '🏛️ 최종 판결이 완료되었습니다. 판결문을 확인해주세요.'
+          });
           
-          // Each participant's personalized verdict is omitted for simplicity - there should only be one judge message
+          console.log('최종 판결 데이터 저장 완료');
         } else {
           console.error('판결 데이터가 올바르지 않음:', verdict);
         }
@@ -935,6 +899,49 @@ export const useChatStore = create<ChatState>((set, get) => {
     // 사용자 욕설 레벨 조회
     getUserCurseLevel: (userId: string) => {
       return get().userCurseLevels[userId] || 0;
+    },
+    
+    // 판결 데이터 설정 (Firebase 동기화 포함)
+    setVerdictData: (data: any) => {
+      const state = get();
+      console.log('setVerdictData 호출됨:', data);
+      console.log('현재 roomId:', state.roomId);
+      console.log('database 객체:', !!database);
+      
+      set({ latestVerdictData: data });
+      
+      // Firebase에도 저장하여 모든 참가자가 볼 수 있도록 함
+      if (state.roomId && database) {
+        console.log('Firebase에 판결 데이터 저장 시작');
+        const verdictRef = ref(database, `rooms/${state.roomId}/verdict`);
+        const verdictData = {
+          data: data,
+          timestamp: new Date().toISOString()
+        };
+        
+        console.log('저장할 데이터:', verdictData);
+        
+        firebaseSet(verdictRef, verdictData)
+          .then(() => {
+            console.log('✅ Firebase에 판결 데이터 저장 성공!');
+          })
+          .catch(error => {
+            console.error('❌ 판결 데이터 Firebase 저장 실패:', error);
+          });
+      } else {
+        console.warn('⚠️ Firebase 저장 조건 미충족 - roomId:', state.roomId, 'database:', !!database);
+      }
+    },
+
+    // 판결 데이터 로컬만 설정 (Firebase 저장 없음)
+    setVerdictDataLocal: (data: any) => {
+      set({ latestVerdictData: data });
+    },
+
+    // 방 ID 설정
+    setRoomId: (roomId: string) => {
+      console.log('🏠 roomId 설정:', roomId);
+      set({ roomId });
     },
   };
 });
