@@ -118,6 +118,15 @@ export default function ChatRoom({
 
   const { hasFinalVerdict, lastVerdictIndex } = findVerdictInfo();
 
+  // Count user messages (excluding system and judge messages)
+  const getUserMessageCount = () => {
+    return messages.filter(message => 
+      message.user === 'user-general'
+    ).length;
+  };
+
+  const isInstantVerdictEnabled = getUserMessageCount() > 4;
+
   // Auto scroll effect
   useEffect(() => {
     if (!messagesEndRef.current || !isAutoScrollEnabled.current) return;
@@ -536,6 +545,7 @@ export default function ChatRoom({
         onShare={handleShareRoom}
         timerActive={timerState.timerActive}
         onInstantVerdict={requestInstantVerdict}
+        isInstantVerdictEnabled={isInstantVerdictEnabled}
       />
 
       {/* Main content */}
