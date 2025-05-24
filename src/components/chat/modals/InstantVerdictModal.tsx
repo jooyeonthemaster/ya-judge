@@ -6,6 +6,7 @@ import { X, Clock, Users, CheckCircle, AlertCircle } from 'lucide-react';
 interface InstantVerdictModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onCancel?: () => void;
   onAgree: () => void;
   currentUsername: string;
   participatingUsers: Array<{ id: string; username: string }>;
@@ -16,6 +17,7 @@ interface InstantVerdictModalProps {
 export default function InstantVerdictModal({ 
   isOpen, 
   onClose, 
+  onCancel,
   onAgree,
   currentUsername,
   participatingUsers,
@@ -30,7 +32,15 @@ export default function InstantVerdictModal({
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          onClose(); // 시간 초과시 모달 닫기
+          // 시간 초과시 onCancel 호출 (타이머 재개 처리)
+          // setTimeout을 사용하여 다음 틱에서 호출하여 렌더링 중 상태 업데이트 방지
+          setTimeout(() => {
+            if (onCancel) {
+              onCancel();
+            } else {
+              onClose();
+            }
+          }, 0);
           return 0;
         }
         return prev - 1;
@@ -59,7 +69,7 @@ export default function InstantVerdictModal({
         {/* 헤더 */}
         <div className="bg-gradient-to-r from-red-500 to-orange-500 text-white p-4 rounded-t-xl relative">
           <button
-            onClick={onClose}
+            onClick={onCancel || onClose}
             className="absolute top-4 right-4 text-white hover:text-gray-200 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -143,7 +153,7 @@ export default function InstantVerdictModal({
           {/* 버튼들 */}
           <div className="flex space-x-3">
             <button
-              onClick={onClose}
+              onClick={onCancel || onClose}
               className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
             >
               취소

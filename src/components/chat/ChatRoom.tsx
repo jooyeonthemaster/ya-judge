@@ -362,6 +362,21 @@ export default function ChatRoom({
       } else {
         // 즉시 판결 요청이 취소되었을 때
         console.log('⚡ 즉시 판결 요청 취소됨');
+        
+        // 타이머 재개 (서버에서 취소된 경우)
+        if (timerState.timerActive && timerState.timerPaused) {
+          timerState.resumeTimerMode();
+          
+          if (roomId) {
+            addMessage({
+              user: 'system',
+              name: '시스템',
+              text: '▶️ 즉시 판결이 취소되어 타이머가 재개되었습니다.',
+              roomId: roomId
+            });
+          }
+        }
+        
         useChatStore.setState({
           instantVerdictRequested: false,
           showInstantVerdictModal: false,
@@ -457,6 +472,25 @@ export default function ChatRoom({
     
     // Request instant verdict
     requestInstantVerdict();
+  };
+
+  // Handle instant verdict cancel/timeout with timer resume
+  const handleInstantVerdictCancel = () => {
+    // Resume timer when instant verdict is cancelled
+    timerState.resumeTimerMode();
+    
+    // Add system message about timer resume
+    if (roomId) {
+      addMessage({
+        user: 'system',
+        name: '시스템',
+        text: '▶️ 즉시 판결이 취소되어 타이머가 재개되었습니다.',
+        roomId: roomId
+      });
+    }
+    
+    // Close the modal
+    setShowInstantVerdictModal(false);
   };
 
   // Trial handlers
@@ -673,11 +707,8 @@ export default function ChatRoom({
       
       <InstantVerdictModal
         isOpen={showInstantVerdictModal}
-        onClose={() => {
-          setShowInstantVerdictModal(false);
-          // Timer remains paused when modal is closed
-          // Don't resume timer here - let user manually resume if needed
-        }}
+        onClose={() => setShowInstantVerdictModal(false)}
+        onCancel={handleInstantVerdictCancel}
         onAgree={() => agreeToInstantVerdict(chatState.username)}
         currentUsername={chatState.username}
         participatingUsers={roomUsers}
