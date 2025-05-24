@@ -699,6 +699,28 @@ export default function ChatRoom({
       <VerdictModal
         isOpen={showVerdictModal}
         onClose={() => {
+          // Stop timer and ensure final verdict state is set
+          useChatStore.setState({ timerActive: false });
+          timerState.setFinalVerdictTriggered(true);
+          
+          // Also update Firebase to prevent sync from overriding local state
+          if (roomId && database) {
+            const timerRef = ref(database, `rooms/${roomId}/timer`);
+            set(timerRef, {
+              active: false,
+              completed: true,
+              completedAt: new Date().toISOString(),
+              endReason: 'verdict_complete'
+            });
+            
+            const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
+            set(verdictStatusRef, {
+              inProgress: false,
+              completed: true,
+              completedAt: new Date().toISOString()
+            });
+          }
+          
           setShowVerdictModal(false);
           setVerdictData(null);
         }}
