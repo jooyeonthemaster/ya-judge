@@ -125,7 +125,7 @@ export default function ChatRoom({
     ).length;
   };
 
-  const isInstantVerdictEnabled = getUserMessageCount() > 4;
+  const isInstantVerdictEnabled = getUserMessageCount() > 4 && !showInstantVerdictModal && !showVerdictModal && !isVerdictLoading;
 
   // Auto scroll effect
   useEffect(() => {
