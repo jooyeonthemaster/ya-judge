@@ -10,16 +10,20 @@ export const DEFAULT_TIMER_DURATION = 5 * 60; // 5 minutes
 export const TEST_TIMER_DURATION = 50; // 1 minute for testing
 
 // Timer state types
-export type TimerState = 'idle' | 'running' | 'completed';
+export type TimerState = 'idle' | 'running' | 'paused' | 'completed';
 
 // Interface for timer data stored in Firebase
 export interface TimerData {
   active: boolean;
+  paused?: boolean;
   startTime?: string; // ISO string
+  pausedAt?: string; // ISO string
+  resumedAt?: string; // ISO string
+  totalPausedDuration?: number; // Total time paused in seconds
   durationSeconds: number;
   completed?: boolean;
   completedAt?: string; // ISO string
-  endReason?: 'time_expired' | 'aggressive_language' | 'user_ended' | 'other';
+  endReason?: 'time_expired' | 'aggressive_language' | 'user_ended' | 'paused' | 'other';
   messagesSent?: boolean;
   reset?: boolean;
   resetAt?: string; // ISO string

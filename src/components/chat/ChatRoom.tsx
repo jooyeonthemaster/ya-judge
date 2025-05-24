@@ -440,6 +440,25 @@ export default function ChatRoom({
       });
   };
 
+  // Instant verdict handler with timer pause
+  const handleInstantVerdict = () => {
+    // Pause the timer when instant verdict is requested
+    timerState.pauseTimerMode();
+    
+    // Add system message about timer pause
+    if (roomId) {
+      addMessage({
+        user: 'system',
+        name: '시스템',
+        text: '⏸️ 즉시 판결이 요청되어 타이머가 일시정지되었습니다.',
+        roomId: roomId
+      });
+    }
+    
+    // Request instant verdict
+    requestInstantVerdict();
+  };
+
   // Trial handlers
   const handleUserReady = () => {
     const userId = chatState.currentUserId;
@@ -544,8 +563,12 @@ export default function ChatRoom({
         activeChattersCount={chatState.calculatedChattersCount()}
         onShare={handleShareRoom}
         timerActive={timerState.timerActive}
-        onInstantVerdict={requestInstantVerdict}
+        timerPaused={timerState.timerPaused}
+        onInstantVerdict={handleInstantVerdict}
+        onPauseTimer={timerState.pauseTimerMode}
+        onResumeTimer={timerState.resumeTimerMode}
         isInstantVerdictEnabled={isInstantVerdictEnabled}
+        isRoomHost={chatState.isRoomHost}
       />
 
       {/* Main content */}
@@ -650,7 +673,11 @@ export default function ChatRoom({
       
       <InstantVerdictModal
         isOpen={showInstantVerdictModal}
-        onClose={() => setShowInstantVerdictModal(false)}
+        onClose={() => {
+          setShowInstantVerdictModal(false);
+          // Timer remains paused when modal is closed
+          // Don't resume timer here - let user manually resume if needed
+        }}
         onAgree={() => agreeToInstantVerdict(chatState.username)}
         currentUsername={chatState.username}
         participatingUsers={roomUsers}

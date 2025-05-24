@@ -27,9 +27,12 @@ interface UseCourtTimerReturn {
   timerDuration: number;
   finalVerdictTriggered: boolean;
   apiCallsEnabled: boolean;
+  timerPaused: boolean;
   
   // 타이머 제어 함수들
   startTimerMode: () => void;
+  pauseTimerMode: () => void;
+  resumeTimerMode: () => void;
   resetTimerMode: () => void;
   setFinalVerdictTriggered: (value: boolean) => void;
   setApiCallsEnabled: (value: boolean) => void;
@@ -42,7 +45,17 @@ export function useCourtTimer({
   addMessage 
 }: UseCourtTimerProps): UseCourtTimerReturn {
   
-  const { startTimer, resetTimer, timerActive, requestFinalVerdict } = useChatStore();
+  const { 
+    startTimer, 
+    pauseTimer, 
+    resumeTimer, 
+    resetTimer, 
+    timerActive, 
+    requestFinalVerdict 
+  } = useChatStore();
+  
+  // Timer pause state from store
+  const timerPaused = useChatStore(state => state.timerPaused);
   
   // 타이머 상태
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
@@ -51,6 +64,8 @@ export function useCourtTimer({
   const [timerState, setTimerState] = useState<TimerState>('idle');
   const [finalVerdictTriggered, setFinalVerdictTriggered] = useState(false);
   const [apiCallsEnabled, setApiCallsEnabled] = useState(true);
+  const [totalPausedDuration, setTotalPausedDuration] = useState(0);
+  const [currentPauseStartTime, setCurrentPauseStartTime] = useState<Date | null>(null);
 
   // 남은 시간 포맷팅
   const remainingTimeFormatted = formatRemainingTime(remainingTime);
@@ -110,11 +125,83 @@ export function useCourtTimer({
     });
   };
 
+  // 타이머 모드 일시정지
+  const pauseTimerMode = () => {
+    if (!roomId || !database) return;
+    
+    // 현재 일시정지 시작 시간 기록
+    const pauseStartTime = new Date();
+    setCurrentPauseStartTime(pauseStartTime);
+    
+    // 로컬 타이머 일시정지
+    pauseTimer();
+    setTimerState('paused');
+    
+    // Firebase에 일시정지 상태 저장
+    const timerRef = ref(database, `rooms/${roomId}/timer`);
+    const timerData: TimerData = {
+      active: true,
+      paused: true,
+      pausedAt: pauseStartTime.toISOString(),
+      startTime: timerStartTime?.toISOString(),
+      totalPausedDuration: totalPausedDuration,
+      durationSeconds: timerDuration
+    };
+    set(timerRef, timerData);
+    
+    // 일시정지 메시지 추가
+    addMessage({
+      user: 'system',
+      name: '시스템',
+      text: '타이머가 일시정지되었습니다.',
+      roomId: roomId || ''
+    });
+  };
+
+  // 타이머 모드 재개
+  const resumeTimerMode = () => {
+    if (!roomId || !database) return;
+    
+    // 일시정지 기간 계산 및 누적
+    if (currentPauseStartTime) {
+      const pauseDuration = Math.floor((new Date().getTime() - currentPauseStartTime.getTime()) / 1000);
+      const newTotalPausedDuration = totalPausedDuration + pauseDuration;
+      setTotalPausedDuration(newTotalPausedDuration);
+      setCurrentPauseStartTime(null);
+      
+      // 로컬 타이머 재개
+      resumeTimer();
+      setTimerState('running');
+      
+      // Firebase에 재개 상태 저장 (누적 일시정지 시간 포함)
+      const timerRef = ref(database, `rooms/${roomId}/timer`);
+      const timerData: TimerData = {
+        active: true,
+        paused: false,
+        resumedAt: new Date().toISOString(),
+        startTime: timerStartTime?.toISOString(),
+        totalPausedDuration: newTotalPausedDuration,
+        durationSeconds: timerDuration
+      };
+      set(timerRef, timerData);
+      
+      // 재개 메시지 추가
+      addMessage({
+        user: 'system',
+        name: '시스템',
+        text: '타이머가 재개되었습니다.',
+        roomId: roomId || ''
+      });
+    }
+  };
+
   // 타이머 모드 리셋
   const resetTimerMode = () => {
     setFinalVerdictTriggered(false);
     setApiCallsEnabled(true);
     setTimerState('idle');
+    setTotalPausedDuration(0);
+    setCurrentPauseStartTime(null);
     resetTimer();
     setRemainingTime(getTimerDuration());
     
@@ -135,8 +222,18 @@ export function useCourtTimer({
     if (!timerActive || !timerStartTime) return;
     
     const timerInterval = setInterval(() => {
+      // 타이머가 일시정지 상태인 경우 업데이트하지 않음
+      if (timerPaused) return;
+      
       const now = new Date();
-      const elapsed = Math.floor((now.getTime() - timerStartTime.getTime()) / 1000);
+      // 일시정지 시간을 고려한 정확한 경과 시간 계산
+      let currentTotalPausedDuration = totalPausedDuration;
+      if (currentPauseStartTime) {
+        // 현재 일시정지 중이면 현재까지의 일시정지 시간도 포함
+        currentTotalPausedDuration += Math.floor((now.getTime() - currentPauseStartTime.getTime()) / 1000);
+      }
+      
+      const elapsed = Math.floor((now.getTime() - timerStartTime.getTime()) / 1000) - currentTotalPausedDuration;
       const remaining = Math.max(0, timerDuration - elapsed);
       
       setRemainingTime(remaining);
@@ -162,6 +259,7 @@ export function useCourtTimer({
             completed: true,
             completedAt: new Date().toISOString(),
             endReason: 'time_expired',
+            totalPausedDuration: currentTotalPausedDuration,
             durationSeconds: timerDuration
           };
           set(timerRef, timerData);
@@ -177,7 +275,7 @@ export function useCourtTimer({
     }, 1000);
     
     return () => clearInterval(timerInterval);
-  }, [timerActive, timerStartTime, timerDuration, timerState, roomId, database, addMessage, finalVerdictTriggered]);
+  }, [timerActive, timerPaused, timerStartTime, timerDuration, timerState, totalPausedDuration, currentPauseStartTime, roomId, database, addMessage, finalVerdictTriggered]);
 
   // 서버 타이머 상태 동기화
   useEffect(() => {
@@ -216,7 +314,44 @@ export function useCourtTimer({
           setTimerDuration(timerData.durationSeconds);
         }
         
-        setTimerState('running');
+        // 누적 일시정지 시간 동기화
+        if (timerData.totalPausedDuration !== undefined) {
+          setTotalPausedDuration(timerData.totalPausedDuration);
+        }
+        
+        // Check if timer is paused
+        if (timerData.paused) {
+          setTimerState('paused');
+          pauseTimer();
+          if (timerData.pausedAt) {
+            setCurrentPauseStartTime(new Date(timerData.pausedAt));
+          }
+        } else {
+          setTimerState('running');
+          setCurrentPauseStartTime(null);
+        }
+      }
+      
+      // 타이머 일시정지/재개 동기화
+      if (timerData.active && timerActive) {
+        // 누적 일시정지 시간 동기화
+        if (timerData.totalPausedDuration !== undefined) {
+          setTotalPausedDuration(timerData.totalPausedDuration);
+        }
+        
+        if (timerData.paused && !timerPaused) {
+          console.log('Timer paused by another participant, syncing...');
+          pauseTimer();
+          setTimerState('paused');
+          if (timerData.pausedAt) {
+            setCurrentPauseStartTime(new Date(timerData.pausedAt));
+          }
+        } else if (!timerData.paused && timerPaused) {
+          console.log('Timer resumed by another participant, syncing...');
+          resumeTimer();
+          setTimerState('running');
+          setCurrentPauseStartTime(null);
+        }
       }
       
       // 타이머 완료 처리
@@ -290,7 +425,7 @@ export function useCourtTimer({
     return () => {
       off(timerRef);
     };
-  }, [roomId, database, timerActive, timerState, startTimer, requestFinalVerdict, addMessage, finalVerdictTriggered, apiCallsEnabled, isRoomHost]);
+  }, [roomId, database, timerActive, timerPaused, timerState, startTimer, pauseTimer, resumeTimer, requestFinalVerdict, addMessage, finalVerdictTriggered, apiCallsEnabled, isRoomHost]);
 
   // 기존 타이머 동기화 (방 참여 시)
   useEffect(() => {
@@ -315,13 +450,30 @@ export function useCourtTimer({
               setTimerDuration(timerData.durationSeconds);
             }
             
+            // 누적 일시정지 시간 동기화
+            const serverTotalPausedDuration = timerData.totalPausedDuration || 0;
+            setTotalPausedDuration(serverTotalPausedDuration);
+            
             const now = new Date();
-            const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+            // 일시정지 시간을 고려한 정확한 남은 시간 계산
+            const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000) - serverTotalPausedDuration;
             const remaining = Math.max(0, timerDuration - elapsed);
             
             if (remaining > 0) {
               startTimer();
-              setTimerState('running');
+              
+              // 일시정지 상태 확인
+              if (timerData.paused) {
+                setTimerState('paused');
+                pauseTimer();
+                if (timerData.pausedAt) {
+                  setCurrentPauseStartTime(new Date(timerData.pausedAt));
+                }
+              } else {
+                setTimerState('running');
+                setCurrentPauseStartTime(null);
+              }
+              
               setRemainingTime(remaining);
             } else if (timerData.completed) {
               setTimerState('completed');
@@ -346,9 +498,12 @@ export function useCourtTimer({
     timerDuration,
     finalVerdictTriggered,
     apiCallsEnabled,
+    timerPaused,
     
     // 타이머 제어 함수들
     startTimerMode,
+    pauseTimerMode,
+    resumeTimerMode,
     resetTimerMode,
     setFinalVerdictTriggered,
     setApiCallsEnabled

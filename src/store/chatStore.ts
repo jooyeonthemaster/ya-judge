@@ -72,6 +72,9 @@ interface ChatState {
   timerStartTime: number | null;
   timerDuration: number;
   timerActive: boolean;
+  timerPaused: boolean;
+  timerPausedAt: number | null;
+  totalPausedDuration: number;
   
   detectedIssues: string[];
   judgeInterventions: JudgeIntervention[];
@@ -110,6 +113,7 @@ interface ChatState {
   // 타이머 관련 함수
   startTimer: () => void;
   pauseTimer: () => void;
+  resumeTimer: () => void;
   resetTimer: () => void;
   getTimeLeft: () => number;
   timeSinceLastIntervention: () => number;
@@ -161,6 +165,9 @@ export const useChatStore = create<ChatState>((set, get) => {
     timerStartTime: null,
     timerDuration: TIMER_DURATION,
     timerActive: false,
+    timerPaused: false,
+    timerPausedAt: null,
+    totalPausedDuration: 0,
     
     detectedIssues: [],
     judgeInterventions: [],
@@ -513,17 +520,31 @@ export const useChatStore = create<ChatState>((set, get) => {
       set({ 
         timerStartTime: Date.now(),
         timerActive: true,
+        timerPaused: false,
+        timerPausedAt: null,
+        totalPausedDuration: 0,
         finalVerdictRequested: false
       });
     },
     
     pauseTimer: () => {
       const state = get();
-      if (state.timerStartTime) {
-        const elapsedTime = Date.now() - state.timerStartTime;
+      if (state.timerActive && !state.timerPaused) {
         set({
-          timerActive: false,
-          timerDuration: Math.max(0, state.timerDuration - elapsedTime)
+          timerPaused: true,
+          timerPausedAt: Date.now()
+        });
+      }
+    },
+    
+    resumeTimer: () => {
+      const state = get();
+      if (state.timerPaused && state.timerPausedAt) {
+        const pauseDuration = Date.now() - state.timerPausedAt;
+        set({
+          timerPaused: false,
+          timerPausedAt: null,
+          totalPausedDuration: state.totalPausedDuration + pauseDuration
         });
       }
     },
@@ -533,6 +554,9 @@ export const useChatStore = create<ChatState>((set, get) => {
         timerStartTime: null,
         timerDuration: TIMER_DURATION,
         timerActive: false,
+        timerPaused: false,
+        timerPausedAt: null,
+        totalPausedDuration: 0,
         finalVerdictRequested: false
       });
     },
@@ -543,7 +567,15 @@ export const useChatStore = create<ChatState>((set, get) => {
         return state.timerDuration / 1000; // 초 단위로 반환
       }
       
-      const elapsedTime = Date.now() - state.timerStartTime;
+      // 타이머가 일시정지 중인 경우
+      if (state.timerPaused && state.timerPausedAt) {
+        const elapsedTime = state.timerPausedAt - state.timerStartTime - state.totalPausedDuration;
+        const timeLeft = Math.max(0, state.timerDuration - elapsedTime);
+        return Math.ceil(timeLeft / 1000);
+      }
+      
+      // 타이머가 실행 중인 경우
+      const elapsedTime = Date.now() - state.timerStartTime - state.totalPausedDuration;
       const timeLeft = Math.max(0, state.timerDuration - elapsedTime);
       return Math.ceil(timeLeft / 1000); // 초 단위로 반환, 올림
     },
