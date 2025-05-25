@@ -1085,32 +1085,32 @@ export const useChatStore = create<ChatState>((set, get) => {
         const verdictRef = ref(database, `rooms/${state.roomId}/verdict`);
         
         // Firebase에서 판결 데이터 가져오기
-        import('firebase/database').then(({ get: firebaseGet }) => {
-          firebaseGet(verdictRef).then((snapshot) => {
-            if (snapshot.exists()) {
-              const verdictData = snapshot.val();
-              console.log('📋 판결 데이터 확인:', verdictData);
+        // import('firebase/database').then(({ get: firebaseGet }) => {
+        //   firebaseGet(verdictRef).then((snapshot) => {
+        //     if (snapshot.exists()) {
+        //       const verdictData = snapshot.val();
+        //       console.log('📋 판결 데이터 확인:', verdictData);
               
-              if (verdictData.data) {
-                console.log('💾 로컬 판결 데이터 즉시 업데이트 - 모달 표시');
-                // 로컬 상태 즉시 업데이트하여 모달 표시
-                state.setVerdictDataLocal(verdictData.data);
+        //       if (verdictData.data) {
+        //         console.log('💾 로컬 판결 데이터 즉시 업데이트 - 모달 표시');
+        //         // 로컬 상태 즉시 업데이트하여 모달 표시
+        //         state.setVerdictDataLocal(verdictData.data);
                 
-                // Firebase에도 완료 플래그 업데이트
-                const updatedVerdictData = {
-                  ...verdictData,
-                  isLoadingComplete: true,
-                  loadingCompletedAt: new Date().toISOString()
-                };
-                firebaseSet(verdictRef, updatedVerdictData);
-              }
-            } else {
-              console.error('⚠️ 판결 데이터가 존재하지 않음');
-            }
-          }).catch(error => {
-            console.error('❌ 판결 데이터 읽기 실패:', error);
-          });
-        });
+        //         // Firebase에도 완료 플래그 업데이트
+        //         const updatedVerdictData = {
+        //           ...verdictData,
+        //           isLoadingComplete: true,
+        //           loadingCompletedAt: new Date().toISOString()
+        //         };
+        //         firebaseSet(verdictRef, updatedVerdictData);
+        //       }
+        //     } else {
+        //       console.error('⚠️ 판결 데이터가 존재하지 않음');
+        //     }
+        //   }).catch(error => {
+        //     console.error('❌ 판결 데이터 읽기 실패:', error);
+        //   });
+        // });
       }
     },
 

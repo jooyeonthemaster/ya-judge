@@ -176,7 +176,7 @@ export default function ChatRoomStatus({
             판결 완료
           </h3>
           <p className="text-sm text-gray-600 mt-1">
-            이 채팅방의 최종 판결이 완료되었습니다.
+            새로운 재판을 위한 준비를 해주세요.
           </p>
         </div>
 
@@ -191,6 +191,24 @@ export default function ChatRoomStatus({
             <Share className="w-4 h-4 mr-2" />
             법정 링크 공유하기
           </motion.button>
+        )}
+        
+        {/* 재판 준비 완료 버튼 (비호스트) */}
+        {!postVerdictReadyUsers[currentUserId] ? (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onTrialReady}
+            className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-amber-600 hover:to-amber-700 flex items-center justify-center"
+          >
+            <CheckCircle2 className="w-4 h-4 mr-2" />
+            새 재판 준비 완료
+          </motion.button>
+        ) : (
+          <div className="w-full max-w-[280px] py-2.5 px-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-center">
+            <CheckCircle2 className="w-4 h-4 mr-2 text-amber-600" />
+            <span className="text-sm text-amber-700 font-medium">준비 완료! 호스트와 다른 참석자 대기 중...</span>
+          </div>
         )}
         
         <div className="w-full max-w-[280px] py-2.5 px-4 bg-gray-300 text-gray-500 rounded-lg flex items-center justify-center cursor-not-allowed">
@@ -223,7 +241,7 @@ export default function ChatRoomStatus({
         </div>
 
         {/* 공유하기 버튼 */}
-        {onShare && (
+        {/* {onShare && (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -233,7 +251,8 @@ export default function ChatRoomStatus({
             <Share className="w-4 h-4 mr-2" />
             법정 링크 공유하기
           </motion.button>
-        )}
+        )} */}
+        
         
         {/* 재판 준비 완료 버튼 (호스트) */}
         {!postVerdictReadyUsers[currentUserId] ? (
