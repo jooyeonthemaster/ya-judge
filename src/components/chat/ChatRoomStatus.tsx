@@ -4,7 +4,8 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   Scale,
-  Share
+  Share,
+  History
 } from 'lucide-react';
 
 interface ChatRoomStatusProps {
@@ -29,6 +30,7 @@ interface ChatRoomStatusProps {
   onTrialReady: () => void;
   onStartNewTrial: () => void;
   onShare?: () => void;
+  onViewVerdictHistory?: () => void;
 }
 
 export default function ChatRoomStatus({
@@ -45,7 +47,8 @@ export default function ChatRoomStatus({
   onInitiateCourt,
   onTrialReady,
   onStartNewTrial,
-  onShare
+  onShare,
+  onViewVerdictHistory
 }: ChatRoomStatusProps) {
   
   // 유틸리티 함수들
@@ -111,6 +114,19 @@ export default function ChatRoomStatus({
           >
             <Share className="w-4 h-4 mr-2" />
             법정 링크 공유하기
+          </motion.button>
+        )}
+
+        {/* 판결 다시보기 버튼 */}
+        {onViewVerdictHistory && (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onViewVerdictHistory}
+            className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-indigo-600 hover:to-purple-700 flex items-center justify-center"
+          >
+            <History className="w-4 h-4 mr-2" />
+            판결 다시보기
           </motion.button>
         )}
         
@@ -192,6 +208,19 @@ export default function ChatRoomStatus({
             법정 링크 공유하기
           </motion.button>
         )}
+
+        {/* 판결 다시보기 버튼 */}
+        {onViewVerdictHistory && (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onViewVerdictHistory}
+            className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-indigo-600 hover:to-purple-700 flex items-center justify-center"
+          >
+            <History className="w-4 h-4 mr-2" />
+            판결 다시보기
+          </motion.button>
+        )}
         
         {/* 재판 준비 완료 버튼 (비호스트) */}
         {!postVerdictReadyUsers[currentUserId] ? (
@@ -240,19 +269,18 @@ export default function ChatRoomStatus({
           </p>
         </div>
 
-        {/* 공유하기 버튼 */}
-        {/* {onShare && (
+        {/* 판결 다시보기 버튼 */}
+        {onViewVerdictHistory && (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={onShare}
-            className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-blue-600 hover:to-blue-700 flex items-center justify-center"
+            onClick={onViewVerdictHistory}
+            className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-indigo-600 hover:to-purple-700 flex items-center justify-center"
           >
-            <Share className="w-4 h-4 mr-2" />
-            법정 링크 공유하기
+            <History className="w-4 h-4 mr-2" />
+            판결 다시보기
           </motion.button>
-        )} */}
-        
+        )}
         
         {/* 재판 준비 완료 버튼 (호스트) */}
         {!postVerdictReadyUsers[currentUserId] ? (
@@ -320,6 +348,19 @@ export default function ChatRoomStatus({
           </motion.button>
         )}
 
+        {/* 판결 다시보기 버튼 */}
+        {onViewVerdictHistory && (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onViewVerdictHistory}
+            className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-indigo-600 hover:to-purple-700 flex items-center justify-center"
+          >
+            <History className="w-4 h-4 mr-2" />
+            판결 다시보기
+          </motion.button>
+        )}
+
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -346,6 +387,19 @@ export default function ChatRoomStatus({
         >
           <Share className="w-4 h-4 mr-2" />
           법정 링크 공유하기
+        </motion.button>
+      )}
+
+      {/* 판결 다시보기 버튼 */}
+      {onViewVerdictHistory && (
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={onViewVerdictHistory}
+          className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-indigo-600 hover:to-purple-700 flex items-center justify-center"
+        >
+          <History className="w-4 h-4 mr-2" />
+          판결 다시보기
         </motion.button>
       )}
 

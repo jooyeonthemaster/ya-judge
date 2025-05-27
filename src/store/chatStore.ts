@@ -95,6 +95,14 @@ interface ChatState {
   // 판결 데이터
   latestVerdictData: any;
   
+  // 판결 히스토리 (여러 판결 저장)
+  verdictHistory: Array<{
+    id: string;
+    data: any;
+    timestamp: string;
+    participants: string[];
+  }>;
+  
   // 즉시 판결 관련 상태
   instantVerdictRequested: boolean;
   instantVerdictAgreedUsers: Record<string, boolean>;
@@ -129,6 +137,11 @@ interface ChatState {
   setVerdictData: (data: any) => void;
   setVerdictDataLocal: (data: any) => void;
   onVerdictLoadingComplete: () => void;
+  
+  // 판결 히스토리 관련 함수
+  addVerdictToHistory: (data: any, participants: string[]) => void;
+  getVerdictHistory: () => Array<{ id: string; data: any; timestamp: string; participants: string[] }>;
+  clearVerdictHistory: () => void;
   
   // 사용자 욕설 레벨 관련 함수
   updateUserCurseLevel: (userId: string, increment: number) => void;
@@ -187,6 +200,9 @@ export const useChatStore = create<ChatState>((set, get) => {
     
     // 판결 데이터
     latestVerdictData: null,
+    
+    // 판결 히스토리
+    verdictHistory: [],
     
     // 즉시 판결 관련 상태
     instantVerdictRequested: false,
@@ -994,7 +1010,9 @@ export const useChatStore = create<ChatState>((set, get) => {
         timerDuration: TIMER_DURATION,
         timerActive: false,
         finalVerdictRequested: false,
-        error: null
+        error: null,
+        verdictHistory: [],
+        latestVerdictData: null
       });
     },
 
@@ -1027,6 +1045,12 @@ export const useChatStore = create<ChatState>((set, get) => {
       console.log('database 객체:', !!database);
       
       set({ latestVerdictData: data });
+      
+      // 판결을 히스토리에 추가 (참가자 정보 포함)
+      const participants = state.roomUsers
+        .filter(user => !user.username.includes('System') && user.username !== 'System')
+        .map(user => user.username);
+      state.addVerdictToHistory(data, participants);
       
       // Firebase에도 저장하여 모든 참가자가 볼 수 있도록 함
       if (state.roomId && database) {
@@ -1112,6 +1136,33 @@ export const useChatStore = create<ChatState>((set, get) => {
         //   });
         // });
       }
+    },
+
+    // 판결 히스토리에 추가
+    addVerdictToHistory: (data: any, participants: string[]) => {
+      const verdictEntry = {
+        id: uuidv4(),
+        data,
+        timestamp: new Date().toISOString(),
+        participants: [...participants]
+      };
+      
+      set(state => ({
+        verdictHistory: [...state.verdictHistory, verdictEntry]
+      }));
+      
+      console.log('📚 판결이 히스토리에 추가됨:', verdictEntry.id);
+    },
+
+    // 판결 히스토리 조회
+    getVerdictHistory: () => {
+      return get().verdictHistory;
+    },
+
+    // 판결 히스토리 초기화
+    clearVerdictHistory: () => {
+      set({ verdictHistory: [] });
+      console.log('🗑️ 판결 히스토리 초기화됨');
     },
 
     // 즉시 판결 관련 함수

@@ -49,6 +49,11 @@ export default function ChatRoom({
   const [hasNewIssues, setHasNewIssues] = useState(false);
   const [previousIssuesCount, setPreviousIssuesCount] = useState(0);
   const [showVerdictModal, setShowVerdictModal] = useState(false);
+  const [savedVerdictData, setSavedVerdictData] = useState<any>(null);
+  
+  // Separate local states for individual verdict viewing (not synchronized)
+  const [showIndividualVerdictModal, setShowIndividualVerdictModal] = useState(false);
+  const [individualVerdictData, setIndividualVerdictData] = useState<any>(null);
   
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -72,6 +77,7 @@ export default function ChatRoom({
     setRoomId,
     isVerdictLoading,
     onVerdictLoadingComplete,
+
     // 즉시 판결 관련
     instantVerdictRequested,
     instantVerdictAgreedUsers,
@@ -165,11 +171,13 @@ export default function ChatRoom({
     setPreviousIssuesCount(currentIssuesCount);
   }, [detectedIssues, previousIssuesCount]);
 
-  // 판결 데이터 감지 및 모달 표시
+  // 판결 데이터 감지 및 자동 모달 표시 (최초 판결 완료 시)
   useEffect(() => {
     if (latestVerdictData && !showVerdictModal) {
-      console.log('📋 판결 데이터 감지 - 모달 표시');
+      console.log('📋 최초 판결 데이터 감지 - 자동 모달 표시 (모든 사용자)');
       setShowVerdictModal(true);
+      // Save the verdict data for later viewing
+      setSavedVerdictData(latestVerdictData);
     }
   }, [latestVerdictData, showVerdictModal]);
 
@@ -493,6 +501,16 @@ export default function ChatRoom({
     setShowInstantVerdictModal(false);
   };
 
+  // Handle verdict history viewing - use local state only (no synchronization)
+  const handleViewVerdictHistory = () => {
+    if (savedVerdictData) {
+      console.log('📖 개별 판결 다시보기 - 로컬 상태만 사용 (다른 사용자에게 영향 없음)');
+      // Use local state that doesn't affect other users
+      setIndividualVerdictData(savedVerdictData);
+      setShowIndividualVerdictModal(true);
+    }
+  };
+
   // Trial handlers
   const handleUserReady = () => {
     const userId = chatState.currentUserId;
@@ -667,6 +685,7 @@ export default function ChatRoom({
             onTrialReady={handleTrialReady}
             onStartNewTrial={handleStartNewTrial}
             onShare={handleShareRoom}
+            onViewVerdictHistory={savedVerdictData ? handleViewVerdictHistory : undefined}
           />
         ) : (
           <MessageInput
@@ -696,6 +715,7 @@ export default function ChatRoom({
         onRedirectToHome={handleRedirectToHome}
       />
       
+      {/* Auto-triggered Verdict Modal - synchronized across all users */}
       <VerdictModal
         isOpen={showVerdictModal}
         onClose={() => {
@@ -726,7 +746,7 @@ export default function ChatRoom({
         }}
         verdictData={latestVerdictData}
       />
-      
+
       <InstantVerdictModal
         isOpen={showInstantVerdictModal}
         onClose={() => setShowInstantVerdictModal(false)}
@@ -736,6 +756,16 @@ export default function ChatRoom({
         participatingUsers={roomUsers}
         agreedUsers={instantVerdictAgreedUsers}
         timeLeft={60}
+      />
+
+      {/* Individual Verdict Modal - for personal "판결 다시보기" only (no synchronization) */}
+      <VerdictModal
+        isOpen={showIndividualVerdictModal}
+        onClose={() => {
+          setShowIndividualVerdictModal(false);
+          setIndividualVerdictData(null);
+        }}
+        verdictData={individualVerdictData}
       />
     </div>
   );
