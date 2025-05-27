@@ -60,6 +60,9 @@ export default function ChatRoom({
   const [retrialAgreedUsers, setRetrialAgreedUsers] = useState<Record<string, boolean>>({});
   const [isModalForRetrial, setIsModalForRetrial] = useState(false);
   
+  // CourtReadyModal host state tracking (for non-host button disabling)
+  const [isHostViewingCourtReadyModal, setIsHostViewingCourtReadyModal] = useState(false);
+  
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -414,6 +417,37 @@ export default function ChatRoom({
     };
   }, [roomId, database, checkInstantVerdictConsensus]);
 
+  // Firebase CourtReadyModal 상태 실시간 리스너
+  useEffect(() => {
+    if (!roomId || !database) return;
+
+    console.log(`🏛️ CourtReadyModal 상태 리스너 설정: ${roomId}`);
+    const courtReadyModalRef = ref(database, `rooms/${roomId}/courtReadyModal`);
+    
+    const courtReadyModalUnsubscribe = onValue(courtReadyModalRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const modalData = snapshot.val();
+        console.log('🏛️ Firebase CourtReadyModal 상태 수신:', modalData);
+        
+        // 호스트가 아닌 사용자들에게 모달 상태 동기화 (버튼 비활성화용)
+        if (!chatState.isRoomHost && modalData.isOpen !== undefined) {
+          setIsHostViewingCourtReadyModal(modalData.isOpen);
+          console.log(`비호스트 사용자: CourtReadyModal 상태 = ${modalData.isOpen} -> 버튼 ${modalData.isOpen ? '비활성화' : '활성화'}`);
+        }
+      } else {
+        // 모달 데이터가 없으면 기본적으로 활성화
+        if (!chatState.isRoomHost) {
+          setIsHostViewingCourtReadyModal(false);
+        }
+      }
+    });
+
+    return () => {
+      console.log('🧹 CourtReadyModal 상태 리스너 정리');
+      off(courtReadyModalRef, 'value', courtReadyModalUnsubscribe);
+    };
+  }, [roomId, database, chatState.isRoomHost]);
+
   // Firebase 재심 상태 실시간 리스너
   useEffect(() => {
     if (!roomId || !database) return;
@@ -475,6 +509,17 @@ export default function ChatRoom({
           console.log('Setting isModalForRetrial to true');
           setIsModalForRetrial(true);
           chatState.setShowCourtReadyModal(true);
+          
+          // Firebase에 CourtReadyModal 상태 동기화
+          if (roomId && database) {
+            const courtReadyModalRef = ref(database, `rooms/${roomId}/courtReadyModal`);
+            set(courtReadyModalRef, {
+              isOpen: true,
+              openedAt: new Date().toISOString(),
+              isRetrial: true
+            });
+          }
+          
           console.log('✅ 재심 CourtReadyModal shown to host');
         } else {
           console.log('👥 비호스트 사용자 - CourtReadyModal 표시 안 함');
@@ -796,11 +841,24 @@ export default function ChatRoom({
     const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
     remove(trialReadyRef);
     
+    // For fresh new trials (not re-trials), clear Firebase messages
+    if (!isModalForRetrial) {
+      const messagesRef = ref(database, `rooms/${roomId}/messages`);
+      remove(messagesRef);
+      
+      // Clear local messages only for fresh trials
+      clearChat();
+    }
+    
     // Reset timer
     timerState.resetTimerMode();
     
-    // Clear messages and start trial
-    clearChat();
+    // Clear Firebase CourtReadyModal state and close modal
+    if (roomId && database) {
+      const courtReadyModalRef = ref(database, `rooms/${roomId}/courtReadyModal`);
+      remove(courtReadyModalRef);
+    }
+    
     chatState.setShowCourtReadyModal(false);
     timerState.startTimerMode();
     
@@ -865,6 +923,17 @@ export default function ChatRoom({
     // Show court ready modal first
     setIsModalForRetrial(false);
     chatState.setShowCourtReadyModal(true);
+    
+    // Firebase에 CourtReadyModal 상태 동기화 (새 재판용)
+    if (roomId && database) {
+      const courtReadyModalRef = ref(database, `rooms/${roomId}/courtReadyModal`);
+      set(courtReadyModalRef, {
+        isOpen: true,
+        openedAt: new Date().toISOString(),
+        isRetrial: false
+      });
+    }
+    
     console.log('✅ CourtReadyModal shown for regular new trial');
   };
 
@@ -953,6 +1022,7 @@ export default function ChatRoom({
             onViewVerdictHistory={savedVerdictData ? handleViewVerdictHistory : undefined}
             onRequestRetrial={handleRequestRetrial}
             isRetrialInProgress={showRetrialModal}
+            isHostViewingCourtReadyModal={isHostViewingCourtReadyModal}
           />
         ) : (
           <MessageInput
@@ -969,6 +1039,15 @@ export default function ChatRoom({
         isOpen={chatState.showCourtReadyModal}
         onClose={() => {
           console.log('🔴 CourtReadyModal 닫기');
+          
+          // Firebase에서 CourtReadyModal 상태 제거 (버튼 다시 활성화)
+          if (roomId && database) {
+            const courtReadyModalRef = ref(database, `rooms/${roomId}/courtReadyModal`);
+            remove(courtReadyModalRef).then(() => {
+              console.log('Firebase CourtReadyModal 상태 제거 완료 - 버튼 활성화');
+            });
+          }
+          
           chatState.setShowCourtReadyModal(false);
           setIsModalForRetrial(false);
         }}

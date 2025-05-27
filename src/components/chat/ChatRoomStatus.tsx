@@ -30,6 +30,9 @@ interface ChatRoomStatusProps {
   // 재심 상태
   isRetrialInProgress?: boolean;
   
+  // CourtReadyModal 상태 (호스트가 모달을 보고 있는지)
+  isHostViewingCourtReadyModal?: boolean;
+  
   // 핸들러 함수들
   onUserReady: () => void;
   onInitiateCourt: () => void;
@@ -51,6 +54,7 @@ export default function ChatRoomStatus({
   roomUsers,
   currentUserId,
   isRetrialInProgress = false,
+  isHostViewingCourtReadyModal = false,
   onUserReady,
   onInitiateCourt,
   onTrialReady,
@@ -227,7 +231,7 @@ export default function ChatRoomStatus({
         </div>
 
         {/* 공유하기 버튼 */}
-        {onShare && (
+        {/* {onShare && (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -237,15 +241,21 @@ export default function ChatRoomStatus({
             <Share className="w-4 h-4 mr-2" />
             법정 링크 공유하기
           </motion.button>
-        )}
+        )} */}
 
         {/* 판결 다시보기 버튼 */}
         {onViewVerdictHistory && (
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onViewVerdictHistory}
-            className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-indigo-600 hover:to-purple-700 flex items-center justify-center"
+            whileHover={{ scale: !isHostViewingCourtReadyModal ? 1.02 : 1 }}
+            whileTap={{ scale: !isHostViewingCourtReadyModal ? 0.98 : 1 }}
+            onClick={!isHostViewingCourtReadyModal ? onViewVerdictHistory : undefined}
+            disabled={isHostViewingCourtReadyModal}
+            className={`w-full max-w-[280px] py-2.5 px-4 font-medium rounded-lg transition-all shadow-lg flex items-center justify-center ${
+              isHostViewingCourtReadyModal
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:shadow-xl hover:from-indigo-600 hover:to-purple-700'
+            }`}
+            title={isHostViewingCourtReadyModal ? '호스트가 재판 준비 중입니다...' : ''}
           >
             <History className="w-4 h-4 mr-2" />
             판결 다시보기
@@ -255,18 +265,24 @@ export default function ChatRoomStatus({
         {/* 재심 요청 버튼 */}
         {onRequestRetrial && (
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onRequestRetrial}
-            className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-orange-600 hover:to-red-600 flex items-center justify-center"
+            whileHover={{ scale: !isHostViewingCourtReadyModal ? 1.02 : 1 }}
+            whileTap={{ scale: !isHostViewingCourtReadyModal ? 0.98 : 1 }}
+            onClick={!isHostViewingCourtReadyModal ? onRequestRetrial : undefined}
+            disabled={isHostViewingCourtReadyModal}
+            className={`w-full max-w-[280px] py-2.5 px-4 font-medium rounded-lg transition-all shadow-lg flex items-center justify-center ${
+              isHostViewingCourtReadyModal
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-xl hover:from-orange-600 hover:to-red-600'
+            }`}
+            title={isHostViewingCourtReadyModal ? '호스트가 재판 준비 중입니다...' : ''}
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             재심 요청
           </motion.button>
         )}
         
-        {/* 재판 준비 완료 버튼 (비호스트) */}
-        {!postVerdictReadyUsers[currentUserId] ? (
+        {/* 항소권 구매 (비호스트) */}
+        {/* {!postVerdictReadyUsers[currentUserId] ? (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -274,14 +290,14 @@ export default function ChatRoomStatus({
             className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-amber-600 hover:to-amber-700 flex items-center justify-center"
           >
             <CheckCircle2 className="w-4 h-4 mr-2" />
-            새 재판 준비 완료
+            항소권 구매(테스트)
           </motion.button>
         ) : (
           <div className="w-full max-w-[280px] py-2.5 px-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-center">
             <CheckCircle2 className="w-4 h-4 mr-2 text-amber-600" />
             <span className="text-sm text-amber-700 font-medium">준비 완료! 호스트와 다른 참석자 대기 중...</span>
           </div>
-        )}
+        )} */}
         
         <div className="w-full max-w-[280px] py-2.5 px-4 bg-gray-300 text-gray-500 rounded-lg flex items-center justify-center cursor-not-allowed">
           <Gavel className="w-4 h-4 mr-2" />
@@ -338,8 +354,8 @@ export default function ChatRoomStatus({
           </motion.button>
         )}
         
-        {/* 재판 준비 완료 버튼 (호스트) */}
-        {!postVerdictReadyUsers[currentUserId] ? (
+        {/* 항소권 구매 (호스트) */}
+        {/* {!postVerdictReadyUsers[currentUserId] ? (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -347,14 +363,14 @@ export default function ChatRoomStatus({
             className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-amber-600 hover:to-amber-700 flex items-center justify-center"
           >
             <CheckCircle2 className="w-4 h-4 mr-2" />
-            재판 준비 완료 (호스트)
+            항소권 구매(테스트)
           </motion.button>
         ) : (
           <div className="w-full max-w-[280px] py-2.5 px-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-center">
             <CheckCircle2 className="w-4 h-4 mr-2 text-amber-600" />
             <span className="text-sm text-amber-700 font-medium">호스트 준비 완료! 다른 참석자 대기 중...</span>
           </div>
-        )}
+        )} */}
         
         {/* 새 재판 개시 선언 버튼 */}
         {/* {checkAllUsersReady() && !isRetrialInProgress ? (
@@ -377,14 +393,21 @@ export default function ChatRoomStatus({
         )} */}
         
         {/* 대기 중인 참석자 안내 */}
-        {notReadyUsers.length > 0 && (
+        {/* this is fucking broke */}
+        {/* {notReadyUsers.length > 0 && (
           <div className="w-full max-w-[280px] py-2 px-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-center">
             <Scale className="w-3.5 h-3.5 mr-2 text-yellow-600" />
             <span className="text-xs text-yellow-700">
               아직 준비되지 않은 참석자: {notReadyUsers.map(u => u.username).join(', ')}
             </span>
           </div>
-        )}
+        )} */}
+          <div className="w-full max-w-[280px] py-2 px-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-center">
+            <Scale className="w-3.5 h-3.5 mr-2 text-yellow-600" />
+            <span className="text-xs text-yellow-700">
+              호스트는 상대방과 협의 후 재심을 요청해주세요.
+            </span>
+          </div>
       </div>
     );
   }
@@ -409,10 +432,16 @@ export default function ChatRoomStatus({
         {/* 판결 다시보기 버튼 */}
         {onViewVerdictHistory && (
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onViewVerdictHistory}
-            className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-indigo-600 hover:to-purple-700 flex items-center justify-center"
+            whileHover={{ scale: !isHostViewingCourtReadyModal ? 1.02 : 1 }}
+            whileTap={{ scale: !isHostViewingCourtReadyModal ? 0.98 : 1 }}
+            onClick={!isHostViewingCourtReadyModal ? onViewVerdictHistory : undefined}
+            disabled={isHostViewingCourtReadyModal}
+            className={`w-full max-w-[280px] py-2.5 px-4 font-medium rounded-lg transition-all shadow-lg flex items-center justify-center ${
+              isHostViewingCourtReadyModal
+                ? 'bg-gray-300 text-gray-200 cursor-not-allowed'
+                : 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:shadow-xl hover:from-indigo-600 hover:to-purple-700'
+            }`}
+            title={isHostViewingCourtReadyModal ? '호스트가 재판 준비 중입니다...' : ''}
           >
             <History className="w-4 h-4 mr-2" />
             판결 다시보기
