@@ -26,8 +26,7 @@ interface DebugInfo {
 }
 
 export default function PaymentResultPage() {
-  const paymentResult = usePaymentStore((state) => state.paymentResult);
-  const setPaymentResult = usePaymentStore((state) => state.setPaymentResult);
+  const { paymentResult, setPaymentResult, setIsPaid, roomId } = usePaymentStore();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorInfo | null>(null);
@@ -66,6 +65,7 @@ export default function PaymentResultPage() {
         // Check for pending payment data in sessionStorage
         const pendingPaymentId = sessionStorage.getItem('pendingPaymentId');
         const pendingOrderData = sessionStorage.getItem('pendingOrderData');
+        const pendingRoomId = sessionStorage.getItem('pendingRoomId');
         
         logPaymentDebug('Payment result page loaded', { 
           hasPaymentId: !!pendingPaymentId,
@@ -127,7 +127,8 @@ export default function PaymentResultPage() {
               if (externalResponse.ok) {
                 logPaymentDebug('URL-based payment completed successfully!');
                 
-                // Store payment data in Zustand store
+                // Mark payment as completed and store payment data
+                setIsPaid(true);
                 setPaymentResult(paymentRecord);
               } else {
                 const errorResponse = await externalResponse.text();
@@ -192,12 +193,21 @@ export default function PaymentResultPage() {
               if (externalResponse.ok) {
                 logPaymentDebug('Mobile payment completed successfully!');
                 
-                // Store payment data in Zustand store
+                // Mark payment as completed and store payment data
+                setIsPaid(true);
                 setPaymentResult(paymentRecord);
+                
+                // Auto-redirect to chat room if we have room ID
+                if (pendingRoomId) {
+                  setTimeout(() => {
+                    router.push(`/room/${pendingRoomId}`);
+                  }, 2000); // 2 second delay to show success
+                }
                 
                 // Clear the pending payment data
                 sessionStorage.removeItem('pendingPaymentId');
                 sessionStorage.removeItem('pendingOrderData');
+                sessionStorage.removeItem('pendingRoomId');
               } else {
                 const errorResponse = await externalResponse.text();
                 logPaymentDebug('Failed to record mobile payment', { status: externalResponse.status, response: errorResponse });
@@ -413,6 +423,23 @@ export default function PaymentResultPage() {
             <p>결제해 주셔서 감사합니다</p>
             <p>영수증을 보관해 주세요</p>
           </div>
+          
+          {/* Back to Chat Room Button */}
+          {(roomId || sessionStorage.getItem('pendingRoomId')) && (
+            <div className="mt-6 flex justify-center">
+              <button 
+                onClick={() => {
+                  const targetRoomId = roomId || sessionStorage.getItem('pendingRoomId');
+                  if (targetRoomId) {
+                    router.push(`/room/${targetRoomId}`);
+                  }
+                }}
+                className="px-6 py-3 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium transition-colors"
+              >
+                채팅방으로 돌아가기
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

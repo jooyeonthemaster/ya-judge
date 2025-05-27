@@ -18,7 +18,12 @@ interface CheckoutFormData {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const setPaymentResult = usePaymentStore((state) => state.setPaymentResult);
+  const { 
+    setPaymentResult, 
+    setIsPaid, 
+    roomId, 
+    userName 
+  } = usePaymentStore();
   const [isLoading, setIsLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [formData, setFormData] = useState<CheckoutFormData>({
@@ -26,7 +31,7 @@ export default function CheckoutPage() {
     email: "",
     phone: "",
     address: "",
-    orderName: "Test Order",
+    orderName: "재판 참가비",
     totalAmount: 1000,
     payMethod: "CARD",
   });
@@ -34,7 +39,15 @@ export default function CheckoutPage() {
   useEffect(() => {
     // Check if mobile browser on client side
     setIsMobile(isMobileBrowser());
-  }, []);
+    
+    // Prepopulate form with user data from payment store
+    if (userName) {
+      setFormData(prev => ({
+        ...prev,
+        name: userName
+      }));
+    }
+  }, [userName]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -77,6 +90,7 @@ export default function CheckoutPage() {
         // to be retrieved after redirection
         sessionStorage.setItem('pendingPaymentId', paymentId);
         sessionStorage.setItem('pendingOrderData', JSON.stringify(formData));
+        sessionStorage.setItem('pendingRoomId', roomId || '');
         console.log('Mobile payment initiated, awaiting redirect...');
         // The rest of the flow will continue after redirect
         return;
@@ -114,11 +128,21 @@ export default function CheckoutPage() {
               amount: formData.totalAmount,
               orderName: formData.orderName
             });
-            alert('Payment successful!');
+            
+            // Mark payment as completed
+            setIsPaid(true);
             // Store payment data in Zustand store
             setPaymentResult(paymentRecord);
-            // Redirect to result page
-            router.push('/payment/result');
+            
+            alert('결제가 완료되었습니다! 채팅방으로 돌아갑니다.');
+            
+            // Redirect back to chat room
+            if (roomId) {
+              router.push(`/room/${roomId}`);
+            } else {
+              // Fallback to result page if no room ID
+              router.push('/payment/result');
+            }
           } else {
             console.error('Failed to record payment to external API');
           }

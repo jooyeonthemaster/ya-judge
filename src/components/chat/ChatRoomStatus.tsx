@@ -8,6 +8,8 @@ import {
   History,
   RefreshCw
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { usePaymentStore } from '@/app/store/paymentStore';
 
 interface ChatRoomStatusProps {
   // 기본 상태
@@ -57,6 +59,27 @@ export default function ChatRoomStatus({
   onViewVerdictHistory,
   onRequestRetrial
 }: ChatRoomStatusProps) {
+  const router = useRouter();
+  const { setRoomId, setUserName } = usePaymentStore();
+  
+  // Handle payment redirection
+  const handlePaymentRedirect = () => {
+    // Get room ID from current URL
+    const currentUrl = window.location.pathname;
+    const roomIdMatch = currentUrl.match(/\/room\/([^\/]+)/);
+    const roomId = roomIdMatch ? roomIdMatch[1] : null;
+    
+    // Get current user name
+    const currentUser = roomUsers.find(user => user.id === currentUserId);
+    const userName = currentUser?.username || '';
+    
+    // Store data in payment store
+    if (roomId) setRoomId(roomId);
+    if (userName) setUserName(userName);
+    
+    // Redirect to payment checkout
+    router.push('/payment/checkout');
+  };
   
   // 유틸리티 함수들
   const allUsersReady = (): boolean => {
@@ -247,7 +270,7 @@ export default function ChatRoomStatus({
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={onTrialReady}
+            onClick={handlePaymentRedirect}
             className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-amber-600 hover:to-amber-700 flex items-center justify-center"
           >
             <CheckCircle2 className="w-4 h-4 mr-2" />
@@ -320,7 +343,7 @@ export default function ChatRoomStatus({
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={onTrialReady}
+            onClick={handlePaymentRedirect}
             className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-amber-600 hover:to-amber-700 flex items-center justify-center"
           >
             <CheckCircle2 className="w-4 h-4 mr-2" />
@@ -334,7 +357,7 @@ export default function ChatRoomStatus({
         )}
         
         {/* 새 재판 개시 선언 버튼 */}
-        {checkAllUsersReady() && !isRetrialInProgress ? (
+        {/* {checkAllUsersReady() && !isRetrialInProgress ? (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -351,7 +374,7 @@ export default function ChatRoomStatus({
               {isRetrialInProgress ? '재심 진행 중...' : '새 재판 개시 선언 (준비 중...)'}
             </span>
           </div>
-        )}
+        )} */}
         
         {/* 대기 중인 참석자 안내 */}
         {notReadyUsers.length > 0 && (
