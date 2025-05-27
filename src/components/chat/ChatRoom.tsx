@@ -54,6 +54,11 @@ export default function ChatRoom({
   // Separate local states for individual verdict viewing (not synchronized)
   const [showIndividualVerdictModal, setShowIndividualVerdictModal] = useState(false);
   const [individualVerdictData, setIndividualVerdictData] = useState<any>(null);
+
+  // Re-trial modal state
+  const [showRetrialModal, setShowRetrialModal] = useState(false);
+  const [retrialAgreedUsers, setRetrialAgreedUsers] = useState<Record<string, boolean>>({});
+  const [isModalForRetrial, setIsModalForRetrial] = useState(false);
   
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -188,6 +193,16 @@ export default function ChatRoom({
       setRoomId(roomId);
     }
   }, [roomId, setRoomId]);
+
+  // CourtReadyModal 상태 변경 추적
+  useEffect(() => {
+    console.log('🎯 CourtReadyModal 상태 변경:', {
+      isOpen: chatState.showCourtReadyModal,
+      isRetrial: isModalForRetrial,
+      isRoomHost: chatState.isRoomHost,
+      showRetrialModal: showRetrialModal
+    });
+  }, [chatState.showCourtReadyModal, isModalForRetrial, chatState.isRoomHost, showRetrialModal]);
 
   // Firebase 로딩 상태 실시간 리스너 (모든 참가자용)
   useEffect(() => {
@@ -399,6 +414,118 @@ export default function ChatRoom({
     };
   }, [roomId, database, checkInstantVerdictConsensus]);
 
+  // Firebase 재심 상태 실시간 리스너
+  useEffect(() => {
+    if (!roomId || !database) return;
+
+    console.log(`🔄 재심 리스너 설정: ${roomId}`);
+    const retrialRef = ref(database, `rooms/${roomId}/retrial`);
+    
+    // 재심 만장일치 체크 함수
+    const checkRetrialConsensus = (agreedUsers: Record<string, boolean>) => {
+      const realUsers = roomUsers.filter(user => 
+        !user.username.includes('System') && user.username !== 'System'
+      );
+      
+      // 실제로 동의한 사용자만 카운트 (값이 true인 경우만)
+      const agreedCount = Object.values(agreedUsers).filter(agreed => agreed === true).length;
+      const totalRealUsers = realUsers.length;
+      
+      console.log(`재심 동의 현황: ${agreedCount}/${totalRealUsers}`);
+      console.log('Real users:', realUsers.map(u => u.username));
+      console.log('Agreed users object:', agreedUsers);
+      console.log('Actually agreed users:', Object.entries(agreedUsers).filter(([_, agreed]) => agreed === true).map(([username, _]) => username));
+      console.log('Is room host:', chatState.isRoomHost);
+      
+      // 모든 사용자가 동의했을 때만 (실제 동의한 수 = 전체 실제 사용자 수)
+      if (agreedCount === totalRealUsers && totalRealUsers > 0 && agreedCount >= 2) {
+        console.log('🎉 재심 만장일치! 호스트에게 CourtReadyModal 표시');
+        console.log(`확인: ${agreedCount}명이 동의했고, 총 ${totalRealUsers}명의 실제 사용자가 있음`);
+        
+        // 추가 검증: 실제로 모든 실제 사용자가 동의했는지 확인
+        const realUsernames = realUsers.map(u => u.username);
+        const agreedUsernames = Object.entries(agreedUsers)
+          .filter(([_, agreed]) => agreed === true)
+          .map(([username, _]) => username);
+        
+        console.log('실제 사용자 목록:', realUsernames);
+        console.log('동의한 사용자 목록:', agreedUsernames);
+        
+        const allRealUsersAgreed = realUsernames.every(username => agreedUsernames.includes(username));
+        console.log('모든 실제 사용자가 동의했는가?', allRealUsersAgreed);
+        
+        if (!allRealUsersAgreed) {
+          console.log('🚫 일부 실제 사용자가 아직 동의하지 않음 - 모달 표시 중단');
+          return;
+        }
+        
+        // 모달 닫기 및 상태 초기화
+        setShowRetrialModal(false);
+        setRetrialAgreedUsers({});
+        
+        // Firebase에서 재심 요청 제거
+        if (roomId && database) {
+          const retrialRef = ref(database, `rooms/${roomId}/retrial`);
+          remove(retrialRef);
+        }
+        
+        // 호스트에게만 CourtReadyModal 표시
+        if (chatState.isRoomHost) {
+          console.log('🎯 호스트에게 재심 CourtReadyModal 표시 시작');
+          console.log('Setting isModalForRetrial to true');
+          setIsModalForRetrial(true);
+          chatState.setShowCourtReadyModal(true);
+          console.log('✅ 재심 CourtReadyModal shown to host');
+        } else {
+          console.log('👥 비호스트 사용자 - CourtReadyModal 표시 안 함');
+        }
+        
+        // 시스템 메시지 추가
+        if (roomId) {
+          addMessage({
+            user: 'system',
+            name: '시스템',
+            text: '🎉 모든 참가자가 재심에 동의했습니다! 호스트가 재심을 시작해주세요.',
+            roomId: roomId
+          });
+        }
+      } else {
+        console.log(`아직 모든 사용자가 동의하지 않음: ${agreedCount}/${totalRealUsers} (최소 2명 필요)`);
+      }
+    };
+    
+    const retrialUnsubscribe = onValue(retrialRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const retrialData = snapshot.val();
+        console.log('🔄 Firebase 재심 상태 수신:', retrialData);
+        
+        // 모든 유저에게 재심 요청 상태 동기화
+        if (retrialData.requested) {
+          setShowRetrialModal(true);
+          const agreedUsers = retrialData.agreedUsers || {};
+          setRetrialAgreedUsers(agreedUsers);
+          
+          console.log('Firebase에서 받은 동의자 목록:', agreedUsers);
+          
+          // 동의 현황 변경 시 만장일치 체크
+          checkRetrialConsensus(agreedUsers);
+        }
+      } else {
+        // 재심 요청이 취소되었을 때
+        console.log('🔄 재심 요청 취소됨');
+        setShowRetrialModal(false);
+        setRetrialAgreedUsers({});
+      }
+    });
+
+    return () => {
+      console.log('🧹 재심 리스너 정리');
+      off(retrialRef, 'value', retrialUnsubscribe);
+    };
+  }, [roomId, database, roomUsers, chatState.isRoomHost, addMessage]);
+
+
+
   // Message sending
   const sendMessage = (text: string, type?: string, relatedIssue?: string) => {
     if (!text.trim() || !roomId) return;
@@ -511,6 +638,128 @@ export default function ChatRoom({
     }
   };
 
+  // Re-trial handlers
+  const handleRequestRetrial = () => {
+    console.log('🔄 재심 요청 시작');
+    setRetrialAgreedUsers({});
+    setShowRetrialModal(true);
+    
+    // Store re-trial request in Firebase for all clients
+    if (roomId && database) {
+      const retrialRef = ref(database, `rooms/${roomId}/retrial`);
+      set(retrialRef, {
+        requested: true,
+        requestedAt: new Date().toISOString(),
+        agreedUsers: {},
+        requestedBy: chatState.username
+      }).then(() => {
+        console.log('Firebase에 재심 요청 저장 완료');
+      }).catch(error => {
+        console.error('Firebase 재심 요청 저장 실패:', error);
+      });
+    }
+    
+    if (roomId) {
+      addMessage({
+        user: 'system',
+        name: '시스템',
+        text: '🔄 재심이 요청되었습니다. 모든 참가자의 동의가 필요합니다.',
+        roomId: roomId
+      });
+    }
+  };
+
+  const handleAgreeToRetrial = () => {
+    console.log(`🤝 ${chatState.username}님 재심 동의`);
+    console.log('현재 roomUsers:', roomUsers);
+    console.log('현재 재심 동의자:', retrialAgreedUsers);
+    
+    // Update Firebase with agreement
+    if (roomId && database) {
+      const agreedUserRef = ref(database, `rooms/${roomId}/retrial/agreedUsers/${chatState.username}`);
+      set(agreedUserRef, true).then(() => {
+        console.log('Firebase에 재심 동의 저장 완료');
+        
+        // Update local state immediately
+        setRetrialAgreedUsers(prev => ({
+          ...prev,
+          [chatState.username]: true
+        }));
+      }).catch(error => {
+        console.error('Firebase 재심 동의 저장 실패:', error);
+      });
+    }
+
+    if (roomId) {
+      addMessage({
+        user: 'system',
+        name: '시스템',
+        text: `${chatState.username}님이 재심에 동의했습니다.`,
+        roomId: roomId
+      });
+    }
+  };
+
+  const handleStartRetrial = () => {
+    console.log('🔄 재심 시작');
+    
+    // Reset states for new trial
+    timerState.setFinalVerdictTriggered(false);
+    timerState.setApiCallsEnabled(true);
+    chatState.setShowPostVerdictStartButton(false);
+    chatState.setShowTrialReadyButton(false);
+    
+    // Clear Firebase data
+    if (roomId && database) {
+      const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
+      remove(verdictStatusRef);
+      
+      const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
+      remove(trialReadyRef);
+    }
+    
+    // Reset timer and start new trial
+    timerState.resetTimerMode();
+    clearChat();
+    
+    addMessage({
+      user: 'system',
+      name: '시스템',
+      text: '🔄 모든 참가자가 동의하여 재심이 시작됩니다!',
+      roomId: roomId || ''
+    });
+    
+    // Start timer for new trial
+    setTimeout(() => {
+      timerState.startTimerMode();
+    }, 1000);
+  };
+
+  const handleCancelRetrial = () => {
+    console.log('🔄 재심 요청 취소');
+    setShowRetrialModal(false);
+    setRetrialAgreedUsers({});
+    
+    // Remove re-trial request from Firebase
+    if (roomId && database) {
+      const retrialRef = ref(database, `rooms/${roomId}/retrial`);
+      remove(retrialRef).then(() => {
+        console.log('Firebase에서 재심 요청 제거 완료');
+      }).catch(error => {
+        console.error('Firebase 재심 요청 제거 실패:', error);
+      });
+    }
+    
+    if (roomId) {
+      addMessage({
+        user: 'system',
+        name: '시스템',
+        text: '재심 요청이 취소되었습니다.',
+        roomId: roomId
+      });
+    }
+  };
+
   // Trial handlers
   const handleUserReady = () => {
     const userId = chatState.currentUserId;
@@ -532,13 +781,42 @@ export default function ChatRoom({
   };
 
   const handleStartTrial = () => {
-    if (messages.length > 0) {
-      chatState.setShowConfirmStartModal(true);
-    } else {
-      clearChat();
-      chatState.setShowCourtReadyModal(false);
-      timerState.startTimerMode();
-    }
+    if (!roomId || !database) return;
+    
+    // Reset states
+    timerState.setFinalVerdictTriggered(false);
+    timerState.setApiCallsEnabled(true);
+    chatState.setShowPostVerdictStartButton(false);
+    chatState.setShowTrialReadyButton(false);
+    
+    // Clear Firebase data
+    const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
+    remove(verdictStatusRef);
+    
+    const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
+    remove(trialReadyRef);
+    
+    // Reset timer
+    timerState.resetTimerMode();
+    
+    // Clear messages and start trial
+    clearChat();
+    chatState.setShowCourtReadyModal(false);
+    timerState.startTimerMode();
+    
+    const messageText = isModalForRetrial 
+      ? '🔄 재심이 시작되었습니다. 모두 준비해주세요.'
+      : '호스트가 새 재판을 시작했습니다. 모두 준비해주세요.';
+    
+    addMessage({
+      user: 'system',
+      name: '시스템',
+      text: messageText,
+      roomId: roomId || ''
+    });
+    
+    // Reset retrial flag
+    setIsModalForRetrial(false);
   };
 
   const handleConfirmStart = () => {
@@ -573,34 +851,21 @@ export default function ChatRoom({
   };
 
   const handleStartNewTrial = () => {
+    console.log('🚨 handleStartNewTrial called - regular new trial flow');
+    console.log('isRetrialInProgress (showRetrialModal):', showRetrialModal);
+    
     if (!roomId || !database) return;
     
-    // Reset states
-    timerState.setFinalVerdictTriggered(false);
-    timerState.setApiCallsEnabled(true);
-    chatState.setShowPostVerdictStartButton(false);
-    chatState.setShowTrialReadyButton(false);
+    // Prevent regular new trial if retrial is in progress
+    if (showRetrialModal) {
+      console.log('🚫 Blocking regular new trial - retrial in progress');
+      return;
+    }
     
-    // Clear Firebase data
-    const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
-    remove(verdictStatusRef);
-    
-    const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
-    remove(trialReadyRef);
-    
-    // Reset timer
-    timerState.resetTimerMode();
-    
-    // Clear messages and show modal
-    clearChat();
-    addMessage({
-      user: 'system',
-      name: '시스템',
-      text: '호스트가 새 재판을 시작했습니다. 모두 준비해주세요.',
-      roomId: roomId || ''
-    });
-    
+    // Show court ready modal first
+    setIsModalForRetrial(false);
     chatState.setShowCourtReadyModal(true);
+    console.log('✅ CourtReadyModal shown for regular new trial');
   };
 
   const handleRedirectToHome = () => {
@@ -686,6 +951,8 @@ export default function ChatRoom({
             onStartNewTrial={handleStartNewTrial}
             onShare={handleShareRoom}
             onViewVerdictHistory={savedVerdictData ? handleViewVerdictHistory : undefined}
+            onRequestRetrial={handleRequestRetrial}
+            isRetrialInProgress={showRetrialModal}
           />
         ) : (
           <MessageInput
@@ -700,8 +967,13 @@ export default function ChatRoom({
       {/* Modals */}
       <CourtReadyModal
         isOpen={chatState.showCourtReadyModal}
-        onClose={() => chatState.setShowCourtReadyModal(false)}
+        onClose={() => {
+          console.log('🔴 CourtReadyModal 닫기');
+          chatState.setShowCourtReadyModal(false);
+          setIsModalForRetrial(false);
+        }}
         onStartTrial={handleStartTrial}
+        isRetrial={isModalForRetrial}
       />
       
       <ConfirmStartModal
@@ -756,6 +1028,10 @@ export default function ChatRoom({
         participatingUsers={roomUsers}
         agreedUsers={instantVerdictAgreedUsers}
         timeLeft={60}
+        modalTitle="⚡ 즉시 판결 요청"
+        confirmationMessage="재판을 즉시 종료하고 판결을 받으시겠습니까?"
+        agreeButtonText="⚡ 동의하기"
+        successMessage="🎉 모든 참가자가 동의했습니다! 곧 판결이 시작됩니다..."
       />
 
       {/* Individual Verdict Modal - for personal "판결 다시보기" only (no synchronization) */}
@@ -766,6 +1042,22 @@ export default function ChatRoom({
           setIndividualVerdictData(null);
         }}
         verdictData={individualVerdictData}
+      />
+
+      {/* Re-trial Modal */}
+      <InstantVerdictModal
+        isOpen={showRetrialModal}
+        onClose={handleCancelRetrial}
+        onCancel={handleCancelRetrial}
+        onAgree={handleAgreeToRetrial}
+        currentUsername={chatState.username}
+        participatingUsers={roomUsers}
+        agreedUsers={retrialAgreedUsers}
+        timeLeft={60}
+        modalTitle="🔄 재심 요청"
+        confirmationMessage="재판을 재시작하시겠습니까?"
+        agreeButtonText="🔄 재심 동의"
+        successMessage="🎉 모든 참가자가 동의했습니다! 곧 재판이 재시작됩니다..."
       />
     </div>
   );

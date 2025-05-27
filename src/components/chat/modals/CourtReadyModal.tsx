@@ -5,9 +5,10 @@ interface CourtReadyModalProps {
   isOpen: boolean;
   onClose: () => void;
   onStartTrial: () => void;
+  isRetrial?: boolean;
 }
 
-export default function CourtReadyModal({ isOpen, onClose, onStartTrial }: CourtReadyModalProps) {
+export default function CourtReadyModal({ isOpen, onClose, onStartTrial, isRetrial = false }: CourtReadyModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -25,11 +26,13 @@ export default function CourtReadyModal({ isOpen, onClose, onStartTrial }: Court
         <div className="relative z-10">
           <h2 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-purple-700 flex items-center mb-4">
             <Gavel className="h-5 w-5 mr-2 text-pink-600" />
-            실시간 AI 판사 재판
+            {isRetrial ? '재심 시작' : '실시간 AI 판사 재판'}
           </h2>
           <p className="mb-4 text-gray-800 text-sm">
-            이 모드에서는 참석자들이 변론을 진행하는 동안 AI 판사가 공정하게 심리합니다.
-            5분 타이머가 시작되며, 시간이 종료되면 AI 판사가 최종 판결을 내립니다.
+            {isRetrial 
+              ? '모든 참가자가 재심에 동의했습니다. 재심을 시작하시겠습니까? 5분 타이머가 시작되며, 시간이 종료되면 AI 판사가 최종 판결을 내립니다.'
+              : '이 모드에서는 참석자들이 변론을 진행하는 동안 AI 판사가 공정하게 심리합니다. 5분 타이머가 시작되며, 시간이 종료되면 AI 판사가 최종 판결을 내립니다.'
+            }
           </p>
           <div className="flex justify-between">
             <motion.button
@@ -48,7 +51,7 @@ export default function CourtReadyModal({ isOpen, onClose, onStartTrial }: Court
             >
               <div className="flex items-center">
                 <Gavel className="w-4 h-4 mr-2" />
-                재판 시작
+                {isRetrial ? '재심 시작' : '재판 시작'}
               </div>
             </motion.button>
           </div>

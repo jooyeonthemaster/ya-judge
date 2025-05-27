@@ -5,7 +5,8 @@ import {
   AlertTriangle, 
   Scale,
   Share,
-  History
+  History,
+  RefreshCw
 } from 'lucide-react';
 
 interface ChatRoomStatusProps {
@@ -24,6 +25,9 @@ interface ChatRoomStatusProps {
   roomUsers: Array<{ id: string; username: string; }>;
   currentUserId: string;
   
+  // 재심 상태
+  isRetrialInProgress?: boolean;
+  
   // 핸들러 함수들
   onUserReady: () => void;
   onInitiateCourt: () => void;
@@ -31,6 +35,7 @@ interface ChatRoomStatusProps {
   onStartNewTrial: () => void;
   onShare?: () => void;
   onViewVerdictHistory?: () => void;
+  onRequestRetrial?: () => void;
 }
 
 export default function ChatRoomStatus({
@@ -43,12 +48,14 @@ export default function ChatRoomStatus({
   showPostVerdictStartButton,
   roomUsers,
   currentUserId,
+  isRetrialInProgress = false,
   onUserReady,
   onInitiateCourt,
   onTrialReady,
   onStartNewTrial,
   onShare,
-  onViewVerdictHistory
+  onViewVerdictHistory,
+  onRequestRetrial
 }: ChatRoomStatusProps) {
   
   // 유틸리티 함수들
@@ -221,6 +228,19 @@ export default function ChatRoomStatus({
             판결 다시보기
           </motion.button>
         )}
+
+        {/* 재심 요청 버튼 */}
+        {onRequestRetrial && (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onRequestRetrial}
+            className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-orange-600 hover:to-red-600 flex items-center justify-center"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            재심 요청
+          </motion.button>
+        )}
         
         {/* 재판 준비 완료 버튼 (비호스트) */}
         {!postVerdictReadyUsers[currentUserId] ? (
@@ -281,6 +301,19 @@ export default function ChatRoomStatus({
             판결 다시보기
           </motion.button>
         )}
+
+        {/* 재심 요청 버튼 */}
+        {onRequestRetrial && (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onRequestRetrial}
+            className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-orange-600 hover:to-red-600 flex items-center justify-center"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            재심 요청
+          </motion.button>
+        )}
         
         {/* 재판 준비 완료 버튼 (호스트) */}
         {!postVerdictReadyUsers[currentUserId] ? (
@@ -301,7 +334,7 @@ export default function ChatRoomStatus({
         )}
         
         {/* 새 재판 개시 선언 버튼 */}
-        {checkAllUsersReady() ? (
+        {checkAllUsersReady() && !isRetrialInProgress ? (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -314,7 +347,9 @@ export default function ChatRoomStatus({
         ) : (
           <div className="w-full max-w-[280px] py-2.5 px-4 bg-gray-300 text-gray-500 rounded-lg flex items-center justify-center cursor-not-allowed">
             <Gavel className="w-4 h-4 mr-2" />
-            <span className="font-medium">새 재판 개시 선언 (준비 중...)</span>
+            <span className="font-medium">
+              {isRetrialInProgress ? '재심 진행 중...' : '새 재판 개시 선언 (준비 중...)'}
+            </span>
           </div>
         )}
         

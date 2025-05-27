@@ -12,6 +12,14 @@ interface InstantVerdictModalProps {
   participatingUsers: Array<{ id: string; username: string }>;
   agreedUsers: Record<string, boolean>;
   timeLeft: number;
+  
+  // Annotation props for customizable content
+  modalTitle?: string;
+  modalDescription?: string;
+  confirmationMessage?: string;
+  successMessage?: string;
+  agreeButtonText?: string;
+  icon?: React.ReactNode;
 }
 
 export default function InstantVerdictModal({ 
@@ -22,7 +30,15 @@ export default function InstantVerdictModal({
   currentUsername,
   participatingUsers,
   agreedUsers,
-  timeLeft
+  timeLeft,
+  
+  // Annotation props for customizable content
+  modalTitle,
+  modalDescription,
+  confirmationMessage,
+  successMessage,
+  agreeButtonText,
+  icon
 }: InstantVerdictModalProps) {
   const [countdown, setCountdown] = useState(30); // 30초 타임아웃
 
@@ -77,7 +93,8 @@ export default function InstantVerdictModal({
           
           <div className="flex items-center space-x-3">
             <AlertCircle className="w-6 h-6" />
-            <h2 className="text-lg font-bold">⚡ 즉시 판결 요청</h2>
+            {/* take this as props */}
+            <h2 className="text-lg font-bold">{modalTitle || '⚡ 즉시 판결 요청'}</h2>
           </div>
           
           <div className="mt-2 flex items-center space-x-2 text-sm">
@@ -89,11 +106,12 @@ export default function InstantVerdictModal({
         {/* 내용 */}
         <div className="p-6">
           <div className="text-center mb-6">
+            {/* take this as props */}
             <h3 className="text-lg font-semibold text-gray-800 mb-2">
-              재판을 즉시 종료하고 판결을 받으시겠습니까?
+              {confirmationMessage || '재판을 즉시 종료하고 판결을 받으시겠습니까?'}
             </h3>
             <p className="text-sm text-gray-600">
-              모든 참가자의 동의가 필요합니다. ({agreedCount}/{totalUsers})
+              {modalDescription || `모든 참가자의 동의가 필요합니다. (${agreedCount}/${totalUsers})`}
             </p>
           </div>
 
@@ -164,7 +182,7 @@ export default function InstantVerdictModal({
                 onClick={onAgree}
                 className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg hover:from-red-600 hover:to-orange-600 transition-all font-medium shadow-lg"
               >
-                ⚡ 동의하기
+                {agreeButtonText || '⚡ 동의하기'}
               </button>
             ) : (
               <button
@@ -179,7 +197,7 @@ export default function InstantVerdictModal({
           {allAgreed && (
             <div className="mt-4 p-3 bg-green-100 border border-green-300 rounded-lg text-center">
               <p className="text-green-800 font-medium">
-                🎉 모든 참가자가 동의했습니다! 곧 판결이 시작됩니다...
+                {successMessage || '🎉 모든 참가자가 동의했습니다! 곧 판결이 시작됩니다...'}
               </p>
             </div>
           )}
