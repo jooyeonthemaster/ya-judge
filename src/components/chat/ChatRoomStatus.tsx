@@ -26,6 +26,10 @@ interface ChatRoomStatusProps {
   // 사용자 정보
   roomUsers: Array<{ id: string; username: string; }>;
   currentUserId: string;
+  currentUsername: string;
+  
+  // 결제 정보
+  paidUsers: Record<string, boolean>;
   
   // 재심 상태
   isRetrialInProgress?: boolean;
@@ -53,6 +57,8 @@ export default function ChatRoomStatus({
   showPostVerdictStartButton,
   roomUsers,
   currentUserId,
+  currentUsername,
+  paidUsers,
   isRetrialInProgress = false,
   isHostViewingCourtReadyModal = false,
   onUserReady,
@@ -83,6 +89,11 @@ export default function ChatRoomStatus({
     
     // Redirect to payment checkout
     router.push('/payment/checkout');
+  };
+  
+  // Check if current user can request retrial (must have bought appeal rights)
+  const canRequestRetrial = (): boolean => {
+    return paidUsers[currentUsername] === true;
   };
   
   // 유틸리티 함수들
@@ -265,16 +276,16 @@ export default function ChatRoomStatus({
         {/* 재심 요청 버튼 */}
         {onRequestRetrial && (
           <motion.button
-            whileHover={{ scale: !isHostViewingCourtReadyModal ? 1.02 : 1 }}
-            whileTap={{ scale: !isHostViewingCourtReadyModal ? 0.98 : 1 }}
-            onClick={!isHostViewingCourtReadyModal ? onRequestRetrial : undefined}
-            disabled={isHostViewingCourtReadyModal}
+            whileHover={{ scale: canRequestRetrial() ? 1.02 : 1 }}
+            whileTap={{ scale: canRequestRetrial() ? 0.98 : 1 }}
+            onClick={canRequestRetrial() ? onRequestRetrial : undefined}
+            disabled={!canRequestRetrial()}
             className={`w-full max-w-[280px] py-2.5 px-4 font-medium rounded-lg transition-all shadow-lg flex items-center justify-center ${
-              isHostViewingCourtReadyModal
+              !canRequestRetrial()
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-xl hover:from-orange-600 hover:to-red-600'
             }`}
-            title={isHostViewingCourtReadyModal ? '호스트가 재판 준비 중입니다...' : ''}
+            title={!canRequestRetrial() ? '항소권을 구매한 사용자만 재심을 요청할 수 있습니다' : ''}
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             재심 요청
@@ -344,10 +355,16 @@ export default function ChatRoomStatus({
         {/* 재심 요청 버튼 */}
         {onRequestRetrial && (
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onRequestRetrial}
-            className="w-full max-w-[280px] py-2.5 px-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl hover:from-orange-600 hover:to-red-600 flex items-center justify-center"
+            whileHover={{ scale: canRequestRetrial() ? 1.02 : 1 }}
+            whileTap={{ scale: canRequestRetrial() ? 0.98 : 1 }}
+            onClick={canRequestRetrial() ? onRequestRetrial : undefined}
+            disabled={!canRequestRetrial()}
+            className={`w-full max-w-[280px] py-2.5 px-4 font-medium rounded-lg transition-all shadow-lg flex items-center justify-center ${
+              !canRequestRetrial()
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-xl hover:from-orange-600 hover:to-red-600'
+            }`}
+            title={!canRequestRetrial() ? '항소권을 구매한 사용자만 재심을 요청할 수 있습니다' : ''}
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             재심 요청

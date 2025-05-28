@@ -1180,6 +1180,8 @@ export default function ChatRoom({
             showPostVerdictStartButton={chatState.showPostVerdictStartButton}
             roomUsers={roomUsers}
             currentUserId={chatState.currentUserId}
+            currentUsername={chatState.username}
+            paidUsers={paidUsers}
             onUserReady={handleUserReady}
             onInitiateCourt={handleInitiateCourt}
             onTrialReady={handleTrialReady}

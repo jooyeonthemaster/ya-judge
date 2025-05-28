@@ -60,7 +60,7 @@ export default function ChatRoomHeader({
         
         <div className="flex items-center space-x-2">
           {/* 타이머 일시정지/재개 버튼 (호스트이고 재판 중일 때만 표시) */}
-          {isRoomHost && timerActive && (onPauseTimer || onResumeTimer) && (
+          {/* {isRoomHost && timerActive && (onPauseTimer || onResumeTimer) && (
             <button
               onClick={timerPaused ? onResumeTimer : onPauseTimer}
               className="flex items-center space-x-1 px-3 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:from-blue-600 hover:to-cyan-600 transition-all duration-200 shadow-md text-sm font-medium"
@@ -68,7 +68,7 @@ export default function ChatRoomHeader({
               <span>{timerPaused ? '▶️' : '⏸️'}</span>
               <span>{timerPaused ? '재개' : '일시정지'}</span>
             </button>
-          )}
+          )} */}
           
           {/* 즉시 판결받기 버튼 (재판 중일 때만 표시) */}
           {timerActive && onInstantVerdict && (
