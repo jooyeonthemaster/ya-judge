@@ -17,11 +17,14 @@ interface PaymentStore {
   roomId: string | null;
   userName: string | null;
   isPaid: boolean;
+  paymentCompleted: boolean;
   setPaymentResult: (result: PaymentResult) => void;
   clearPaymentResult: () => void;
   setRoomId: (roomId: string) => void;
   setUserName: (userName: string) => void;
   setIsPaid: (isPaid: boolean) => void;
+  setPaymentCompleted: (completed: boolean) => void;
+  clearPaymentCompleted: () => void;
   clearPaymentData: () => void;
 }
 
@@ -30,15 +33,19 @@ export const usePaymentStore = create<PaymentStore>((set) => ({
   roomId: null,
   userName: null,
   isPaid: false,
+  paymentCompleted: false,
   setPaymentResult: (result) => set({ paymentResult: result }),
   clearPaymentResult: () => set({ paymentResult: null }),
   setRoomId: (roomId) => set({ roomId }),
   setUserName: (userName) => set({ userName }),
   setIsPaid: (isPaid) => set({ isPaid }),
+  setPaymentCompleted: (completed) => set({ paymentCompleted: completed }),
+  clearPaymentCompleted: () => set({ paymentCompleted: false }),
   clearPaymentData: () => set({ 
     roomId: null, 
     userName: null, 
     isPaid: false,
-    paymentResult: null 
+    paymentResult: null,
+    paymentCompleted: false
   }),
 })); 

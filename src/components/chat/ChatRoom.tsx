@@ -24,6 +24,7 @@ import InstantVerdictModal from './modals/InstantVerdictModal';
 import { useCourtTimer } from '@/hooks/useCourtTimer';
 import { useChatRoomState } from '@/hooks/useChatRoomState';
 import { useRealTimeAnalysis } from '@/hooks/useRealTimeAnalysis';
+import { usePaymentStore } from '@/app/store/paymentStore';
 
 // Firebase utilities
 import { ref, onValue, set, remove, off, get, onDisconnect } from 'firebase/database';
@@ -95,6 +96,12 @@ export default function ChatRoom({
     setShowInstantVerdictModal,
     checkInstantVerdictConsensus
   } = useChatStore();
+
+  // Payment store for auto-ready after payment
+  const { paymentCompleted, clearPaymentCompleted } = usePaymentStore();
+  
+  // Local state for tracking paid users from Firebase
+  const [paidUsers, setPaidUsers] = useState<Record<string, boolean>>({});
 
   // Custom hooks
   const chatState = useChatRoomState({ roomId, customUsername });
@@ -315,6 +322,32 @@ export default function ChatRoom({
       
       if (chatState.isRoomHost && timerState.finalVerdictTriggered) {
         chatState.setShowPostVerdictStartButton(true);
+        
+        // Check if all users are ready and show court ready modal
+        const allRealUsers = roomUsers.filter(user => 
+          !user.username.includes('System') && 
+          user.username !== 'System'
+        );
+        
+        const readyCount = Object.keys(readyData).length;
+        const expectedCount = allRealUsers.length;
+        
+        // If all users are ready, show the court ready modal
+        if (readyCount >= expectedCount && expectedCount > 0) {
+          console.log('🎯 모든 사용자가 준비 완료 - CourtReadyModal 표시');
+          setIsModalForRetrial(false); // This is a new trial, not a retrial
+          chatState.setShowCourtReadyModal(true);
+          
+          // Firebase에 CourtReadyModal 상태 동기화
+          if (roomId && database) {
+            const courtReadyModalRef = ref(database, `rooms/${roomId}/courtReadyModal`);
+            set(courtReadyModalRef, {
+              isOpen: true,
+              openedAt: new Date().toISOString(),
+              isRetrial: false
+            });
+          }
+        }
       }
     });
 
@@ -383,7 +416,7 @@ export default function ChatRoom({
           });
           
           // 동의 현황 변경 시 만장일치 체크
-          checkInstantVerdictConsensus();
+          checkInstantVerdictConsensus(paidUsers);
         }
       } else {
         // 즉시 판결 요청이 취소되었을 때
@@ -415,7 +448,7 @@ export default function ChatRoom({
       console.log('🧹 즉시 판결 리스너 정리');
       off(instantVerdictRef, 'value', instantVerdictUnsubscribe);
     };
-  }, [roomId, database, checkInstantVerdictConsensus]);
+  }, [roomId, database, checkInstantVerdictConsensus, paidUsers]);
 
   // Firebase CourtReadyModal 상태 실시간 리스너
   useEffect(() => {
@@ -461,14 +494,24 @@ export default function ChatRoom({
         !user.username.includes('System') && user.username !== 'System'
       );
       
-      // 실제로 동의한 사용자만 카운트 (값이 true인 경우만)
-      const agreedCount = Object.values(agreedUsers).filter(agreed => agreed === true).length;
+      // 실제로 동의한 사용자 + 항소권을 구매한 사용자 카운트
+      // 항소권을 구매한 사용자는 재심에 암묵적으로 동의한 것으로 간주
+      const explicitlyAgreedUsers = Object.entries(agreedUsers)
+        .filter(([_, agreed]) => agreed === true)
+        .map(([username, _]) => username);
+      
+      const paidUsernames = Object.keys(paidUsers);
+      
+      // 명시적으로 동의하거나 항소권을 구매한 사용자들의 집합
+      const effectivelyAgreedUsers = new Set([...explicitlyAgreedUsers, ...paidUsernames]);
+      const agreedCount = effectivelyAgreedUsers.size;
       const totalRealUsers = realUsers.length;
       
       console.log(`재심 동의 현황: ${agreedCount}/${totalRealUsers}`);
       console.log('Real users:', realUsers.map(u => u.username));
-      console.log('Agreed users object:', agreedUsers);
-      console.log('Actually agreed users:', Object.entries(agreedUsers).filter(([_, agreed]) => agreed === true).map(([username, _]) => username));
+      console.log('Explicitly agreed users:', explicitlyAgreedUsers);
+      console.log('Paid users (implicitly agreed):', paidUsernames);
+      console.log('Effectively agreed users:', Array.from(effectivelyAgreedUsers));
       console.log('Is room host:', chatState.isRoomHost);
       
       // 모든 사용자가 동의했을 때만 (실제 동의한 수 = 전체 실제 사용자 수)
@@ -478,14 +521,10 @@ export default function ChatRoom({
         
         // 추가 검증: 실제로 모든 실제 사용자가 동의했는지 확인
         const realUsernames = realUsers.map(u => u.username);
-        const agreedUsernames = Object.entries(agreedUsers)
-          .filter(([_, agreed]) => agreed === true)
-          .map(([username, _]) => username);
+        const allRealUsersAgreed = realUsernames.every(username => effectivelyAgreedUsers.has(username));
         
         console.log('실제 사용자 목록:', realUsernames);
-        console.log('동의한 사용자 목록:', agreedUsernames);
-        
-        const allRealUsersAgreed = realUsernames.every(username => agreedUsernames.includes(username));
+        console.log('실질적으로 동의한 사용자 목록:', Array.from(effectivelyAgreedUsers));
         console.log('모든 실제 사용자가 동의했는가?', allRealUsersAgreed);
         
         if (!allRealUsersAgreed) {
@@ -567,9 +606,107 @@ export default function ChatRoom({
       console.log('🧹 재심 리스너 정리');
       off(retrialRef, 'value', retrialUnsubscribe);
     };
-  }, [roomId, database, roomUsers, chatState.isRoomHost, addMessage]);
+  }, [roomId, database, roomUsers, chatState.isRoomHost, addMessage, paidUsers]);
 
+  // Firebase 결제 사용자 상태 실시간 리스너
+  useEffect(() => {
+    if (!roomId || !database) return;
 
+    console.log(`💳 결제 사용자 리스너 설정: ${roomId}`);
+    const paidUsersRef = ref(database, `rooms/${roomId}/paidUsers`);
+    
+    const paidUsersUnsubscribe = onValue(paidUsersRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const paidUsersData = snapshot.val();
+        console.log('💳 Firebase 결제 사용자 상태 수신:', paidUsersData);
+        
+        // Convert to simple username -> boolean mapping
+        const paidUsersMap: Record<string, boolean> = {};
+        Object.values(paidUsersData).forEach((userData: any) => {
+          if (userData.username && userData.isPaid) {
+            paidUsersMap[userData.username] = true;
+          }
+        });
+        
+        setPaidUsers(paidUsersMap);
+        console.log('💳 결제 사용자 맵 업데이트:', paidUsersMap);
+      } else {
+        console.log('💳 결제 사용자 데이터 없음');
+        setPaidUsers({});
+      }
+    });
+
+    return () => {
+      console.log('🧹 결제 사용자 리스너 정리');
+      off(paidUsersRef, 'value', paidUsersUnsubscribe);
+    };
+  }, [roomId, database]);
+
+  // Auto-mark user as ready after successful payment
+  useEffect(() => {
+    if (!paymentCompleted || !roomId || !database || !chatState.username) return;
+    
+    // Only auto-mark as ready if final verdict has been triggered (post-verdict state)
+    if (!timerState.finalVerdictTriggered) {
+      console.log('⚠️ Payment completed but not in post-verdict state, not auto-marking as ready');
+      return;
+    }
+    
+    // Check if user is already marked as ready
+    if (chatState.postVerdictReadyUsers[chatState.currentUserId]) {
+      console.log('⚠️ User already marked as ready, clearing payment completion flag');
+      clearPaymentCompleted();
+      return;
+    }
+    
+    console.log('💳 Payment completed - auto-marking user as ready and storing paid status');
+    
+    // Mark user as ready in Firebase (same logic as handleTrialReady)
+    const userId = chatState.currentUserId;
+    const trialReadyRef = ref(database, `rooms/${roomId}/trialReady/${userId}`);
+    
+    // Also store the paid status in Firebase so other clients can see it
+    const paidUsersRef = ref(database, `rooms/${roomId}/paidUsers/${chatState.username}`);
+    
+    Promise.all([
+      set(trialReadyRef, true),
+      set(paidUsersRef, {
+        username: chatState.username,
+        userId: userId,
+        paidAt: new Date().toISOString(),
+        isPaid: true
+      })
+    ])
+      .then(() => {
+        console.log('✅ Auto-marked user as ready after payment and stored paid status');
+        
+        // Add system message
+        addMessage({
+          user: 'system',
+          name: '시스템',
+          text: `${chatState.username}님이 항소권을 구매하고 재판 준비가 완료되었습니다.`,
+          roomId: roomId
+        });
+        
+        // Clear the payment completion flag
+        clearPaymentCompleted();
+      })
+      .catch(error => {
+        console.error('❌ Error auto-marking user as ready after payment:', error);
+        // Still clear the flag to prevent infinite retries
+        clearPaymentCompleted();
+      });
+  }, [
+    paymentCompleted, 
+    roomId, 
+    database, 
+    chatState.username, 
+    chatState.currentUserId,
+    chatState.postVerdictReadyUsers,
+    timerState.finalVerdictTriggered,
+    clearPaymentCompleted,
+    addMessage
+  ]);
 
   // Message sending
   const sendMessage = (text: string, type?: string, relatedIssue?: string) => {
@@ -650,8 +787,8 @@ export default function ChatRoom({
       });
     }
     
-    // Request instant verdict
-    requestInstantVerdict();
+    // Request instant verdict with current username for auto-agreement of paid users
+    requestInstantVerdict(chatState.username);
   };
 
   // Handle instant verdict cancel/timeout with timer resume
@@ -754,6 +891,13 @@ export default function ChatRoom({
     chatState.setShowPostVerdictStartButton(false);
     chatState.setShowTrialReadyButton(false);
     
+    // Clear payment completion status so users can manually control instant verdict readiness
+    clearPaymentCompleted();
+    
+    // Immediately clear local paidUsers state
+    setPaidUsers({});
+    console.log('💳 로컬 결제 사용자 상태 즉시 초기화');
+    
     // Clear Firebase data
     if (roomId && database) {
       const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
@@ -761,6 +905,11 @@ export default function ChatRoom({
       
       const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
       remove(trialReadyRef);
+      
+      // Clear paidUsers data so users can manually control instant verdict readiness during retrial
+      const paidUsersRef = ref(database, `rooms/${roomId}/paidUsers`);
+      remove(paidUsersRef);
+      console.log('💳 재심 시작으로 인해 항소권 자동 준비 상태를 초기화했습니다.');
     }
     
     // Reset timer and start new trial
@@ -834,12 +983,29 @@ export default function ChatRoom({
     chatState.setShowPostVerdictStartButton(false);
     chatState.setShowTrialReadyButton(false);
     
+    // Clear payment completion status so users can manually control instant verdict readiness
+    clearPaymentCompleted();
+    
+    // Immediately clear local paidUsers state
+    setPaidUsers({});
+    console.log('💳 로컬 결제 사용자 상태 즉시 초기화');
+    
     // Clear Firebase data
     const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
     remove(verdictStatusRef);
     
     const trialReadyRef = ref(database, `rooms/${roomId}/trialReady`);
     remove(trialReadyRef);
+    
+    // Clear paidUsers data for both retrials and fresh trials
+    // This ensures users can manually control instant verdict readiness
+    const paidUsersRef = ref(database, `rooms/${roomId}/paidUsers`);
+    remove(paidUsersRef);
+    if (isModalForRetrial) {
+      console.log('💳 재심 시작으로 인해 항소권 자동 준비 상태를 초기화했습니다.');
+    } else {
+      console.log('💳 새 재판 시작으로 인해 항소권 상태를 초기화했습니다.');
+    }
     
     // For fresh new trials (not re-trials), clear Firebase messages
     if (!isModalForRetrial) {
@@ -1106,6 +1272,7 @@ export default function ChatRoom({
         currentUsername={chatState.username}
         participatingUsers={roomUsers}
         agreedUsers={instantVerdictAgreedUsers}
+        paidUsers={paidUsers}
         timeLeft={60}
         modalTitle="⚡ 즉시 판결 요청"
         confirmationMessage="재판을 즉시 종료하고 판결을 받으시겠습니까?"
@@ -1132,6 +1299,7 @@ export default function ChatRoom({
         currentUsername={chatState.username}
         participatingUsers={roomUsers}
         agreedUsers={retrialAgreedUsers}
+        paidUsers={paidUsers}
         timeLeft={60}
         modalTitle="🔄 재심 요청"
         confirmationMessage="재판을 재시작하시겠습니까?"

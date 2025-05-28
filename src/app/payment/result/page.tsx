@@ -9,10 +9,11 @@ import { CheckCircle, AlertCircle } from "lucide-react";
 interface PendingPayment {
   paymentId: string;
   orderData: any;
+  roomId: string;
 }
 
 interface ErrorInfo {
-  code?: string;
+  code: string;
   message: string;
   details?: any;
   timestamp: string;
@@ -22,11 +23,11 @@ interface DebugInfo {
   lastMessage?: string;
   lastData?: any;
   timestamp?: string;
-  logs?: Array<{timestamp: string; message: string; data?: any}>;
+  logs?: any[];
 }
 
 export default function PaymentResultPage() {
-  const { paymentResult, setPaymentResult, setIsPaid, roomId } = usePaymentStore();
+  const { paymentResult, setPaymentResult, setIsPaid, setPaymentCompleted, roomId } = usePaymentStore();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorInfo | null>(null);
@@ -130,6 +131,7 @@ export default function PaymentResultPage() {
                 // Mark payment as completed and store payment data
                 setIsPaid(true);
                 setPaymentResult(paymentRecord);
+                setPaymentCompleted(true);
               } else {
                 const errorResponse = await externalResponse.text();
                 logPaymentDebug('Failed to record URL-based payment', { status: externalResponse.status, response: errorResponse });
@@ -196,6 +198,7 @@ export default function PaymentResultPage() {
                 // Mark payment as completed and store payment data
                 setIsPaid(true);
                 setPaymentResult(paymentRecord);
+                setPaymentCompleted(true);
                 
                 // Auto-redirect to chat room if we have room ID
                 if (pendingRoomId) {

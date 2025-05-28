@@ -21,6 +21,7 @@ export default function CheckoutPage() {
   const { 
     setPaymentResult, 
     setIsPaid, 
+    setPaymentCompleted,
     roomId, 
     userName 
   } = usePaymentStore();
@@ -131,6 +132,7 @@ export default function CheckoutPage() {
             
             // Mark payment as completed
             setIsPaid(true);
+            setPaymentCompleted(true);
             // Store payment data in Zustand store
             setPaymentResult(paymentRecord);
             

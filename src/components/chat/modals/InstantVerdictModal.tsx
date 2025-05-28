@@ -11,6 +11,7 @@ interface InstantVerdictModalProps {
   currentUsername: string;
   participatingUsers: Array<{ id: string; username: string }>;
   agreedUsers: Record<string, boolean>;
+  paidUsers: Record<string, boolean>;
   timeLeft: number;
   
   // Annotation props for customizable content
@@ -30,6 +31,7 @@ export default function InstantVerdictModal({
   currentUsername,
   participatingUsers,
   agreedUsers,
+  paidUsers,
   timeLeft,
   
   // Annotation props for customizable content
@@ -78,6 +80,14 @@ export default function InstantVerdictModal({
   const agreedCount = Object.keys(agreedUsers).length;
   const currentUserAgreed = agreedUsers[currentUsername];
   const allAgreed = agreedCount === totalUsers && totalUsers > 0;
+  
+  // Check if current user has paid for appeal rights
+  const currentUserPaid = paidUsers[currentUsername];
+  
+  // For instant verdict, only count explicit agreements, not paid users
+  // Paid users must manually agree to instant verdict just like everyone else
+  const effectiveAgreedCount = agreedCount;
+  const effectiveAllAgreed = effectiveAgreedCount >= totalUsers && totalUsers > 0;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -111,7 +121,7 @@ export default function InstantVerdictModal({
               {confirmationMessage || '재판을 즉시 종료하고 판결을 받으시겠습니까?'}
             </h3>
             <p className="text-sm text-gray-600">
-              {modalDescription || `모든 참가자의 동의가 필요합니다. (${agreedCount}/${totalUsers})`}
+              {modalDescription || `모든 참가자의 동의가 필요합니다. (${effectiveAgreedCount}/${totalUsers})`}
             </p>
           </div>
 
@@ -119,12 +129,12 @@ export default function InstantVerdictModal({
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700">동의 진행률</span>
-              <span className="text-sm text-gray-600">{Math.round((agreedCount/totalUsers) * 100)}%</span>
+              <span className="text-sm text-gray-600">{Math.round((effectiveAgreedCount/totalUsers) * 100)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
                 className="bg-gradient-to-r from-green-400 to-green-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${(agreedCount/totalUsers) * 100}%` }}
+                style={{ width: `${(effectiveAgreedCount/totalUsers) * 100}%` }}
               ></div>
             </div>
           </div>
@@ -150,7 +160,9 @@ export default function InstantVerdictModal({
                   ) : (
                     <div className="flex items-center text-gray-400">
                       <Clock className="w-4 h-4 mr-1" />
-                      <span className="text-xs">대기 중</span>
+                      <span className="text-xs">
+                        {paidUsers[user.username] ? '대기 중 (항소권 보유)' : '대기 중'}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -177,12 +189,19 @@ export default function InstantVerdictModal({
               취소
             </button>
             
-            {!currentUserAgreed ? (
+            {!currentUserAgreed && !currentUserPaid ? (
               <button
                 onClick={onAgree}
                 className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg hover:from-red-600 hover:to-orange-600 transition-all font-medium shadow-lg"
               >
                 {agreeButtonText || '⚡ 동의하기'}
+              </button>
+            ) : currentUserPaid ? (
+              <button
+                disabled
+                className="flex-1 px-4 py-3 bg-amber-500 text-white rounded-lg font-medium cursor-not-allowed opacity-75"
+              >
+                💳 항소권 구매 완료
               </button>
             ) : (
               <button
@@ -194,7 +213,7 @@ export default function InstantVerdictModal({
             )}
           </div>
 
-          {allAgreed && (
+          {effectiveAllAgreed && (
             <div className="mt-4 p-3 bg-green-100 border border-green-300 rounded-lg text-center">
               <p className="text-green-800 font-medium">
                 {successMessage || '🎉 모든 참가자가 동의했습니다! 곧 판결이 시작됩니다...'}

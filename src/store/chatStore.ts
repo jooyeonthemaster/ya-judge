@@ -151,10 +151,10 @@ interface ChatState {
   setRoomId: (roomId: string) => void;
   
   // 즉시 판결 관련 함수
-  requestInstantVerdict: () => void;
+  requestInstantVerdict: (currentUsername?: string) => void;
   agreeToInstantVerdict: (username: string) => void;
   setShowInstantVerdictModal: (show: boolean) => void;
-  checkInstantVerdictConsensus: () => void;
+  checkInstantVerdictConsensus: (paidUsers?: Record<string, boolean>) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => {
@@ -1166,7 +1166,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     },
 
     // 즉시 판결 관련 함수
-    requestInstantVerdict: () => {
+    requestInstantVerdict: (currentUsername?: string) => {
       const state = get();
       
       if (!state.timerActive || state.finalVerdictRequested || state.instantVerdictRequested) {
@@ -1176,10 +1176,14 @@ export const useChatStore = create<ChatState>((set, get) => {
       
       console.log('🚨 즉시 판결 요청 시작');
       
+      // Check Firebase for paid users instead of localStorage
+      // Note: This should be passed from the component that has access to Firebase data
+      const initialAgreedUsers: Record<string, boolean> = {};
+      
       set({ 
         instantVerdictRequested: true,
         showInstantVerdictModal: true,
-        instantVerdictAgreedUsers: {}
+        instantVerdictAgreedUsers: initialAgreedUsers
       });
       
       // Firebase에 즉시 판결 요청 상태 저장
@@ -1188,8 +1192,8 @@ export const useChatStore = create<ChatState>((set, get) => {
         firebaseSet(instantVerdictRef, {
           requested: true,
           requestedAt: new Date().toISOString(),
-          agreedUsers: {},
-          startedBy: 'system' // 실제로는 현재 사용자로 변경 가능
+          agreedUsers: initialAgreedUsers,
+          startedBy: currentUsername || 'system'
         }).then(() => {
           console.log('Firebase에 즉시 판결 요청 저장 완료');
         }).catch(error => {
@@ -1197,7 +1201,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         });
       }
       
-      // 시스템 메시지 추가
+      // 시스템 메시지 추가 - simplified since we can't check payment status here
       state.addMessage({
         user: 'system',
         name: '시스템',
@@ -1266,18 +1270,23 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
     },
     
-    checkInstantVerdictConsensus: () => {
+    checkInstantVerdictConsensus: (paidUsers?: Record<string, boolean>) => {
       const state = get();
       
       if (!state.instantVerdictRequested) return;
       
-      const totalUsers = state.roomUsers.length;
+      const totalUsers = state.roomUsers.filter(user => 
+        !user.username.includes('System') && user.username !== 'System'
+      ).length;
+      
+      // Only count users who explicitly agreed to instant verdict
+      // Do NOT auto-include paid users - they must manually agree to instant verdict
       const agreedCount = Object.keys(state.instantVerdictAgreedUsers).length;
       
-      console.log(`즉시 판결 동의 현황: ${agreedCount}/${totalUsers}`);
+      console.log(`즉시 판결 동의 현황: ${agreedCount}/${totalUsers} (명시적 동의만 카운트)`);
       
-      // 모든 사용자가 동의했을 때
-      if (agreedCount === totalUsers && totalUsers > 0) {
+      // 모든 사용자가 명시적으로 동의했을 때만
+      if (agreedCount >= totalUsers && totalUsers > 0) {
         console.log('🎉 즉시 판결 만장일치! 판결 시작');
         
         // 모달 닫기
