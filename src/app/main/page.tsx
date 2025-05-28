@@ -179,9 +179,6 @@ export default function Home() {
 
       {/* 히어로 섹션 */}
       <section className="pt-8 pb-10 bg-gradient-to-b from-pink-50 via-pink-50 to-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-pink-200 rounded-full opacity-30 -mr-32 -mt-32 blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-200 rounded-full opacity-30 -ml-32 -mb-32 blur-3xl animate-pulse"></div>
-        
         <div className="px-5 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -201,20 +198,21 @@ export default function Home() {
               </span>
               <span className="block text-pink-800 mt-1">커플 분쟁</span>
             </h1>
-            
-            <div className="relative w-64 h-64 mx-auto my-3 drop-shadow-2xl">
-              <div className="absolute inset-0 bg-gradient-to-br from-pink-400 to-purple-400 rounded-full blur-xl opacity-30 animate-pulse"></div>
+            <div className="flex justify-center items-center">
+              <div className="relative w-64 h-64 mx-auto my-3 drop-shadow-2xl">
               <Image 
                 src="/images/judge.png" 
                 alt="판사 캐릭터" 
-                width={250} 
-                height={250}
+                width={220} 
+                height={220}
                 className="object-contain relative z-10 transform hover:scale-105 transition-transform duration-300"
               />
               <div className="absolute -right-2 -top-4 bg-gradient-to-br from-yellow-400 to-yellow-600 text-white text-xs font-black px-3 py-1.5 rounded-full shadow-lg transform rotate-12 z-20">
                 83% 승률!
               </div>
             </div>
+            </div>
+            
             
             <p className="text-lg text-gray-800 mb-6 font-bold px-2 leading-snug">
               <span className="text-pink-600 block">관계 파탄 직전에서 단 한 번의 판결로</span>
@@ -243,9 +241,6 @@ export default function Home() {
 
       {/* 실제 커플 갈등 사례 */}
       <section className="py-12 bg-white relative">
-        <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-pink-100 to-purple-100 rounded-full opacity-40 -mr-20 blur-xl"></div>
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-br from-yellow-100 to-pink-100 rounded-full opacity-30 -ml-16 blur-xl"></div>
-        
         <div className="px-5 relative z-10">
           <h2 className="text-3xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-pink-700 to-purple-700 text-center leading-tight">
             극한의 갈등,<br/>냉철한 판결
@@ -316,9 +311,6 @@ export default function Home() {
 
       {/* 기능 하이라이트 - 4단계 심판 프로세스 */}
       <section className="py-14 bg-gradient-to-b from-white to-pink-50 relative">
-        <div className="absolute top-10 right-10 w-32 h-32 bg-gradient-to-br from-pink-200 to-purple-200 rounded-full opacity-30 blur-xl"></div>
-        <div className="absolute bottom-10 left-10 w-40 h-40 bg-gradient-to-br from-yellow-200 to-pink-200 rounded-full opacity-30 blur-xl"></div>
-        
         <div className="px-5 relative z-10">
           <h2 className="text-3xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-pink-700 to-purple-700 text-center leading-tight">
             AI 판사의<br/>4단계 해부 과정
@@ -353,8 +345,6 @@ export default function Home() {
 
       {/* 사용 사례 */}
       <section className="py-12 bg-white relative">
-        <div className="absolute bottom-10 right-0 w-32 h-32 bg-pink-50 rounded-full opacity-50 -mr-16 blur-xl"></div>
-        
         <div className="px-5 relative z-10">
           <h2 className="text-2xl font-extrabold mb-2 text-pink-600 text-center">끝나지 않는 논쟁들</h2>
           <p className="text-sm text-gray-600 mb-8 text-center font-medium leading-snug">
@@ -395,8 +385,6 @@ export default function Home() {
 
       {/* 이용 방법 */}
       <section id="how-it-works" className="py-12 bg-gradient-to-b from-pink-50 to-white relative">
-        <div className="absolute top-10 left-0 w-20 h-20 bg-pink-100 rounded-full opacity-40 -ml-10 blur-xl"></div>
-        
         <div className="px-5 relative z-10">
           <h2 className="text-2xl font-extrabold mb-2 text-pink-600 text-center">3분만에 판결받기</h2>
           <p className="text-sm text-gray-600 mb-8 text-center font-medium">
@@ -442,8 +430,6 @@ export default function Home() {
 
       {/* 추가 섹션: 사용자 후기 */}
       <section className="py-12 bg-white relative">
-        <div className="absolute top-0 left-0 w-40 h-40 bg-pink-50 rounded-full opacity-40 -ml-20 blur-xl"></div>
-        
         <div className="px-5 relative z-10">
           <h2 className="text-2xl font-extrabold mb-2 text-pink-600 text-center">판결 후 달라진 일상</h2>
           <p className="text-sm text-gray-600 mb-8 text-center font-medium leading-snug">
@@ -510,8 +496,6 @@ export default function Home() {
 
       {/* 푸터 */}
       <footer className="py-10 bg-gradient-to-t from-pink-50 to-white relative overflow-hidden">
-        <div className="absolute bottom-0 right-0 w-40 h-40 bg-pink-100 rounded-full opacity-30 -mr-20 -mb-20 blur-3xl"></div>
-        
         <div className="px-5 relative z-10 text-center">
           <div className="flex items-center justify-center gap-2 mb-5">
             <span className="font-extrabold text-xl text-pink-600">야 판사야!</span>
