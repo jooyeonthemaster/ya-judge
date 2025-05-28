@@ -293,7 +293,7 @@ export default function ChatRoomStatus({
         )}
         
         {/* 항소권 구매 (비호스트) */}
-        {!postVerdictReadyUsers[currentUserId] ? (
+        {/* {!postVerdictReadyUsers[currentUserId] ? (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -308,7 +308,7 @@ export default function ChatRoomStatus({
             <CheckCircle2 className="w-4 h-4 mr-2 text-amber-600" />
             <span className="text-sm text-amber-700 font-medium">준비 완료! 호스트와 다른 참석자 대기 중...</span>
           </div>
-        )}
+        )} */}
         
         <div className="w-full max-w-[280px] py-2.5 px-4 bg-gray-300 text-gray-500 rounded-lg flex items-center justify-center cursor-not-allowed">
           <Gavel className="w-4 h-4 mr-2" />
@@ -372,7 +372,7 @@ export default function ChatRoomStatus({
         )}
         
         {/* 항소권 구매 (호스트) */}
-        {!postVerdictReadyUsers[currentUserId] ? (
+        {/* {!postVerdictReadyUsers[currentUserId] ? (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -387,7 +387,7 @@ export default function ChatRoomStatus({
             <CheckCircle2 className="w-4 h-4 mr-2 text-amber-600" />
             <span className="text-sm text-amber-700 font-medium">호스트 준비 완료! 다른 참석자 대기 중...</span>
           </div>
-        )}
+        )} */}
         
         {/* 새 재판 개시 선언 버튼 */}
         {/* {checkAllUsersReady() && !isRetrialInProgress ? (
@@ -413,7 +413,7 @@ export default function ChatRoomStatus({
         <div className="w-full max-w-[280px] py-2 px-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-center">
           <Scale className="w-3.5 h-3.5 mr-2 text-yellow-600" />
           <span className="text-xs text-yellow-700">
-            호스트는 상대방과 협의 후 재심을 요청해주세요.
+            재심 기능은 준비중입니다!
           </span>
         </div>
       </div>
