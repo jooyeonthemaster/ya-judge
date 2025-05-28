@@ -472,7 +472,7 @@ export default function ChatRoom({
       console.log('Is room host:', chatState.isRoomHost);
       
       // 모든 사용자가 동의했을 때만 (실제 동의한 수 = 전체 실제 사용자 수)
-      if (agreedCount === totalRealUsers && totalRealUsers > 0 && agreedCount >= 2) {
+      if (agreedCount === totalRealUsers && totalRealUsers > 0) {
         console.log('🎉 재심 만장일치! 호스트에게 CourtReadyModal 표시');
         console.log(`확인: ${agreedCount}명이 동의했고, 총 ${totalRealUsers}명의 실제 사용자가 있음`);
         
