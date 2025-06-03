@@ -17,6 +17,17 @@ export async function GET(request: NextRequest) {
     const paymentId = searchParams.get('paymentId');
     const txId = searchParams.get('txId');
 
+    // Log request source information
+    const userAgent = request.headers.get('user-agent') || '';
+    const isMobileRequest = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i.test(userAgent);
+    
+    console.log('=== PAYMENT VERIFICATION REQUEST INFO ===');
+    console.log('Request type:', isMobileRequest ? 'MOBILE BROWSER' : 'PC BROWSER');
+    console.log('User Agent:', userAgent);
+    console.log('Payment ID:', paymentId);
+    console.log('Transaction ID:', txId || 'N/A');
+    console.log('==========================================');
+
     if (!paymentId) {
       return NextResponse.json({
         status: 'error',
@@ -68,43 +79,77 @@ export async function GET(request: NextRequest) {
 
     const payment = await paymentResponse.json();
 
+    // Log the complete payment response from Portone API
+    console.log('=== FULL PORTONE API RESPONSE ===');
+    console.log('Raw payment object:', JSON.stringify(payment, null, 2));
+    console.log('Payment status:', payment.status);
+    console.log('Payment method object:', JSON.stringify(payment.method, null, 2));
+    console.log('Payment amount object:', JSON.stringify(payment.amount, null, 2));
+    console.log('Payment customer object:', JSON.stringify(payment.customer, null, 2));
+    console.log('================================');
+
     // 2. Check the payment status
     switch (payment.status) {
       case 'VIRTUAL_ACCOUNT_ISSUED': {
         // Handle virtual account issued case
+        const virtualAccountData = {
+          paymentId: payment.paymentId,
+          amount: payment.amount.total,
+          orderName: payment.orderName,
+          customerName: payment.customer?.fullName || '',
+          customerEmail: payment.customer?.email || '',
+          customerPhone: payment.customer?.phoneNumber || '',
+          method: payment.method,
+          status: payment.status
+        };
+
+        console.log('Virtual Account data to save in database:', JSON.stringify(virtualAccountData, null, 2));
+        console.log('Browser type for this Virtual Account:', isMobileRequest ? 'MOBILE' : 'PC');
+
         return NextResponse.json({
           status: 'pending',
           message: 'Virtual account has been issued',
-          payment: {
-            paymentId: payment.paymentId,
-            amount: payment.amount.total,
-            orderName: payment.orderName,
-            customerName: payment.customer?.fullName || '',
-            customerEmail: payment.customer?.email || '',
-            customerPhone: payment.customer?.phoneNumber || '',
-            method: payment.method,
-            status: payment.status
-          }
+          payment: virtualAccountData
         });
       }
       case 'PAID': {
         // Handle successful payment
+        const paymentData = {
+          paymentId: payment.paymentId,
+          amount: payment.amount.total,
+          orderName: payment.orderName,
+          customerName: payment.customer?.fullName || '',
+          customerEmail: payment.customer?.email || '',
+          customerPhone: payment.customer?.phoneNumber || '',
+          method: payment.method,
+          status: payment.status
+        };
+
+        console.log('Payment data to save in database:', JSON.stringify(paymentData, null, 2));
+        console.log('Browser type for this Payment:', isMobileRequest ? 'MOBILE' : 'PC');
+
         return NextResponse.json({
           status: 'success',
           message: 'Payment completed successfully',
-          payment: {
-            paymentId: payment.paymentId,
-            amount: payment.amount.total,
-            orderName: payment.orderName,
-            customerName: payment.customer?.fullName || '',
-            customerEmail: payment.customer?.email || '',
-            customerPhone: payment.customer?.phoneNumber || '',
-            method: payment.method,
-            status: payment.status
-          }
+          payment: paymentData
         });
       }
       default: {
+        // Handle other payment statuses (failed, cancelled, etc.)
+        const failedPaymentData = {
+          paymentId: payment.paymentId,
+          amount: payment.amount?.total || 0,
+          orderName: payment.orderName || '',
+          customerName: payment.customer?.fullName || '',
+          customerEmail: payment.customer?.email || '',
+          customerPhone: payment.customer?.phoneNumber || '',
+          method: payment.method,
+          status: payment.status
+        };
+
+        console.log('Failed/Other payment data for reference:', JSON.stringify(failedPaymentData, null, 2));
+        console.log('Browser type for this Failed/Other payment:', isMobileRequest ? 'MOBILE' : 'PC');
+
         return NextResponse.json({
           status: 'failed',
           message: `Payment status: ${payment.status}`,
