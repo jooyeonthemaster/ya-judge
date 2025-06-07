@@ -668,6 +668,9 @@ export default function ChatRoom({
     // Also store the paid status in Firebase so other clients can see it
     const paidUsersRef = ref(database, `rooms/${roomId}/paidUsers/${chatState.username}`);
     
+    // Clear ispaying status since this user completed payment
+    const isPayingRef = ref(database, `rooms/${roomId}/ispaying`);
+    
     Promise.all([
       set(trialReadyRef, true),
       set(paidUsersRef, {
@@ -675,10 +678,11 @@ export default function ChatRoom({
         userId: userId,
         paidAt: new Date().toISOString(),
         isPaid: true
-      })
+      }),
+      remove(isPayingRef) // Clear ispaying status to allow other users to pay
     ])
       .then(() => {
-        console.log('✅ Auto-marked user as ready after payment and stored paid status');
+        console.log('✅ Auto-marked user as ready after payment, stored paid status, and cleared ispaying status');
         
         // Add system message
         addMessage({
@@ -909,7 +913,30 @@ export default function ChatRoom({
       // Clear paidUsers data so users can manually control instant verdict readiness during retrial
       const paidUsersRef = ref(database, `rooms/${roomId}/paidUsers`);
       remove(paidUsersRef);
-      console.log('💳 재심 시작으로 인해 항소권 자동 준비 상태를 초기화했습니다.');
+      
+          // Clear ispaying status to allow new payments
+    const isPayingRef = ref(database, `rooms/${roomId}/ispaying`);
+    remove(isPayingRef);
+    
+    // Signal all users to clear their session storage
+    const clearSessionSignalRef = ref(database, `rooms/${roomId}/clearPaymentSession`);
+    set(clearSessionSignalRef, {
+      timestamp: new Date().toISOString(),
+      reason: 'retrial_start',
+      clearedBy: chatState.username
+    }).then(() => {
+      console.log('✅ Session storage clear signal sent to all users for retrial');
+      // Remove the signal after a short delay to clean up
+      setTimeout(() => {
+        remove(clearSessionSignalRef).catch(error => {
+          console.error('❌ Failed to remove session clear signal:', error);
+        });
+      }, 2000);
+    }).catch(error => {
+      console.error('❌ Failed to send session storage clear signal for retrial:', error);
+    });
+    
+    console.log('💳 재심 시작으로 인해 항소권 자동 준비 상태 및 결제 상태를 초기화했습니다.');
     }
     
     // Reset timer and start new trial
@@ -1001,6 +1028,31 @@ export default function ChatRoom({
     // This ensures users can manually control instant verdict readiness
     const paidUsersRef = ref(database, `rooms/${roomId}/paidUsers`);
     remove(paidUsersRef);
+    
+    // Clear ispaying status to allow new payments
+    const isPayingRef = ref(database, `rooms/${roomId}/ispaying`);
+    remove(isPayingRef);
+    
+    // Signal all users to clear their session storage
+    const clearSessionSignalRef = ref(database, `rooms/${roomId}/clearPaymentSession`);
+    set(clearSessionSignalRef, {
+      timestamp: new Date().toISOString(),
+      reason: 'trial_start',
+      clearedBy: chatState.username
+    }).then(() => {
+      console.log('✅ Session storage clear signal sent to all users for trial');
+      // Remove the signal after a short delay to clean up
+      setTimeout(() => {
+        remove(clearSessionSignalRef).catch(error => {
+          console.error('❌ Failed to remove session clear signal:', error);
+        });
+      }, 2000);
+    }).catch(error => {
+      console.error('❌ Failed to send session storage clear signal for trial:', error);
+    });
+    
+    console.log('💳 결제 상태 초기화 - 새로운 결제가 가능합니다.');
+    
     if (isModalForRetrial) {
       console.log('💳 재심 시작으로 인해 항소권 자동 준비 상태를 초기화했습니다.');
     } else {

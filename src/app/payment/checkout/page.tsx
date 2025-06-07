@@ -50,6 +50,53 @@ export default function CheckoutPage() {
     }
   }, [userName]);
 
+  // Clear ispaying status when user leaves payment page without completing
+  useEffect(() => {
+    const handleBeforeUnload = async () => {
+      if (roomId) {
+        try {
+          // Get room ID and clear ispaying status
+          const { database } = await import('@/lib/firebase');
+          const { ref, remove, set } = await import('firebase/database');
+          
+          if (database) {
+            const isPayingRef = ref(database, `rooms/${roomId}/ispaying`);
+            await remove(isPayingRef);
+            console.log('Cleared ispaying status due to page unload');
+            
+            // Signal all users to clear their session storage
+            const clearSessionSignalRef = ref(database, `rooms/${roomId}/clearPaymentSession`);
+            await set(clearSessionSignalRef, {
+              timestamp: new Date().toISOString(),
+              reason: 'payment_page_left',
+              clearedBy: userName || 'unknown'
+            });
+            console.log('Session storage clear signal sent to all users for payment page exit');
+            
+            // Remove the signal after a short delay to clean up
+            setTimeout(() => {
+              remove(clearSessionSignalRef).catch(error => {
+                console.error('Failed to remove session clear signal:', error);
+              });
+            }, 2000);
+          }
+        } catch (error) {
+          console.error('Failed to clear ispaying status or send clear signal on page unload:', error);
+        }
+      }
+    };
+
+    // Add event listener for page unload
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      // Clean up event listener
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Also clear on component unmount
+      handleBeforeUnload();
+    };
+  }, [roomId]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -129,6 +176,24 @@ export default function CheckoutPage() {
               amount: formData.totalAmount,
               orderName: formData.orderName
             });
+            
+            // Clear Firebase ispaying status but preserve session storage for user return
+            if (roomId) {
+              try {
+                const { database } = await import('@/lib/firebase');
+                const { ref, remove } = await import('firebase/database');
+                
+                if (database) {
+                  // Clear Firebase ispaying status
+                  const isPayingRef = ref(database, `rooms/${roomId}/ispaying`);
+                  await remove(isPayingRef);
+                  console.log('Cleared Firebase ispaying status after payment completion');
+                  console.log('Session storage preserved - paying user can return to room');
+                }
+              } catch (error) {
+                console.error('Failed to clear ispaying status after payment completion:', error);
+              }
+            }
             
             // Mark payment as completed
             setIsPaid(true);
