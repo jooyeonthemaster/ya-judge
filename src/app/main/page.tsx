@@ -31,6 +31,13 @@ export default function Home() {
   const [isCreating, setIsCreating] = useState(false);
   const [activeCase, setActiveCase] = useState(0);
 
+  // Clear local storage when navigating to main page
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+    }
+  }, []);
+
   const createRoom = () => {
     setIsCreating(true);
     try {
