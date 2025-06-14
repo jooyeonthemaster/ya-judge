@@ -378,6 +378,16 @@ export default function ChatRoom({
     const hostPresenceListener = onValue(hostPresenceRef, async (snapshot) => {
       const isHostPresent = snapshot.val();
       
+      // Mobile detection
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      console.log('📱 Host presence changed:', { 
+        isHostPresent, 
+        isCurrentUserHost: chatState.isRoomHost,
+        isMobile,
+        userAgent: navigator.userAgent.substring(0, 50)
+      });
+      
       // Handle host returning from payment
       if (isHostPresent === true && !chatState.isRoomHost) {
         // Check if there was a previous system message about mobile payment
@@ -401,9 +411,12 @@ export default function ChatRoom({
       }
       
       if (isHostPresent === false && !chatState.isRoomHost) {
+        console.log('📱 Host presence is false, checking for mobile payment exceptions...');
+        
         // Check if host is currently in payment (mobile exception)
         // Don't show HostLeftModal if host is paying on mobile
         if (!database) {
+          console.log('📱 No database connection, showing HostLeftModal');
           chatState.setShowHostLeftModal(true);
           return;
         }
@@ -411,6 +424,11 @@ export default function ChatRoom({
         try {
           const isPayingRef = ref(database, `rooms/${roomId}/ispaying`);
           const isPayingSnapshot = await get(isPayingRef);
+          
+          console.log('📱 Payment status check:', {
+            exists: isPayingSnapshot.exists(),
+            data: isPayingSnapshot.exists() ? isPayingSnapshot.val() : null
+          });
           
           if (isPayingSnapshot.exists()) {
             const paymentData = isPayingSnapshot.val();
@@ -472,6 +490,11 @@ export default function ChatRoom({
              msg.text.includes('항소권을 구매하고 재판 준비가 완료되었습니다'))
           );
           
+          console.log('📱 Recent payment completion check:', {
+            hasRecentPaymentCompletion,
+            recentMessages: recentMessages.map(m => ({ user: m.user, text: m.text.substring(0, 50) }))
+          });
+          
           if (hasRecentPaymentCompletion) {
             console.log('📱 Mobile Payment Return Grace Period: Recent payment completion detected, delaying HostLeftModal check');
             
@@ -480,6 +503,11 @@ export default function ChatRoom({
               console.log('📱 Grace period ended, re-checking host presence');
               get(hostPresenceRef).then((graceHostSnapshot) => {
                 const isStillHostAbsent = graceHostSnapshot.val() === false;
+                
+                console.log('📱 Grace period check result:', {
+                  isStillHostAbsent,
+                  hostPresence: graceHostSnapshot.val()
+                });
                 
                 if (isStillHostAbsent) {
                   console.log('📱 Host still absent after grace period - showing HostLeftModal');
@@ -495,11 +523,94 @@ export default function ChatRoom({
             return; // Don't show the modal immediately if recent payment completion
           }
           
+          // MOBILE SPECIFIC: Additional check for mobile users
+          if (isMobile) {
+            console.log('📱 Mobile user detected, adding extra grace period for mobile payment return');
+            
+            // Check session storage for payment indicators
+            const hasPaymentSession = sessionStorage.getItem('newPaymentId') || 
+                                    sessionStorage.getItem('newRoomId') ||
+                                    sessionStorage.getItem('username');
+            
+            console.log('📱 Mobile payment session check:', {
+              hasPaymentSession: !!hasPaymentSession,
+              newPaymentId: !!sessionStorage.getItem('newPaymentId'),
+              newRoomId: !!sessionStorage.getItem('newRoomId'),
+              username: !!sessionStorage.getItem('username')
+            });
+            
+            if (hasPaymentSession) {
+              console.log('📱 Mobile payment session detected, extending grace period to 60 seconds');
+              
+              setTimeout(() => {
+                console.log('📱 Extended mobile grace period ended, re-checking host presence');
+                get(hostPresenceRef).then((mobileGraceHostSnapshot) => {
+                  const isStillHostAbsent = mobileGraceHostSnapshot.val() === false;
+                  
+                  if (isStillHostAbsent) {
+                    console.log('📱 Host still absent after extended mobile grace period - showing HostLeftModal');
+                    chatState.setShowHostLeftModal(true);
+                  } else {
+                    console.log('📱 Host reconnected during extended mobile grace period - not showing HostLeftModal');
+                  }
+                }).catch(error => {
+                  console.error('Error in extended mobile grace period host check:', error);
+                });
+              }, 60000); // 60 seconds for mobile
+              
+              return; // Don't show the modal immediately for mobile payment users
+            }
+          }
+          
+          // CRITICAL: Check if current user just returned from payment and might be the host
+          const currentUserJustReturnedFromPayment = () => {
+            // Check if current page was accessed from payment result page
+            const referrer = document.referrer;
+            const isFromPaymentResult = referrer.includes('/newpayment/result') || referrer.includes('/payment/result');
+            
+            // Check if user has payment-related session storage
+            const hasPaymentData = sessionStorage.getItem('newRoomId') || 
+                                  sessionStorage.getItem('newPaymentId') ||
+                                  localStorage.getItem('mobilePaymentDebugLogs');
+            
+            console.log('📱 Current user payment return check:', {
+              isFromPaymentResult,
+              hasPaymentData: !!hasPaymentData,
+              referrer: referrer.substring(0, 100),
+              currentUsername: chatState.username
+            });
+            
+            return isFromPaymentResult || hasPaymentData;
+          };
+          
+          if (currentUserJustReturnedFromPayment()) {
+            console.log('📱 CRITICAL: Current user just returned from payment, preventing HostLeftModal for 2 minutes');
+            
+            // Extended grace period for users returning from payment
+            setTimeout(() => {
+              console.log('📱 Payment return grace period ended, final host presence check');
+              get(hostPresenceRef).then((finalHostSnapshot) => {
+                const isStillHostAbsent = finalHostSnapshot.val() === false;
+                
+                if (isStillHostAbsent) {
+                  console.log('📱 Host still absent after payment return grace period - showing HostLeftModal');
+                  chatState.setShowHostLeftModal(true);
+                } else {
+                  console.log('📱 Host reconnected after payment return - not showing HostLeftModal');
+                }
+              }).catch(error => {
+                console.error('Error in payment return grace period host check:', error);
+              });
+            }, 120000); // 2 minutes for payment return users
+            
+            return; // Don't show the modal immediately for users returning from payment
+          }
+          
         } catch (error) {
           console.error('Error checking payment status:', error);
         }
         
-        console.log('📱 Host has left the room, showing HostLeftModal');
+        console.log('📱 No payment exceptions found, showing HostLeftModal');
         chatState.setShowHostLeftModal(true);
       }
     });
