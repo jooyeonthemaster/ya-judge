@@ -85,7 +85,7 @@ export async function initializePayment(
       email: customer.email,
       phoneNumber: customer.phone,
     },
-    redirectUrl: window.location.origin + '/payment/result',
+    redirectUrl: window.location.origin + '/newpayment/result',
   };
 
   console.log('=== PAYMENT INITIALIZATION ===');

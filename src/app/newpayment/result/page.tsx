@@ -28,10 +28,25 @@ export default function NewPaymentResultPage() {
   const [loading, setLoading] = useState(true);
   const [localError, setLocalError] = useState<ErrorInfo | null>(null);
 
+  // Mobile debugging helper function
+  function logMobilePaymentDebug(message: string, data?: any) {
+    const timestamp = new Date().toISOString();
+    console.log(`[MOBILE-DEBUG ${timestamp}] ${message}`, data);
+    
+    // Save to localStorage for persistent mobile debugging
+    try {
+      const logs = JSON.parse(localStorage.getItem('mobilePaymentDebugLogs') || '[]');
+      logs.push({ timestamp, message, data });
+      localStorage.setItem('mobilePaymentDebugLogs', JSON.stringify(logs.slice(-10))); // Keep last 10 logs
+    } catch (e) {
+      console.warn('Failed to save debug logs:', e);
+    }
+  }
+
   useEffect(() => {
     async function handlePaymentResult() {
       try {
-        console.log('=== NEW PAYMENT RESULT PAGE LOADED ===');
+        logMobilePaymentDebug('NEW PAYMENT RESULT PAGE LOADED');
 
         // Get URL parameters first
         const urlParams = new URLSearchParams(window.location.search);
@@ -44,18 +59,17 @@ export default function NewPaymentResultPage() {
         const newOrderData = sessionStorage.getItem('newOrderData');
         const newRoomId = sessionStorage.getItem('newRoomId');
         
-        console.log('URL Params:', { urlPaymentId, transactionType, txId });
-        console.log('Session Storage:', { 
+        logMobilePaymentDebug('URL Params', { urlPaymentId, transactionType, txId });
+        logMobilePaymentDebug('Session Storage', { 
           hasNewPaymentId: !!newPaymentId, 
           hasNewOrderData: !!newOrderData,
           hasNewRoomId: !!newRoomId
         });
-        console.log('Existing Payment Result:', !!paymentResult);
-        console.log('=======================================');
+        logMobilePaymentDebug('Existing Payment Result', !!paymentResult);
         
         // If we already have a payment result, show it
         if (hasResult && paymentResult) {
-          console.log('Payment result already exists, displaying...');
+          logMobilePaymentDebug('Payment result already exists, displaying...');
           setLoading(false);
           return;
         }
