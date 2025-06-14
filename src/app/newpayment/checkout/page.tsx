@@ -202,8 +202,9 @@ export default function NewCheckoutPage() {
         console.log('Order Name:', formData.orderName);
         console.log('===================================');
         
-        // Redirect to result page instead of showing alert and going to room
-        router.push('/newpayment/result');
+        // Redirect to result page with room ID as backup parameter
+        const redirectUrl = roomId ? `/newpayment/result?roomId=${roomId}` : '/newpayment/result';
+        router.push(redirectUrl);
       } else {
         // Payment verification failed
         const errorMessage = verificationResult.message || 'Payment verification failed';

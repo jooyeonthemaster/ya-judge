@@ -467,6 +467,19 @@ export default function ChatRoomStatus({
     if (roomId) setRoomId(roomId);
     if (currentUsername) setUserName(currentUsername);
     
+    // CRITICAL: Store room ID in sessionStorage for mobile payment flow
+    if (roomId) {
+      sessionStorage.setItem('newRoomId', roomId);
+      sessionStorage.setItem('roomId', roomId); // Backup storage
+      sessionStorage.setItem('username', currentUsername);
+      sessionStorage.setItem('currentUsername', currentUsername);
+      console.log(`🔒 Stored room ID and username in sessionStorage for mobile payment:`, {
+        roomId,
+        username: currentUsername,
+        sessionStorageKeys: Object.keys(sessionStorage)
+      });
+    }
+    
     // Close modal
     setShowPaymentConfirmModal(false);
     

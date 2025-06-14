@@ -64,6 +64,7 @@ export default function NewPaymentResultPage() {
                               sessionStorage.getItem('roomId') ||
                               localStorage.getItem('roomId') ||
                               urlParams.get('roomId') ||
+                              urlParams.get('room') ||
                               document.referrer.match(/\/room\/([^\/\?]+)/)?.[1];
         
         logMobilePaymentDebug('URL Params', { urlPaymentId, transactionType, txId });
@@ -77,6 +78,7 @@ export default function NewPaymentResultPage() {
           sessionRoomId: sessionStorage.getItem('roomId'),
           localRoomId: localStorage.getItem('roomId'),
           urlRoomId: urlParams.get('roomId'),
+          urlRoom: urlParams.get('room'),
           referrerRoomId: document.referrer.match(/\/room\/([^\/\?]+)/)?.[1],
           detectedRoomId
         });
@@ -461,6 +463,22 @@ export default function NewPaymentResultPage() {
             <p className="text-xs text-green-600 text-center mt-1">
               아래 버튼을 눌러 채팅방으로 돌아가세요
             </p>
+            {/* Room ID Debug Info */}
+            {(() => {
+              const detectedRoomId = roomId || 
+                                   sessionStorage.getItem('newRoomId') || 
+                                   sessionStorage.getItem('roomId') ||
+                                   localStorage.getItem('roomId');
+              return detectedRoomId ? (
+                <p className="text-xs text-green-500 text-center mt-2 font-mono">
+                  🏠 방 ID: {detectedRoomId}
+                </p>
+              ) : (
+                <p className="text-xs text-red-500 text-center mt-2">
+                  ⚠️ 방 ID를 찾을 수 없습니다
+                </p>
+              );
+            })()}
           </div>
           
           {/* Order Name */}
@@ -588,11 +606,25 @@ export default function NewPaymentResultPage() {
                                      sessionStorage.getItem('roomId') ||
                                      localStorage.getItem('roomId');
                   
-                  logMobilePaymentDebug('Appeal button clicked', { targetRoomId });
+                  logMobilePaymentDebug('Appeal button clicked - DETAILED DEBUG', { 
+                    targetRoomId,
+                    roomId,
+                    sessionNewRoomId: sessionStorage.getItem('newRoomId'),
+                    sessionRoomId: sessionStorage.getItem('roomId'),
+                    localRoomId: localStorage.getItem('roomId'),
+                    allSessionKeys: Object.keys(sessionStorage),
+                    allLocalKeys: Object.keys(localStorage),
+                    currentUrl: window.location.href,
+                    referrer: document.referrer
+                  });
                   
                   if (targetRoomId) {
+                    logMobilePaymentDebug('Appeal: Navigating to room', { targetRoomId });
                     router.push(`/room/${targetRoomId}`);
                   } else {
+                    logMobilePaymentDebug('Appeal: No room ID found - redirecting to home', {
+                      reason: 'No room ID available from any source'
+                    });
                     router.push('/');
                   }
                 }}
