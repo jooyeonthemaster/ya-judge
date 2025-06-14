@@ -161,6 +161,41 @@ export default function NewPaymentResultPage() {
                           await set(userRef, { username: storedUsername }); // Clean user data
                           logMobilePaymentDebug('URL-based: Successfully restored user to normal state', { userId, username: storedUsername });
                         }
+                        
+                        // CRITICAL: Check if this user is the host and restore host presence
+                        const hostRef = ref(database, `rooms/${mobileRoomId}/host`);
+                        const hostSnapshot = await get(hostRef);
+                        
+                        if (hostSnapshot.exists()) {
+                          const hostUserId = hostSnapshot.val();
+                          
+                          // Find if the current user is the host
+                          const currentUserEntry = Object.entries(users).find(([userId, user]: [string, any]) => 
+                            (user.username || user) === storedUsername
+                          );
+                          
+                          if (currentUserEntry && currentUserEntry[0] === hostUserId) {
+                            // This user is the host - restore host presence
+                            const hostPresenceRef = ref(database, `rooms/${mobileRoomId}/hostPresence`);
+                            await set(hostPresenceRef, true);
+                            logMobilePaymentDebug('URL-based: HOST PRESENCE RESTORED: User is host, restored host presence', { 
+                              username: storedUsername, 
+                              userId: currentUserEntry[0],
+                              hostUserId 
+                            });
+                          } else {
+                            logMobilePaymentDebug('URL-based: User is not host, no host presence restoration needed', { 
+                              username: storedUsername,
+                              userUserId: currentUserEntry?.[0],
+                              hostUserId 
+                            });
+                          }
+                        }
+                        
+                        // Clear ispaying status to allow other users to pay
+                        const isPayingRef = ref(database, `rooms/${mobileRoomId}/ispaying`);
+                        await set(isPayingRef, null);
+                        logMobilePaymentDebug('URL-based: Cleared ispaying status', { roomId: mobileRoomId });
                       }
                     }
                   }
@@ -279,6 +314,41 @@ export default function NewPaymentResultPage() {
                         await set(userRef, { username: storedUsername }); // Clean user data
                         logMobilePaymentDebug('Successfully restored user to normal state', { userId, username: storedUsername });
                       }
+                      
+                      // CRITICAL: Check if this user is the host and restore host presence
+                      const hostRef = ref(database, `rooms/${newRoomId}/host`);
+                      const hostSnapshot = await get(hostRef);
+                      
+                      if (hostSnapshot.exists()) {
+                        const hostUserId = hostSnapshot.val();
+                        
+                        // Find if the current user is the host
+                        const currentUserEntry = Object.entries(users).find(([userId, user]: [string, any]) => 
+                          (user.username || user) === storedUsername
+                        );
+                        
+                        if (currentUserEntry && currentUserEntry[0] === hostUserId) {
+                          // This user is the host - restore host presence
+                          const hostPresenceRef = ref(database, `rooms/${newRoomId}/hostPresence`);
+                          await set(hostPresenceRef, true);
+                          logMobilePaymentDebug('HOST PRESENCE RESTORED: User is host, restored host presence', { 
+                            username: storedUsername, 
+                            userId: currentUserEntry[0],
+                            hostUserId 
+                          });
+                        } else {
+                          logMobilePaymentDebug('User is not host, no host presence restoration needed', { 
+                            username: storedUsername,
+                            userUserId: currentUserEntry?.[0],
+                            hostUserId 
+                          });
+                        }
+                      }
+                      
+                      // Clear ispaying status to allow other users to pay
+                      const isPayingRef = ref(database, `rooms/${newRoomId}/ispaying`);
+                      await set(isPayingRef, null);
+                      logMobilePaymentDebug('Session-based: Cleared ispaying status', { roomId: newRoomId });
                     }
                   }
                 }

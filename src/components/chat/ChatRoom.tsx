@@ -378,27 +378,27 @@ export default function ChatRoom({
     const hostPresenceListener = onValue(hostPresenceRef, async (snapshot) => {
       const isHostPresent = snapshot.val();
       
-             // Handle host returning from payment
-       if (isHostPresent === true && !chatState.isRoomHost) {
-         // Check if there was a previous system message about mobile payment
-         // to determine if we should show a "host returned" message
-         const currentMessages = useChatStore.getState().messages;
-         const recentMessages = currentMessages.slice(-5); // Check last 5 messages
-         const hasMobilePaymentMessage = recentMessages.some((msg: any) => 
-           msg.user === 'system' && 
-           msg.text.includes('호스트가 모바일 결제를 진행 중입니다')
-         );
-         
-         if (hasMobilePaymentMessage) {
-           console.log('📱 Host returned from mobile payment');
-           addMessage({
-             user: 'system',
-             name: '시스템',
-             text: '✅ 호스트가 결제를 완료하고 돌아왔습니다.',
-             roomId: roomId || ''
-           });
-         }
-       }
+      // Handle host returning from payment
+      if (isHostPresent === true && !chatState.isRoomHost) {
+        // Check if there was a previous system message about mobile payment
+        // to determine if we should show a "host returned" message
+        const currentMessages = useChatStore.getState().messages;
+        const recentMessages = currentMessages.slice(-5); // Check last 5 messages
+        const hasMobilePaymentMessage = recentMessages.some((msg: any) => 
+          msg.user === 'system' && 
+          msg.text.includes('호스트가 모바일 결제를 진행 중입니다')
+        );
+        
+        if (hasMobilePaymentMessage) {
+          console.log('📱 Host returned from mobile payment');
+          addMessage({
+            user: 'system',
+            name: '시스템',
+            text: '✅ 호스트가 결제를 완료하고 돌아왔습니다.',
+            roomId: roomId || ''
+          });
+        }
+      }
       
       if (isHostPresent === false && !chatState.isRoomHost) {
         // Check if host is currently in payment (mobile exception)
@@ -461,6 +461,40 @@ export default function ChatRoom({
               return; // Don't show the modal if host is paying
             }
           }
+          
+          // Additional check: Look for recent payment completion messages
+          // This prevents showing HostLeftModal when user just returned from mobile payment
+          const currentMessages = useChatStore.getState().messages;
+          const recentMessages = currentMessages.slice(-10); // Check last 10 messages
+          const hasRecentPaymentCompletion = recentMessages.some((msg: any) => 
+            msg.user === 'system' && 
+            (msg.text.includes('결제를 완료하고 돌아왔습니다') ||
+             msg.text.includes('항소권을 구매하고 재판 준비가 완료되었습니다'))
+          );
+          
+          if (hasRecentPaymentCompletion) {
+            console.log('📱 Mobile Payment Return Grace Period: Recent payment completion detected, delaying HostLeftModal check');
+            
+            // Give a 30-second grace period for the user to fully reconnect
+            setTimeout(() => {
+              console.log('📱 Grace period ended, re-checking host presence');
+              get(hostPresenceRef).then((graceHostSnapshot) => {
+                const isStillHostAbsent = graceHostSnapshot.val() === false;
+                
+                if (isStillHostAbsent) {
+                  console.log('📱 Host still absent after grace period - showing HostLeftModal');
+                  chatState.setShowHostLeftModal(true);
+                } else {
+                  console.log('📱 Host reconnected during grace period - not showing HostLeftModal');
+                }
+              }).catch(error => {
+                console.error('Error in grace period host check:', error);
+              });
+            }, 30000); // 30 seconds grace period
+            
+            return; // Don't show the modal immediately if recent payment completion
+          }
+          
         } catch (error) {
           console.error('Error checking payment status:', error);
         }
