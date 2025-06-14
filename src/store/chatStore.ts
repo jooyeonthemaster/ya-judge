@@ -280,8 +280,14 @@ export const useChatStore = create<ChatState>((set, get) => {
             .then(() => console.log('User added to room'))
             .catch(err => console.error('Failed to add user to room:', err));
           
-          // 연결 종료시 사용자 제거
-          onDisconnect(userRef).remove();
+          // 연결 종료시 사용자 제거 (결제 중 예외 처리)
+          // 대신 사용자를 "결제 중" 상태로 마킹
+          const disconnectHandler = onDisconnect(userRef);
+          disconnectHandler.set({
+            username,
+            inPayment: true, // 결제 중 플래그
+            disconnectedAt: new Date().toISOString()
+          });
           
         }, { onlyOnce: true });
         
@@ -337,14 +343,16 @@ export const useChatStore = create<ChatState>((set, get) => {
           }
         });
         
-        // 사용자 목록 구독
+        // 사용자 목록 구독 (결제 중 사용자 처리 포함)
         onValue(roomUsersRef, (snapshot) => {
           const data = snapshot.val();
           if (data) {
             const usersArray = Object.entries(data)
               .map(([id, user]: [string, any]) => ({
                 id,
-                username: user.username
+                username: user.username || user, // user might be string or object
+                inPayment: user.inPayment || false,
+                disconnectedAt: user.disconnectedAt || null
               }))
               // 시스템 계정 제외 및 중복 사용자 제거
               .filter(user => {
@@ -352,10 +360,29 @@ export const useChatStore = create<ChatState>((set, get) => {
                 return user.username !== 'System' && 
                        !user.username.includes('System') &&
                        user.username.trim() !== '';
+              })
+              // 결제 중인 사용자도 포함 (5분 타임아웃 적용)
+              .filter(user => {
+                if (user.inPayment && user.disconnectedAt) {
+                  const disconnectTime = new Date(user.disconnectedAt).getTime();
+                  const now = new Date().getTime();
+                  const timeDiff = now - disconnectTime;
+                  const fiveMinutes = 5 * 60 * 1000;
+                  
+                  // 5분 이상 결제 중이면 제외
+                  if (timeDiff > fiveMinutes) {
+                    console.log(`💳 User ${user.username} removed from room - payment timeout (${Math.round(timeDiff / 1000 / 60)} minutes)`);
+                    return false;
+                  }
+                  
+                  console.log(`💳 User ${user.username} still in payment (${Math.round(timeDiff / 1000 / 60)} minutes)`);
+                  return true; // 결제 중인 사용자는 유지
+                }
+                return true; // 일반 사용자는 유지
               });
             
-            console.log(`Room users updated: ${usersArray.length} actual users`);
-            set({ roomUsers: usersArray });
+            console.log(`Room users updated: ${usersArray.length} actual users (including payment users)`);
+            set({ roomUsers: usersArray.map(user => ({ id: user.id, username: user.username })) });
           } else {
             set({ roomUsers: [] });
           }

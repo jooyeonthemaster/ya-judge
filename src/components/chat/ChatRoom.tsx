@@ -374,11 +374,98 @@ export default function ChatRoom({
       }
     });
 
-    // Host presence listener
-    const hostPresenceListener = onValue(hostPresenceRef, (snapshot) => {
+    // Host presence listener with mobile payment exception
+    const hostPresenceListener = onValue(hostPresenceRef, async (snapshot) => {
       const isHostPresent = snapshot.val();
       
+             // Handle host returning from payment
+       if (isHostPresent === true && !chatState.isRoomHost) {
+         // Check if there was a previous system message about mobile payment
+         // to determine if we should show a "host returned" message
+         const currentMessages = useChatStore.getState().messages;
+         const recentMessages = currentMessages.slice(-5); // Check last 5 messages
+         const hasMobilePaymentMessage = recentMessages.some((msg: any) => 
+           msg.user === 'system' && 
+           msg.text.includes('호스트가 모바일 결제를 진행 중입니다')
+         );
+         
+         if (hasMobilePaymentMessage) {
+           console.log('📱 Host returned from mobile payment');
+           addMessage({
+             user: 'system',
+             name: '시스템',
+             text: '✅ 호스트가 결제를 완료하고 돌아왔습니다.',
+             roomId: roomId || ''
+           });
+         }
+       }
+      
       if (isHostPresent === false && !chatState.isRoomHost) {
+        // Check if host is currently in payment (mobile exception)
+        // Don't show HostLeftModal if host is paying on mobile
+        if (!database) {
+          chatState.setShowHostLeftModal(true);
+          return;
+        }
+        
+        try {
+          const isPayingRef = ref(database, `rooms/${roomId}/ispaying`);
+          const isPayingSnapshot = await get(isPayingRef);
+          
+          if (isPayingSnapshot.exists()) {
+            const paymentData = isPayingSnapshot.val();
+            const isHostPaying = paymentData && paymentData.status === true;
+            
+            console.log('📱 Host presence check - Host is paying:', isHostPaying);
+            console.log('📱 Payment data:', paymentData);
+            
+            if (isHostPaying) {
+              console.log('📱 Mobile Payment Exception: Host is in payment process, not showing HostLeftModal');
+              
+              // Add system message to inform other users that host is in payment
+              addMessage({
+                user: 'system',
+                name: '시스템',
+                text: '📱 호스트가 모바일 결제를 진행 중입니다. 잠시만 기다려 주세요.',
+                roomId: roomId || ''
+              });
+              
+              // Set a timeout to show the modal after 10 minutes of payment activity
+              // This prevents users from waiting indefinitely if something goes wrong
+              setTimeout(() => {
+                console.log('📱 Payment timeout reached (10 minutes), checking host presence again');
+                // Re-check if host is still paying and host presence is still false
+                get(isPayingRef).then((timeoutPaymentSnapshot) => {
+                  const timeoutPaymentData = timeoutPaymentSnapshot.exists() ? timeoutPaymentSnapshot.val() : null;
+                  const isStillPaying = timeoutPaymentData && timeoutPaymentData.status === true;
+                  
+                  get(hostPresenceRef).then((timeoutHostSnapshot) => {
+                    const isStillHostPresent = timeoutHostSnapshot.val();
+                    
+                    if (!isStillHostPresent && isStillPaying) {
+                      console.log('📱 Host still absent and payment still active after 10 minutes - showing HostLeftModal');
+                      addMessage({
+                        user: 'system',
+                        name: '시스템',
+                        text: '⚠️ 호스트의 결제가 너무 오래 걸리고 있습니다. 호스트가 퇴장한 것으로 간주됩니다.',
+                        roomId: roomId || ''
+                      });
+                      chatState.setShowHostLeftModal(true);
+                    }
+                  });
+                }).catch(error => {
+                  console.error('Error in payment timeout check:', error);
+                });
+              }, 10 * 60 * 1000); // 10 minutes
+              
+              return; // Don't show the modal if host is paying
+            }
+          }
+        } catch (error) {
+          console.error('Error checking payment status:', error);
+        }
+        
+        console.log('📱 Host has left the room, showing HostLeftModal');
         chatState.setShowHostLeftModal(true);
       }
     });

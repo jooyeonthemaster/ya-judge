@@ -401,11 +401,31 @@ export default function ChatRoomStatus({
         const paymentData = {
           status: true,
           user: currentUsername,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          isHost: isRoomHost // Track if the paying user is host
         };
         console.log(`🔒 Payment data to set: ${JSON.stringify(paymentData)}`);
         
         await set(isPayingRef, paymentData);
+        
+        // Add system message to inform other users about payment (for non-host users)
+        // Host payment messages are handled in ChatRoom.tsx host presence listener
+        if (!isRoomHost) {
+          try {
+            const { useChatStore } = await import('@/store/chatStore');
+            const { addMessage } = useChatStore.getState();
+            
+            addMessage({
+              user: 'system',
+              name: '시스템',
+              text: `📱 ${currentUsername}님이 모바일 결제를 진행 중입니다. 잠시만 기다려 주세요.`,
+              roomId: roomId
+            });
+            console.log(`📱 Added system message for non-host ${currentUsername} payment`);
+          } catch (error) {
+            console.error('Error adding payment system message:', error);
+          }
+        }
         
         // Also store in session storage immediately for this user
         setSessionStoragePaymentState(true, currentUsername);

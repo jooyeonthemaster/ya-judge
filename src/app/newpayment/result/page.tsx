@@ -177,6 +177,43 @@ export default function NewPaymentResultPage() {
               console.log('Status:', paymentData.paymentStatus);
               console.log('====================================');
               
+              // Clear payment flags and restore user to normal state
+              try {
+                const { database } = await import('@/lib/firebase');
+                const { ref, set, get } = await import('firebase/database');
+                
+                if (database && newRoomId) {
+                  // Get current user from session storage if available
+                  const storedUsername = sessionStorage.getItem('username') || 
+                                       sessionStorage.getItem('currentUsername') ||
+                                       localStorage.getItem('username');
+                  
+                  if (storedUsername) {
+                    logMobilePaymentDebug('Cleaning up payment flags for user', { username: storedUsername, roomId: newRoomId });
+                    
+                    // Find user in room users and restore to normal state
+                    const roomUsersRef = ref(database, `rooms/${newRoomId}/users`);
+                    const usersSnapshot = await get(roomUsersRef);
+                    
+                    if (usersSnapshot.exists()) {
+                      const users = usersSnapshot.val();
+                      const userEntry = Object.entries(users).find(([_, user]: [string, any]) => 
+                        (user.username || user) === storedUsername
+                      );
+                      
+                      if (userEntry) {
+                        const [userId] = userEntry;
+                        const userRef = ref(database, `rooms/${newRoomId}/users/${userId}`);
+                        await set(userRef, { username: storedUsername }); // Clean user data
+                        logMobilePaymentDebug('Successfully restored user to normal state', { userId, username: storedUsername });
+                      }
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error('Error cleaning up payment flags:', error);
+              }
+              
               // Auto-redirect to chat room if we have room ID
               if (newRoomId) {
                 setTimeout(() => {
