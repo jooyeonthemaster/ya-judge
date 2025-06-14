@@ -9,7 +9,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { usePaymentStore } from '@/app/store/paymentStore';
+import { useNewPaymentStore } from '@/app/store/newPaymentStore';
 import { ref, set, get, remove } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import { useState, useEffect, useMemo } from 'react';
@@ -75,7 +75,7 @@ export default function ChatRoomStatus({
   onRequestRetrial
 }: ChatRoomStatusProps) {
   const router = useRouter();
-  const { setRoomId, setUserName } = usePaymentStore();
+  const { setRoomId, setUserName } = useNewPaymentStore();
   const [isPaying, setIsPaying] = useState(false);
   const [payingUser, setPayingUser] = useState<string | null>(null);
   const [showPaymentConfirmModal, setShowPaymentConfirmModal] = useState(false);
@@ -450,9 +450,9 @@ export default function ChatRoomStatus({
     // Close modal
     setShowPaymentConfirmModal(false);
     
-    console.log('🚀 Redirecting to payment checkout');
-    // Redirect to payment checkout
-    router.push('/payment/checkout');
+    console.log('🚀 Redirecting to newpayment checkout');
+    // Redirect to newpayment checkout
+    router.push('/newpayment/checkout');
   };
 
   // Handle payment cancellation
@@ -502,7 +502,8 @@ export default function ChatRoomStatus({
   
   // Check if current user can request retrial (must have bought appeal rights)
   const canRequestRetrial = (): boolean => {
-    return paidUsers[currentUsername] === true;
+    // Check if the user has purchased (paid) AND host is not currently viewing CourtReadyModal
+    return paidUsers[currentUsername] === true && !isHostViewingCourtReadyModal;
   };
   
   // 유틸리티 함수들

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import { v4 as uuidv4 } from 'uuid';
 import { useParams } from 'next/navigation';
@@ -24,7 +24,7 @@ import InstantVerdictModal from './modals/InstantVerdictModal';
 import { useCourtTimer } from '@/hooks/useCourtTimer';
 import { useChatRoomState } from '@/hooks/useChatRoomState';
 import { useRealTimeAnalysis } from '@/hooks/useRealTimeAnalysis';
-import { usePaymentStore } from '@/app/store/paymentStore';
+import { useNewPaymentStore } from '@/app/store/newPaymentStore';
 
 // Firebase utilities
 import { ref, onValue, set, remove, off, get, onDisconnect } from 'firebase/database';
@@ -98,7 +98,10 @@ export default function ChatRoom({
   } = useChatStore();
 
   // Payment store for auto-ready after payment
-  const { paymentCompleted, clearPaymentCompleted } = usePaymentStore();
+  const { isPaymentCompleted: paymentCompleted, setPaymentCompleted } = useNewPaymentStore();
+  
+  // Helper function to clear payment completed (equivalent to old clearPaymentCompleted)
+  const clearPaymentCompleted = useCallback(() => setPaymentCompleted(false), [setPaymentCompleted]);
   
   // Local state for tracking paid users from Firebase
   const [paidUsers, setPaidUsers] = useState<Record<string, boolean>>({});
@@ -448,7 +451,7 @@ export default function ChatRoom({
       console.log('🧹 즉시 판결 리스너 정리');
       off(instantVerdictRef, 'value', instantVerdictUnsubscribe);
     };
-  }, [roomId, database, checkInstantVerdictConsensus, paidUsers]);
+  }, [roomId, database, paidUsers]);
 
   // Firebase CourtReadyModal 상태 실시간 리스너
   useEffect(() => {
@@ -606,7 +609,7 @@ export default function ChatRoom({
       console.log('🧹 재심 리스너 정리');
       off(retrialRef, 'value', retrialUnsubscribe);
     };
-  }, [roomId, database, roomUsers, chatState.isRoomHost, addMessage, paidUsers]);
+  }, [roomId, database, roomUsers, chatState.isRoomHost, paidUsers]);
 
   // Firebase 결제 사용자 상태 실시간 리스너
   useEffect(() => {
@@ -708,8 +711,7 @@ export default function ChatRoom({
     chatState.currentUserId,
     chatState.postVerdictReadyUsers,
     timerState.finalVerdictTriggered,
-    clearPaymentCompleted,
-    addMessage
+    clearPaymentCompleted
   ]);
 
   // Message sending

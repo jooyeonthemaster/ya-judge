@@ -202,14 +202,8 @@ export default function NewCheckoutPage() {
         console.log('Order Name:', formData.orderName);
         console.log('===================================');
         
-        alert('결제가 완료되었습니다! 채팅방으로 돌아갑니다.');
-        
-        // Redirect back to chat room or result page
-        if (roomId) {
-          router.push(`/room/${roomId}`);
-        } else {
-          router.push('/newpayment/result');
-        }
+        // Redirect to result page instead of showing alert and going to room
+        router.push('/newpayment/result');
       } else {
         // Payment verification failed
         const errorMessage = verificationResult.message || 'Payment verification failed';

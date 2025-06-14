@@ -424,10 +424,17 @@ export default function NewPaymentResultPage() {
             {/* Alternative Actions */}
             <div className="flex space-x-2">
               <button 
-                onClick={() => router.push('/newpayment/test')}
+                onClick={() => {
+                  const targetRoomId = roomId || sessionStorage.getItem('newRoomId');
+                  if (targetRoomId) {
+                    router.push(`/room/${targetRoomId}`);
+                  } else {
+                    router.push('/');
+                  }
+                }}
                 className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm transition-colors"
               >
-                테스트 페이지
+                항소하러가기
               </button>
               <button 
                 onClick={() => router.push('/')}

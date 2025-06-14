@@ -424,6 +424,19 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
       
       try {
+        // 중복 메시지 체크 (특히 시스템 메시지의 경우)
+        const currentState = get();
+        const lastMessage = currentState.messages[currentState.messages.length - 1];
+        
+        // 마지막 메시지와 동일한 텍스트인지 확인 (시스템 메시지에 대해서만)
+        if (lastMessage && 
+            message.user === 'system' && 
+            lastMessage.user === 'system' && 
+            lastMessage.text === message.text) {
+          console.log('중복 시스템 메시지 감지됨, 추가하지 않음:', message.text);
+          return;
+        }
+        
         // 먼저 message에서 필요한 값을 추출
         const { relatedIssue, ...restMessage } = message;
         
