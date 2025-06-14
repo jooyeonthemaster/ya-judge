@@ -79,8 +79,8 @@ export default function NewPaymentResultPage() {
             if (verificationResult.status === 'success' && verificationResult.payment) {
               const paymentData = verificationResult.payment;
               
-              // Log completion instead of external API call
-              logPaymentCompletion(paymentData);
+              // Save completion to Firebase instead of external API call
+              await logPaymentCompletion(paymentData);
               
               // Update store with successful payment
               setPaymentResult(paymentData);
@@ -150,8 +150,8 @@ export default function NewPaymentResultPage() {
                 'SUCCESS'
               );
               
-              // Log completion instead of external API call
-              logPaymentCompletion(paymentData);
+              // Save completion to Firebase instead of external API call
+              await logPaymentCompletion(paymentData);
               
               // Update store with successful payment
               setPaymentResult(paymentData);

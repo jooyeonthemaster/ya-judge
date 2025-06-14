@@ -171,8 +171,8 @@ export default function NewCheckoutPage() {
         // Create payment result
         const paymentResult = createPaymentResult(paymentId, customer, payment, 'SUCCESS');
 
-        // Log completion instead of external API call
-        logPaymentCompletion(paymentResult);
+        // Save completion to Firebase instead of external API call
+        await logPaymentCompletion(paymentResult);
         
         // Clear Firebase ispaying status but preserve session storage for user return
         if (roomId) {

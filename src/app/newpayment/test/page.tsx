@@ -148,9 +148,9 @@ export default function NewPaymentTestPage() {
       });
 
       if (verificationResult.status === 'success') {
-        // Create and log payment result
+        // Create and save payment result
         const paymentResult = createPaymentResult(mockPaymentId, customer, payment, 'SUCCESS');
-        logPaymentCompletion(paymentResult);
+        await logPaymentCompletion(paymentResult);
         
         // Update store
         setPaymentResult(paymentResult);

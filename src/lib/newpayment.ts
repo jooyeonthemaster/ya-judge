@@ -173,27 +173,68 @@ export async function verifyPayment(
 }
 
 /**
- * Log payment completion instead of external API call
+ * Save payment completion to Firebase instead of external API call
  * This replaces the external API recording functionality
  */
-export function logPaymentCompletion(
+export async function logPaymentCompletion(
   paymentResult: PaymentResult
-): void {
-  console.log('=== PAYMENT COMPLETION LOGGED ===');
-  console.log('Payment ID:', paymentResult.paymentId);
-  console.log('Amount:', paymentResult.amount);
-  console.log('Order Name:', paymentResult.orderName);
-  console.log('Customer Name:', paymentResult.customerName);
-  console.log('Customer Email:', paymentResult.customerEmail);
-  console.log('Customer Phone:', paymentResult.customerPhone);
-  console.log('Payment Status:', paymentResult.paymentStatus);
-  console.log('Payment Method:', paymentResult.paymentMethod);
-  console.log('Timestamp:', paymentResult.timestamp);
-  console.log('Mobile Browser:', isMobileBrowser());
-  console.log('===============================');
-  
-  // In a real application, you would save this to a database
-  // For now, we're just logging as requested
+): Promise<void> {
+  try {
+    // Import Firebase functions
+    const { database } = await import('./firebase');
+    const { ref, set } = await import('firebase/database');
+    
+    if (!database) {
+      console.error('Firebase database not initialized');
+      return;
+    }
+
+    // Create payment date for the path (YYYY-MM-DD format)
+    const paymentDate = new Date(paymentResult.timestamp).toISOString().split('T')[0];
+    
+    // Create the Firebase path: /payment/{paymentdate}/{paymentId}
+    const paymentPath = `payment/${paymentDate}/${paymentResult.paymentId}`;
+    const paymentRef = ref(database, paymentPath);
+    
+    // Prepare payment data to save
+    const paymentData = {
+      ...paymentResult,
+      savedAt: new Date().toISOString(),
+      browser: {
+        isMobile: isMobileBrowser(),
+        userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'server'
+      }
+    };
+    
+    // Save to Firebase
+    await set(paymentRef, paymentData);
+    
+    console.log('=== PAYMENT SAVED TO FIREBASE ===');
+    console.log('Firebase Path:', paymentPath);
+    console.log('Payment ID:', paymentResult.paymentId);
+    console.log('Amount:', paymentResult.amount);
+    console.log('Customer Name:', paymentResult.customerName);
+    console.log('Payment Status:', paymentResult.paymentStatus);
+    console.log('Timestamp:', paymentResult.timestamp);
+    console.log('===============================');
+    
+  } catch (error) {
+    console.error('Error saving payment to Firebase:', error);
+    
+    // Fallback to logging if Firebase save fails
+    console.log('=== PAYMENT COMPLETION (FALLBACK LOG) ===');
+    console.log('Payment ID:', paymentResult.paymentId);
+    console.log('Amount:', paymentResult.amount);
+    console.log('Order Name:', paymentResult.orderName);
+    console.log('Customer Name:', paymentResult.customerName);
+    console.log('Customer Email:', paymentResult.customerEmail);
+    console.log('Customer Phone:', paymentResult.customerPhone);
+    console.log('Payment Status:', paymentResult.paymentStatus);
+    console.log('Payment Method:', paymentResult.paymentMethod);
+    console.log('Timestamp:', paymentResult.timestamp);
+    console.log('Mobile Browser:', isMobileBrowser());
+    console.log('=======================================');
+  }
 }
 
 /**

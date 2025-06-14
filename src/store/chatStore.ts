@@ -23,7 +23,7 @@ const MESSAGES_BEFORE_FIRST_INTERVENTION = 4; // 첫 개입 전 필요한 최소
 
 // 패턴 기반 개입 감지를 위한 상수
 const INTERVENTION_PATTERNS = {
-  AGGRESSIVE: /씨발|시발|ㅅㅂ|ㅆㅂ|개새끼|ㄱㅐㅅㅐㄲㅣ|병신|ㅂㅅ|미친|ㅁㅊ|존나|ㅈㄴ|지랄/i,
+  AGGRESSIVE: /씨발|시발|ㅅㅂ|ㅆㅂ|개새끼|ㄱㅐㅅㅐㄲㅣ|병신|ㅂㅅ|미친|ㅁㅊ|존나|ㅈㄴ|지랄|애미|ㅇㅁ|ㅇㅂ/i,
   OFF_TOPIC: /날씨|점심|주식|게임/,
   INVALID_LOGIC: /무조건|항상|절대|모든/,
   EVIDENCE_NEEDED: /증거|증명|팩트|자료/
