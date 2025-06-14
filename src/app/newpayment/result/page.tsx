@@ -59,14 +59,35 @@ export default function NewPaymentResultPage() {
         const newOrderData = sessionStorage.getItem('newOrderData');
         const newRoomId = sessionStorage.getItem('newRoomId');
         
+        // Enhanced room ID detection from multiple sources
+        const detectedRoomId = newRoomId || 
+                              sessionStorage.getItem('roomId') ||
+                              localStorage.getItem('roomId') ||
+                              urlParams.get('roomId') ||
+                              document.referrer.match(/\/room\/([^\/\?]+)/)?.[1];
+        
         logMobilePaymentDebug('URL Params', { urlPaymentId, transactionType, txId });
         logMobilePaymentDebug('Session Storage', { 
           hasNewPaymentId: !!newPaymentId, 
           hasNewOrderData: !!newOrderData,
           hasNewRoomId: !!newRoomId
         });
+        logMobilePaymentDebug('Enhanced Room ID Detection', { 
+          newRoomId, 
+          sessionRoomId: sessionStorage.getItem('roomId'),
+          localRoomId: localStorage.getItem('roomId'),
+          urlRoomId: urlParams.get('roomId'),
+          referrerRoomId: document.referrer.match(/\/room\/([^\/\?]+)/)?.[1],
+          detectedRoomId
+        });
         logMobilePaymentDebug('Existing Payment Result', !!paymentResult);
         
+        // Store detected room ID for later use
+        if (detectedRoomId && !sessionStorage.getItem('newRoomId')) {
+          sessionStorage.setItem('newRoomId', detectedRoomId);
+          logMobilePaymentDebug('Stored detected room ID for later use', { detectedRoomId });
+        }
+
         // If we already have a payment result, show it
         if (hasResult && paymentResult) {
           logMobilePaymentDebug('Payment result already exists, displaying...');
@@ -99,6 +120,55 @@ export default function NewPaymentResultPage() {
               // Update store with successful payment
               setPaymentResult(paymentData);
               setPaymentCompleted(true);
+              
+              // Handle room ID for mobile users (check session storage)
+              const mobileRoomId = sessionStorage.getItem('newRoomId') || 
+                                 sessionStorage.getItem('roomId') ||
+                                 localStorage.getItem('roomId');
+              
+              if (mobileRoomId) {
+                logMobilePaymentDebug('URL-based payment: Room ID found for mobile user', { roomId: mobileRoomId });
+                
+                // Clear payment flags and restore user to normal state
+                try {
+                  const { database } = await import('@/lib/firebase');
+                  const { ref, set, get } = await import('firebase/database');
+                  
+                  if (database) {
+                    // Get current user from session storage if available
+                    const storedUsername = sessionStorage.getItem('username') || 
+                                         sessionStorage.getItem('currentUsername') ||
+                                         localStorage.getItem('username');
+                    
+                    if (storedUsername) {
+                      logMobilePaymentDebug('URL-based: Cleaning up payment flags for user', { username: storedUsername, roomId: mobileRoomId });
+                      
+                      // Find user in room users and restore to normal state
+                      const roomUsersRef = ref(database, `rooms/${mobileRoomId}/users`);
+                      const usersSnapshot = await get(roomUsersRef);
+                      
+                      if (usersSnapshot.exists()) {
+                        const users = usersSnapshot.val();
+                        const userEntry = Object.entries(users).find(([_, user]: [string, any]) => 
+                          (user.username || user) === storedUsername
+                        );
+                        
+                        if (userEntry) {
+                          const [userId] = userEntry;
+                          const userRef = ref(database, `rooms/${mobileRoomId}/users/${userId}`);
+                          await set(userRef, { username: storedUsername }); // Clean user data
+                          logMobilePaymentDebug('URL-based: Successfully restored user to normal state', { userId, username: storedUsername });
+                        }
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.error('URL-based: Error cleaning up payment flags:', error);
+                }
+                
+                // Ensure room ID is available for manual navigation
+                sessionStorage.setItem('newRoomId', mobileRoomId);
+              }
               
               console.log('=== URL-BASED PAYMENT COMPLETED ===');
               console.log('Payment ID:', paymentData.paymentId);
@@ -214,17 +284,17 @@ export default function NewPaymentResultPage() {
                 console.error('Error cleaning up payment flags:', error);
               }
               
-              // Auto-redirect to chat room if we have room ID
+              // Store room ID for manual navigation (don't auto-redirect)
               if (newRoomId) {
-                setTimeout(() => {
-                  router.push(`/room/${newRoomId}`);
-                }, 3000); // 3 second delay to show success
+                // Ensure room ID is available for manual button click
+                sessionStorage.setItem('newRoomId', newRoomId);
+                logMobilePaymentDebug('Room ID stored for manual navigation', { roomId: newRoomId });
               }
               
-              // Clear the pending payment data
+              // Clear the pending payment data but keep room ID for navigation
               sessionStorage.removeItem('newPaymentId');
               sessionStorage.removeItem('newOrderData');
-              sessionStorage.removeItem('newRoomId');
+              // Keep newRoomId for the return button
               
             } else {
               console.error('Session-based payment verification failed:', verificationResult);
@@ -383,6 +453,16 @@ export default function NewPaymentResultPage() {
           <h1 className="text-xl font-bold text-center mb-1 text-black">결제 완료</h1>
           <p className="text-center text-sm text-green-600 mb-4">New Payment System</p>
           
+          {/* Mobile Success Indicator */}
+          <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-4">
+            <p className="text-sm text-green-700 text-center font-medium">
+              ✅ 모바일 결제가 성공적으로 완료되었습니다
+            </p>
+            <p className="text-xs text-green-600 text-center mt-1">
+              아래 버튼을 눌러 채팅방으로 돌아가세요
+            </p>
+          </div>
+          
           {/* Order Name */}
           <h2 className="text-lg font-semibold text-center text-gray-800 mb-2">
             {paymentResult.orderName}
@@ -457,16 +537,42 @@ export default function NewPaymentResultPage() {
           
           {/* Action Buttons */}
           <div className="mt-6 space-y-3">
-            {/* Back to Chat Room Button */}
-            {(roomId || sessionStorage.getItem('newRoomId')) && (
+            {/* Back to Chat Room Button - Enhanced detection */}
+            {(() => {
+              const availableRoomId = roomId || 
+                                    sessionStorage.getItem('newRoomId') || 
+                                    sessionStorage.getItem('roomId') ||
+                                    localStorage.getItem('roomId');
+              return availableRoomId;
+            })() && (
               <button 
                 onClick={() => {
-                  const targetRoomId = roomId || sessionStorage.getItem('newRoomId');
+                  // Enhanced room ID detection for mobile
+                  const targetRoomId = roomId || 
+                                     sessionStorage.getItem('newRoomId') || 
+                                     sessionStorage.getItem('roomId') ||
+                                     localStorage.getItem('roomId');
+                  
+                  logMobilePaymentDebug('Return to chatroom button clicked', { 
+                    roomId, 
+                    sessionRoomId: sessionStorage.getItem('newRoomId'),
+                    targetRoomId,
+                    userAgent: navigator.userAgent
+                  });
+                  
                   if (targetRoomId) {
+                    // Clear payment session data before returning
+                    sessionStorage.removeItem('newPaymentId');
+                    sessionStorage.removeItem('newOrderData');
+                    
+                    logMobilePaymentDebug('Navigating to room', { targetRoomId });
                     router.push(`/room/${targetRoomId}`);
+                  } else {
+                    logMobilePaymentDebug('No room ID found, redirecting to home');
+                    router.push('/');
                   }
                 }}
-                className="w-full px-6 py-3 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium transition-colors"
+                className="w-full px-6 py-3 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium transition-colors touch-manipulation"
               >
                 채팅방으로 돌아가기
               </button>
@@ -476,20 +582,30 @@ export default function NewPaymentResultPage() {
             <div className="flex space-x-2">
               <button 
                 onClick={() => {
-                  const targetRoomId = roomId || sessionStorage.getItem('newRoomId');
+                  // Enhanced room ID detection for mobile
+                  const targetRoomId = roomId || 
+                                     sessionStorage.getItem('newRoomId') || 
+                                     sessionStorage.getItem('roomId') ||
+                                     localStorage.getItem('roomId');
+                  
+                  logMobilePaymentDebug('Appeal button clicked', { targetRoomId });
+                  
                   if (targetRoomId) {
                     router.push(`/room/${targetRoomId}`);
                   } else {
                     router.push('/');
                   }
                 }}
-                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm transition-colors"
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm transition-colors touch-manipulation"
               >
                 항소하러가기
               </button>
               <button 
-                onClick={() => router.push('/')}
-                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm transition-colors"
+                onClick={() => {
+                  logMobilePaymentDebug('Home button clicked');
+                  router.push('/');
+                }}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm transition-colors touch-manipulation"
               >
                 홈으로
               </button>
