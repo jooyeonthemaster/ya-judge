@@ -52,11 +52,11 @@ export const useNewPaymentStore = create<PaymentStore>((set, get) => ({
 
   // Payment result actions
   setPaymentResult: (result) => {
-    console.log('=== PAYMENT STORE: Setting Payment Result ===');
-    console.log('Payment ID:', result.paymentId);
-    console.log('Status:', result.paymentStatus);
-    console.log('Amount:', result.amount);
-    console.log('==========================================');
+    // console.log('=== PAYMENT STORE: Setting Payment Result ===');
+    // console.log('Payment ID:', result.paymentId);
+    // console.log('Status:', result.paymentStatus);
+    // console.log('Amount:', result.amount);
+    // console.log('==========================================');
     
     set({ 
       paymentResult: result,
@@ -67,24 +67,24 @@ export const useNewPaymentStore = create<PaymentStore>((set, get) => ({
   },
   
   clearPaymentResult: () => {
-    console.log('=== PAYMENT STORE: Clearing Payment Result ===');
+    // console.log('=== PAYMENT STORE: Clearing Payment Result ===');
     set({ paymentResult: null });
   },
 
   // Session actions
   setRoomId: (roomId) => {
-    console.log('=== PAYMENT STORE: Setting Room ID ===', roomId);
+    // console.log('=== PAYMENT STORE: Setting Room ID ===', roomId);
     set({ roomId });
   },
   
   setUserName: (userName) => {
-    console.log('=== PAYMENT STORE: Setting User Name ===', userName);
+    // console.log('=== PAYMENT STORE: Setting User Name ===', userName);
     set({ userName });
   },
 
   // Payment status actions
   setPaymentInProgress: (inProgress) => {
-    console.log('=== PAYMENT STORE: Payment In Progress ===', inProgress);
+   // console.log('=== PAYMENT STORE: Payment In Progress ===', inProgress);
     set({ 
       isPaymentInProgress: inProgress,
       paymentError: inProgress ? null : get().paymentError // Clear error when starting new payment
@@ -92,7 +92,7 @@ export const useNewPaymentStore = create<PaymentStore>((set, get) => ({
   },
   
   setPaymentCompleted: (completed) => {
-    console.log('=== PAYMENT STORE: Payment Completed ===', completed);
+    // console.log('=== PAYMENT STORE: Payment Completed ===', completed);
     set({ 
       isPaymentCompleted: completed,
       isPaymentInProgress: false
@@ -101,7 +101,7 @@ export const useNewPaymentStore = create<PaymentStore>((set, get) => ({
 
   // Error handling
   setPaymentError: (error) => {
-    console.log('=== PAYMENT STORE: Setting Payment Error ===', error);
+    // console.log('=== PAYMENT STORE: Setting Payment Error ===', error);
     set({ 
       paymentError: error,
       isPaymentInProgress: false
@@ -109,13 +109,13 @@ export const useNewPaymentStore = create<PaymentStore>((set, get) => ({
   },
   
   clearPaymentError: () => {
-    console.log('=== PAYMENT STORE: Clearing Payment Error ===');
+    //console.log('=== PAYMENT STORE: Clearing Payment Error ===');
     set({ paymentError: null });
   },
 
   // Utility actions
   clearAllPaymentData: () => {
-    console.log('=== PAYMENT STORE: Clearing All Payment Data ===');
+    //console.log('=== PAYMENT STORE: Clearing All Payment Data ===');
     set({
       paymentResult: null,
       roomId: null,
@@ -127,10 +127,10 @@ export const useNewPaymentStore = create<PaymentStore>((set, get) => ({
   },
   
   initializePaymentSession: (roomId, userName) => {
-    console.log('=== PAYMENT STORE: Initializing Payment Session ===');
-    console.log('Room ID:', roomId);
-    console.log('User Name:', userName);
-    console.log('================================================');
+    // //console.log('=== PAYMENT STORE: Initializing Payment Session ===');
+    // //console.log('Room ID:', roomId);
+    // //console.log('User Name:', userName);
+    // //console.log('================================================');
     
     set({
       roomId,

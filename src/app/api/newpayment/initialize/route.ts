@@ -36,14 +36,14 @@ export async function POST(request: NextRequest) {
     const paymentId = `ord_${timestamp}_${randomPart}`;
     
     // Log initialization
-    console.log('=== PAYMENT INITIALIZATION ===');
-    console.log('Payment ID:', paymentId);
-    console.log('Amount:', amount);
-    console.log('Order Name:', orderName);
-    console.log('Customer:', customerInfo);
-    console.log('Pay Method:', body.payMethod || 'Not specified');
-    console.log('Timestamp:', new Date().toISOString());
-    console.log('=============================');
+    // //console.log('=== PAYMENT INITIALIZATION ===');
+    // //console.log('Payment ID:', paymentId);
+    // //console.log('Amount:', amount);
+    // //console.log('Order Name:', orderName);
+    // //console.log('Customer:', customerInfo);
+    // //console.log('Pay Method:', body.payMethod || 'Not specified');
+    // //console.log('Timestamp:', new Date().toISOString());
+    // //console.log('=============================');
     
     // Return clean payment data for client
     return NextResponse.json({

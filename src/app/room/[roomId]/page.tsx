@@ -64,7 +64,7 @@ export default function RoomPage() {
           // Firebase에 생성자 정보 저장
           try {
             await set(roomCreatorRef, uid);
-            console.log('방 생성자 정보가 저장되었습니다:', uid);
+            //console.log('방 생성자 정보가 저장되었습니다:', uid);
           } catch (error) {
             console.error('방 생성자 정보 저장 중 오류:', error);
           }

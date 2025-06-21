@@ -74,11 +74,11 @@ export const useRealTimeAnalysis = ({
       });
 
       if (!result.committed) {
-        console.log('🚫 최근에 이미 욕설 경고했음. 중복 방지.');
+        //console.log('🚫 최근에 이미 욕설 경고했음. 중복 방지.');
         return;
       }
 
-      console.log('🚨 욕설 감지! 즉시 경고 실행');
+      //console.log('🚨 욕설 감지! 즉시 경고 실행');
 
       // 판사 개입 기록
       addJudgeIntervention(
@@ -134,7 +134,7 @@ export const useRealTimeAnalysis = ({
       
       // 욕설 즉시 감지 및 처리
       if (detectProfanityInMessage(message.text)) {
-        console.log(`🔥 욕설 감지됨: ${message.name} - ${message.text}`);
+        //console.log(`🔥 욕설 감지됨: ${message.name} - ${message.text}`);
         handleImmediateProfanityWarning(message);
       }
     });

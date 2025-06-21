@@ -135,24 +135,24 @@ const CourtProgressBar: React.FC<CourtProgressBarProps> = ({
 
   // 모든 참가자가 동의했을 때 다음 단계로 자동 이동하는 로직
   useEffect(() => {
-    console.log("CourtProgressBar useEffect 실행");
-    console.log("isAllReady 상태:", isAllReady);
-    console.log("onCheckAndMoveToNextStage 함수 존재 여부:", !!onCheckAndMoveToNextStage);
-    console.log("readyUsers:", readyUsers);
-    console.log("totalUsers:", totalUsers);
+    //console.log("CourtProgressBar useEffect 실행");
+    //console.log("isAllReady 상태:", isAllReady);
+    //console.log("onCheckAndMoveToNextStage 함수 존재 여부:", !!onCheckAndMoveToNextStage);
+    //console.log("readyUsers:", readyUsers);
+    //console.log("totalUsers:", totalUsers);
     
     if (isAllReady && onCheckAndMoveToNextStage) {
-      console.log('모든 참가자가 동의했습니다. 다음 단계로 자동 이동 타이머 시작');
+      //console.log('모든 참가자가 동의했습니다. 다음 단계로 자동 이동 타이머 시작');
       
       // 약간의 지연 후 다음 단계로 이동 (UI 피드백을 위해)
       const timer = setTimeout(() => {
-        console.log('타이머 만료, onCheckAndMoveToNextStage 함수 호출');
+        //console.log('타이머 만료, onCheckAndMoveToNextStage 함수 호출');
         onCheckAndMoveToNextStage();
-        console.log('onCheckAndMoveToNextStage 함수 호출 완료');
+        //console.log('onCheckAndMoveToNextStage 함수 호출 완료');
       }, 1000);
       
       return () => {
-        console.log('타이머 정리');
+        //console.log('타이머 정리');
         clearTimeout(timer);
       };
     }

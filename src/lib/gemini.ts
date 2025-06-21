@@ -82,7 +82,7 @@ export const analyzeConversation = async (
     
     // 메시지가 너무 적으면 개입하지 않음
     if (userMessages.length < 2) {
-      console.log('대화가 충분하지 않아 분석을 건너뜁니다.');
+      //console.log('대화가 충분하지 않아 분석을 건너뜁니다.');
       return { shouldIntervene: false };
     }
     
@@ -104,7 +104,7 @@ export const analyzeConversation = async (
       );
       
       if (hasSexualContent) {
-        console.log(`성추행/성희롱 의심 표현 감지됨: ${msg.name} - ${msg.text}`);
+        //console.log(`성추행/성희롱 의심 표현 감지됨: ${msg.name} - ${msg.text}`);
         return {
           shouldIntervene: true,
           type: 'sexual_harassment',
@@ -135,7 +135,7 @@ export const analyzeConversation = async (
       );
       
       if (hasSevereProfanity) {
-        console.log(`심각한 욕설 감지됨: ${msg.name} - ${msg.text}`);
+        // console.log(`심각한 욕설 감지됨: ${msg.name} - ${msg.text}`);
         return {
           shouldIntervene: true,
           type: 'warning',
@@ -150,7 +150,7 @@ export const analyzeConversation = async (
     }
     
     // 3단계: AI를 통한 고급 분석 (증거 요청, 주제 이탈, 논리적 오류 등)
-    console.log('고급 대화 분석 시작');
+    // console.log('고급 대화 분석 시작');
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
     // 참가자 정보 추출
@@ -275,7 +275,7 @@ export const getFinalVerdict = async (
   }
   
   try {
-    console.log('최종 판결 요청 시작');
+    // console.log('최종 판결 요청 시작');
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
     // 사용자 메시지만 필터링하고 시계열 순으로 정렬
@@ -429,22 +429,22 @@ ${userMessages}
 - 상대방 말 끝까지 듣기 연습
 - 하루 칭찬 3개씩 하기`;
 
-    console.log('최종 판결 API 요청 시작');
+    //console.log('최종 판결 API 요청 시작');
     const result = await model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
-    console.log('최종 판결 API 응답 받음');
+    //console.log('최종 판결 API 응답 받음');
     
     try {
       const cleanedText = text.replace(/```json\s*|\s*```/g, '').trim();
       const parsedData = JSON.parse(cleanedText);
       
-      console.log('JSON 파싱 성공:', parsedData.verdict ? '판결 있음' : '판결 없음');
+      //console.log('JSON 파싱 성공:', parsedData.verdict ? '판결 있음' : '판결 없음');
       return parsedData;
       
     } catch (parseError) {
       console.error('최종 판결 응답 파싱 오류:', parseError);
-      console.log('원본 응답:', text);
+      //console.log('원본 응답:', text);
       
       return {
         responses: [],

@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     
     if (PORTONE_API_SECRET) {
       try {
-        console.log('Attempting PortOne cancellation for payment:', paymentId);
+        //console.log('Attempting PortOne cancellation for payment:', paymentId);
         
         const portOneResponse = await fetch(`https://api.portone.io/payments/${encodeURIComponent(paymentId)}/cancel`, {
           method: 'POST',
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
           console.warn('Proceeding with manual cancellation despite PortOne API failure');
         } else {
           const portOneResult = await portOneResponse.json();
-          console.log('PortOne payment cancelled successfully:', portOneResult);
+          //console.log('PortOne payment cancelled successfully:', portOneResult);
           portOneCancelSuccess = true;
         }
       } catch (portOneError) {
@@ -149,19 +149,19 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        console.log('Updated room-specific payment data for cancellation');
+        //console.log('Updated room-specific payment data for cancellation');
       } catch (roomError) {
         console.error('Error updating room-specific data:', roomError);
         // Don't fail the entire operation if room update fails
       }
     }
 
-    console.log('Payment cancelled successfully:', {
-      paymentId,
-      path: paymentPath,
-      reason: reason || 'Cancelled by admin',
-      timestamp: new Date().toISOString()
-    });
+    // console.log('Payment cancelled successfully:', {
+    //   paymentId,
+    //   path: paymentPath,
+    //   reason: reason || 'Cancelled by admin',
+    //   timestamp: new Date().toISOString()
+    // });
 
     const responseMessage = portOneCancelSuccess 
       ? 'Payment cancelled successfully in both PortOne and database'

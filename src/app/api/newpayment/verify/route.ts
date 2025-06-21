@@ -40,12 +40,12 @@ export async function GET(request: NextRequest) {
     const userAgent = request.headers.get('user-agent') || '';
     const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i.test(userAgent);
     
-    console.log('=== PAYMENT VERIFICATION REQUEST ===');
-    console.log('Device Type:', isMobile ? 'MOBILE' : 'DESKTOP');
-    console.log('Payment ID:', paymentId);
-    console.log('Transaction ID:', txId || 'N/A');
-    console.log('User Agent:', userAgent);
-    console.log('===================================');
+    // //console.log('=== PAYMENT VERIFICATION REQUEST ===');
+    // //console.log('Device Type:', isMobile ? 'MOBILE' : 'DESKTOP');
+    // //console.log('Payment ID:', paymentId);
+    // //console.log('Transaction ID:', txId || 'N/A');
+    // //console.log('User Agent:', userAgent);
+    // //console.log('===================================');
 
     // Handle development mode without API secret
     if (!PORTONE_API_SECRET) {
@@ -212,23 +212,23 @@ export async function POST(request: NextRequest) {
  * Logs payment confirmation instead of sending to external API
  */
 function logPaymentConfirmation(data: PaymentVerificationData) {
-  console.log('=== PAYMENT CONFIRMATION LOGGED ===');
-  console.log('Payment ID:', data.paymentId);
-  console.log('Amount:', data.amount);
-  console.log('Order Name:', data.orderName);
-  console.log('Customer Name:', data.customerName);
-  console.log('Customer Email:', data.customerEmail);
-  console.log('Customer Phone:', data.customerPhone);
-  console.log('Payment Status:', data.paymentStatus);
-  console.log('Payment Method:', data.paymentMethod);
-  console.log('Timestamp:', data.timestamp);
+  // console.log('=== PAYMENT CONFIRMATION LOGGED ===');
+  // console.log('Payment ID:', data.paymentId);
+  // console.log('Amount:', data.amount);
+  // console.log('Order Name:', data.orderName);
+  // console.log('Customer Name:', data.customerName);
+  // console.log('Customer Email:', data.customerEmail);
+  // console.log('Customer Phone:', data.customerPhone);
+  // console.log('Payment Status:', data.paymentStatus);
+  // console.log('Payment Method:', data.paymentMethod);
+  // console.log('Timestamp:', data.timestamp);
   if (data.isMobile !== undefined) {
-    console.log('Device Type:', data.isMobile ? 'MOBILE' : 'DESKTOP');
+    // console.log('Device Type:', data.isMobile ? 'MOBILE' : 'DESKTOP');
   }
   if (data.userAgent) {
-    console.log('User Agent:', data.userAgent);
+    // console.log('User Agent:', data.userAgent);
   }
-  console.log('================================');
+  // console.log('================================');
   
   // In a real application, you would save this to a database
   // For now, we're just logging as requested

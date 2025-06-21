@@ -102,7 +102,7 @@ const addMessage = (message: Omit<Message, 'id' | 'timestamp'>) => {
   // 중복 방지 로직
   const messageExists = state.messages.some(m => m.id === message.id);
   if (messageExists) {
-    console.log('Duplicate message detected, skipping:', message.id);
+    //console.log('Duplicate message detected, skipping:', message.id);
     return state;
   }
   // 연속된 시스템 메시지 중복 방지
@@ -203,7 +203,7 @@ disconnectHandler.set({
     const fiveMinutes = 5 * 60 * 1000;
     
     if (timeDiff > fiveMinutes) {
-      console.log(`💳 User ${user.username} removed - payment timeout`);
+      //console.log(`💳 User ${user.username} removed - payment timeout`);
       return false;
     }
     return true; // 결제 중인 사용자는 유지

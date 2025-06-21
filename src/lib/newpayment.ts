@@ -119,29 +119,29 @@ export async function initializePayment(
     };
   }
 
-  console.log('=== PAYMENT INITIALIZATION ===');
-  console.log('Store ID:', storeId ? `${storeId.substring(0, 8)}...` : 'NOT SET');
-  console.log('Channel Key:', channelKey ? 'SET' : 'NOT SET');
-  console.log('Payment ID:', paymentId);
-  console.log('Order Name:', payment.orderName);
-  console.log('Amount:', payment.totalAmount);
-  console.log('Customer:', customer.name);
-  console.log('Pay Method:', payment.payMethod);
-  console.log('Product Type:', payment.payMethod === 'MOBILE' ? 'DIGITAL (auto)' : 'N/A');
-  console.log('Carrier:', payment.payMethod === 'MOBILE' ? 'User will select' : 'N/A');
-  console.log('Mobile Browser:', isMobileBrowser());
+  // console.log('=== PAYMENT INITIALIZATION ===');
+  // console.log('Store ID:', storeId ? `${storeId.substring(0, 8)}...` : 'NOT SET');
+  // console.log('Channel Key:', channelKey ? 'SET' : 'NOT SET');
+  // console.log('Payment ID:', paymentId);
+  // console.log('Order Name:', payment.orderName);
+  // console.log('Amount:', payment.totalAmount);
+  // console.log('Customer:', customer.name);
+  // console.log('Pay Method:', payment.payMethod);
+  // console.log('Product Type:', payment.payMethod === 'MOBILE' ? 'DIGITAL (auto)' : 'N/A');
+  // console.log('Carrier:', payment.payMethod === 'MOBILE' ? 'User will select' : 'N/A');
+  // console.log('Mobile Browser:', isMobileBrowser());
   
   // Log bypass parameters for mobile payments
   if (payment.payMethod === 'MOBILE') {
-    console.log('=== MOBILE PAYMENT BYPASS PARAMS ===');
-    console.log('Shop User ID:', customer.email || customer.phone || paymentId);
-    console.log('Digital Product: 1 (Always digital content)');
-    console.log('Carrier: User will select in payment modal');
-    console.log('==================================');
+    // console.log('=== MOBILE PAYMENT BYPASS PARAMS ===');
+    // console.log('Shop User ID:', customer.email || customer.phone || paymentId);
+    // console.log('Digital Product: 1 (Always digital content)');
+    // console.log('Carrier: User will select in payment modal');
+    // console.log('==================================');
   }
   
-  console.log('Payment Request Config:', JSON.stringify(paymentRequest, null, 2));
-  console.log('=============================');
+  // console.log('Payment Request Config:', JSON.stringify(paymentRequest, null, 2));
+  // console.log('=============================');
 
   return { paymentRequest, paymentId };
 }
@@ -164,7 +164,7 @@ export async function requestPayment(
     throw new Error(response.message || 'Payment failed');
   }
   
-  console.log('Payment request successful:', response);
+  //console.log('Payment request successful:', response);
   
   return {
     response,
@@ -188,10 +188,10 @@ export async function verifyPayment(
       orderData
     };
     
-    console.log('=== SENDING PAYMENT VERIFICATION ===');
-    console.log('Payment ID:', paymentId);
-    console.log('Order Data:', orderData);
-    console.log('===================================');
+    //console.log('=== SENDING PAYMENT VERIFICATION ===');
+    //console.log('Payment ID:', paymentId);
+    //console.log('Order Data:', orderData);
+    //console.log('===================================');
     
     const verifyResponse = await fetch('/api/newpayment/verify', {
       method: 'POST',
@@ -203,13 +203,13 @@ export async function verifyPayment(
 
     const result = await verifyResponse.json();
     
-    console.log('=== PAYMENT VERIFICATION RESULT ===');
-    console.log('Status:', result.status);
-    console.log('Message:', result.message);
+    //console.log('=== PAYMENT VERIFICATION RESULT ===');
+    //console.log('Status:', result.status);
+    //console.log('Message:', result.message);
     if (result.payment) {
-      console.log('Payment Data:', result.payment);
+      //console.log('Payment Data:', result.payment);
     }
-    console.log('=================================');
+    //console.log('=================================');
     
     return result;
   } catch (error) {
@@ -261,17 +261,17 @@ export async function logPaymentCompletion(
     // Save to global Firebase path
     await set(paymentRef, paymentData);
     
-    console.log('=== PAYMENT SAVED TO FIREBASE (GLOBAL) ===');
-    console.log('Firebase Path:', paymentPath);
-    console.log('Payment ID:', paymentResult.paymentId);
-    console.log('Amount:', paymentResult.amount);
-    console.log('Customer Name:', paymentResult.customerName);
-    console.log('Payment Status:', paymentResult.paymentStatus);
-    console.log('Room ID:', roomId || 'N/A');
-    console.log('Username:', username || 'N/A');
-    console.log('Is Host:', isHost || false);
-    console.log('Timestamp:', paymentResult.timestamp);
-    console.log('=========================================');
+    //console.log('=== PAYMENT SAVED TO FIREBASE (GLOBAL) ===');
+    //console.log('Firebase Path:', paymentPath);
+    //console.log('Payment ID:', paymentResult.paymentId);
+    //console.log('Amount:', paymentResult.amount);
+    //console.log('Customer Name:', paymentResult.customerName);
+    //console.log('Payment Status:', paymentResult.paymentStatus);
+    //console.log('Room ID:', roomId || 'N/A');
+    //console.log('Username:', username || 'N/A');
+    //console.log('Is Host:', isHost || false);
+    //console.log('Timestamp:', paymentResult.timestamp);
+    //console.log('=========================================');
 
     // CRITICAL: Also save to room-specific path with order ID for both host and non-host users
     if (roomId && username) {
@@ -293,14 +293,14 @@ export async function logPaymentCompletion(
 
         await set(roomPaidUserRef, roomPaymentData);
 
-        console.log('=== PAYMENT SAVED TO FIREBASE (ROOM-SPECIFIC) ===');
-        console.log('Room Path:', `rooms/${roomId}/paidUsers/${username}`);
-        console.log('Username:', username);
-        console.log('Order ID:', paymentResult.paymentId);
-        console.log('Amount:', paymentResult.amount);
-        console.log('Is Host:', isHost || false);
-        console.log('Payment Status:', paymentResult.paymentStatus);
-        console.log('===============================================');
+        //console.log('=== PAYMENT SAVED TO FIREBASE (ROOM-SPECIFIC) ===');
+        //console.log('Room Path:', `rooms/${roomId}/paidUsers/${username}`);
+        //console.log('Username:', username);
+        //console.log('Order ID:', paymentResult.paymentId);
+        //console.log('Amount:', paymentResult.amount);
+        //console.log('Is Host:', isHost || false);
+        //console.log('Payment Status:', paymentResult.paymentStatus);
+        //console.log('===============================================');
 
         // Also save a separate entry in room's orders for easier order tracking
         const roomOrderRef = ref(database, `rooms/${roomId}/orders/${paymentResult.paymentId}`);
@@ -320,12 +320,12 @@ export async function logPaymentCompletion(
 
         await set(roomOrderRef, orderData);
 
-        console.log('=== ORDER SAVED TO FIREBASE (ROOM ORDERS) ===');
-        console.log('Room Order Path:', `rooms/${roomId}/orders/${paymentResult.paymentId}`);
-        console.log('Order ID:', paymentResult.paymentId);
-        console.log('Username:', username);
-        console.log('Is Host:', isHost || false);
-        console.log('==========================================');
+        // console.log('=== ORDER SAVED TO FIREBASE (ROOM ORDERS) ===');
+        // console.log('Room Order Path:', `rooms/${roomId}/orders/${paymentResult.paymentId}`);
+        // console.log('Order ID:', paymentResult.paymentId);
+        // console.log('Username:', username);
+        // console.log('Is Host:', isHost || false);
+        // console.log('==========================================');
 
       } catch (roomError) {
         console.error('Error saving payment to room-specific Firebase paths:', roomError);
@@ -341,21 +341,21 @@ export async function logPaymentCompletion(
     console.error('Error saving payment to Firebase:', error);
     
     // Fallback to logging if Firebase save fails
-    console.log('=== PAYMENT COMPLETION (FALLBACK LOG) ===');
-    console.log('Payment ID:', paymentResult.paymentId);
-    console.log('Amount:', paymentResult.amount);
-    console.log('Order Name:', paymentResult.orderName);
-    console.log('Customer Name:', paymentResult.customerName);
-    console.log('Customer Email:', paymentResult.customerEmail);
-    console.log('Customer Phone:', paymentResult.customerPhone);
-    console.log('Payment Status:', paymentResult.paymentStatus);
-    console.log('Payment Method:', paymentResult.paymentMethod);
-    console.log('Timestamp:', paymentResult.timestamp);
-    console.log('Room ID:', roomId || 'N/A');
-    console.log('Username:', username || 'N/A');
-    console.log('Is Host:', isHost || false);
-    console.log('Mobile Browser:', isMobileBrowser());
-    console.log('=======================================');
+    // console.log('=== PAYMENT COMPLETION (FALLBACK LOG) ===');
+    // console.log('Payment ID:', paymentResult.paymentId);
+    // console.log('Amount:', paymentResult.amount);
+    // console.log('Order Name:', paymentResult.orderName);
+    // console.log('Customer Name:', paymentResult.customerName);
+    // console.log('Customer Email:', paymentResult.customerEmail);
+    // console.log('Customer Phone:', paymentResult.customerPhone);
+    // console.log('Payment Status:', paymentResult.paymentStatus);
+    // console.log('Payment Method:', paymentResult.paymentMethod);
+    // console.log('Timestamp:', paymentResult.timestamp);
+    // console.log('Room ID:', roomId || 'N/A');
+    // console.log('Username:', username || 'N/A');
+    // console.log('Is Host:', isHost || false);
+    // console.log('Mobile Browser:', isMobileBrowser());
+    // console.log('=======================================');
   }
 }
 

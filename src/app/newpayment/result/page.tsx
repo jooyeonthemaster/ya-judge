@@ -46,7 +46,7 @@ export default function NewPaymentResultPage() {
   // Mobile debugging helper function
   function logMobilePaymentDebug(message: string, data?: any) {
     const timestamp = new Date().toISOString();
-    console.log(`[MOBILE-DEBUG ${timestamp}] ${message}`, data);
+    // console.log(`[MOBILE-DEBUG ${timestamp}] ${message}`, data);
     
     // Save to localStorage for persistent mobile debugging
     try {
@@ -114,9 +114,9 @@ export default function NewPaymentResultPage() {
 
         // Handle URL-based verification (PortOne mobile redirect)
         if (urlPaymentId && transactionType === 'PAYMENT') {
-          console.log('=== HANDLING URL-BASED PAYMENT VERIFICATION ===');
-          console.log('Payment ID from URL:', urlPaymentId);
-          console.log('Transaction ID:', txId || 'N/A');
+          // //console.log('=== HANDLING URL-BASED PAYMENT VERIFICATION ===');
+          // //console.log('Payment ID from URL:', urlPaymentId);
+          // //console.log('Transaction ID:', txId || 'N/A');
           
           try {
             // Verify payment using the new verification endpoint
@@ -126,7 +126,7 @@ export default function NewPaymentResultPage() {
             
             const verificationResult = await verificationResponse.json();
             
-            console.log('URL-based payment verification result:', verificationResult);
+            //console.log('URL-based payment verification result:', verificationResult);
             
             if (verificationResult.status === 'success' && verificationResult.payment) {
               const paymentData = verificationResult.payment;
@@ -262,11 +262,11 @@ export default function NewPaymentResultPage() {
                 sessionStorage.setItem('newRoomId', mobileRoomId);
               }
               
-              console.log('=== URL-BASED PAYMENT COMPLETED ===');
-              console.log('Payment ID:', paymentData.paymentId);
-              console.log('Amount:', paymentData.amount);
-              console.log('Status:', paymentData.paymentStatus);
-              console.log('================================');
+              // //console.log('=== URL-BASED PAYMENT COMPLETED ===');
+              // //console.log('Payment ID:', paymentData.paymentId);
+              // //console.log('Amount:', paymentData.amount);
+              // //console.log('Status:', paymentData.paymentStatus);
+              // //console.log('================================');
               
             } else {
               console.error('URL-based payment verification failed:', verificationResult);
@@ -288,13 +288,13 @@ export default function NewPaymentResultPage() {
         
         // Handle sessionStorage-based verification (mobile flow)
         if (newPaymentId && newOrderData) {
-          console.log('=== HANDLING SESSION STORAGE PAYMENT VERIFICATION ===');
-          console.log('Payment ID from session:', newPaymentId);
+          // //console.log('=== HANDLING SESSION STORAGE PAYMENT VERIFICATION ===');
+          // //console.log('Payment ID from session:', newPaymentId);
           
           try {
             // Parse the order data
             const orderData = JSON.parse(newOrderData);
-            console.log('Order data:', orderData);
+            // //console.log('Order data:', orderData);
             
             // Verify the payment with our new backend
             const verificationResult = await verifyPayment(newPaymentId, {
@@ -306,7 +306,7 @@ export default function NewPaymentResultPage() {
               payMethod: orderData.payMethod
             });
             
-            console.log('Session-based payment verification result:', verificationResult);
+            //console.log('Session-based payment verification result:', verificationResult);
             
             if (verificationResult.status === 'success') {
               // Create payment result
@@ -373,11 +373,11 @@ export default function NewPaymentResultPage() {
               setPaymentResult(paymentData);
               setPaymentCompleted(true);
               
-              console.log('=== SESSION-BASED PAYMENT COMPLETED ===');
-              console.log('Payment ID:', paymentData.paymentId);
-              console.log('Amount:', paymentData.amount);
-              console.log('Status:', paymentData.paymentStatus);
-              console.log('====================================');
+              // //console.log('=== SESSION-BASED PAYMENT COMPLETED ===');
+              // //console.log('Payment ID:', paymentData.paymentId);
+              // //console.log('Amount:', paymentData.amount);
+              // //console.log('Status:', paymentData.paymentStatus);
+              // //console.log('====================================');
               
               // Clear payment flags and restore user to normal state
               try {
@@ -486,7 +486,7 @@ export default function NewPaymentResultPage() {
           const paymentStatus = urlParams.get('payment_status');
           
           if (paymentStatus && paymentStatus !== 'success') {
-            console.log('Payment status from URL:', paymentStatus);
+            //('Payment status from URL:', paymentStatus);
             setLocalError({
               code: 'PAYMENT_' + paymentStatus.toUpperCase(),
               message: `Payment ${paymentStatus}. Please try again.`,

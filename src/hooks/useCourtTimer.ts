@@ -290,7 +290,7 @@ export function useCourtTimer({
       
       // 타이머 리셋 처리
       if (timerData.reset === true) {
-        console.log('Timer reset by host, syncing client state...');
+        //console.log('Timer reset by host, syncing client state...');
         
         setFinalVerdictTriggered(false);
         setApiCallsEnabled(true);
@@ -303,7 +303,7 @@ export function useCourtTimer({
       
       // 타이머 활성화 동기화
       if (timerData.active && !timerActive) {
-        console.log('Timer started by another participant, syncing...');
+        //console.log('Timer started by another participant, syncing...');
         startTimer();
         
         if (timerData.startTime) {
@@ -340,14 +340,14 @@ export function useCourtTimer({
         }
         
         if (timerData.paused && !timerPaused) {
-          console.log('Timer paused by another participant, syncing...');
+          //console.log('Timer paused by another participant, syncing...');
           pauseTimer();
           setTimerState('paused');
           if (timerData.pausedAt) {
             setCurrentPauseStartTime(new Date(timerData.pausedAt));
           }
         } else if (!timerData.paused && timerPaused) {
-          console.log('Timer resumed by another participant, syncing...');
+          //console.log('Timer resumed by another participant, syncing...');
           resumeTimer();
           setTimerState('running');
           setCurrentPauseStartTime(null);
@@ -356,7 +356,7 @@ export function useCourtTimer({
       
       // 타이머 완료 처리
       if (timerData.completed && timerState !== 'completed' && !finalVerdictTriggered && apiCallsEnabled) {
-        console.log('Timer completed signal received from server', timerData.endReason);
+        //console.log('Timer completed signal received from server', timerData.endReason);
         
         setTimerState('completed');
         setRemainingTime(0);
@@ -401,7 +401,7 @@ export function useCourtTimer({
           
           // 호스트만 최종 판결 요청
           if (isRoomHost) {
-            console.log('Host is calling requestFinalVerdict ONE TIME ONLY');
+            //console.log('Host is calling requestFinalVerdict ONE TIME ONLY');
             requestFinalVerdict();
             
             if (database) {
@@ -440,7 +440,7 @@ export function useCourtTimer({
         const timerData = snapshot.val();
         
         if (timerData && timerData.active) {
-          console.log('Room has active timer, synchronizing...');
+          //console.log('Room has active timer, synchronizing...');
           
           if (timerData.startTime) {
             const startTime = new Date(timerData.startTime);

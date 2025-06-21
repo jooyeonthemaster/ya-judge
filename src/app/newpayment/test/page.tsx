@@ -54,8 +54,8 @@ export default function NewPaymentTestPage() {
         payMethod: 'CARD'
       };
 
-      console.log('=== TESTING NEW PAYMENT API ===');
-      console.log('Test Data:', testData);
+      // //console.log('=== TESTING NEW PAYMENT API ===');
+      // //console.log('Test Data:', testData);
 
       // Test initialization endpoint
       const initResponse = await fetch('/api/newpayment/initialize', {
@@ -131,9 +131,9 @@ export default function NewPaymentTestPage() {
         payMethod: 'CARD'
       };
 
-      console.log('=== TESTING PAYMENT FLOW ===');
-      console.log('Customer:', customer);
-      console.log('Payment:', payment);
+      // //console.log('=== TESTING PAYMENT FLOW ===');
+      // //console.log('Customer:', customer);
+      // //console.log('Payment:', payment);
 
       // Simulate payment request (without actual PortOne call)
       const mockPaymentId = `test_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -183,7 +183,7 @@ export default function NewPaymentTestPage() {
   };
 
   const handleStoreTest = () => {
-    console.log('=== TESTING PAYMENT STORE ===');
+    //console.log('=== TESTING PAYMENT STORE ===');
     
     // Test session initialization
     initializePaymentSession('test-room-123', 'Test User');
@@ -221,12 +221,12 @@ export default function NewPaymentTestPage() {
   const handleClearData = () => {
     clearAllPaymentData();
     setTestResults([]);
-    console.log('=== CLEARED ALL TEST DATA ===');
+    //console.log('=== CLEARED ALL TEST DATA ===');
   };
 
   // Test mobile payment with KCP V2 bypass parameters
   const testMobilePayment = async () => {
-    console.log('=== TESTING MOBILE PAYMENT ===');
+    //console.log('=== TESTING MOBILE PAYMENT ===');
     
     const customer: CustomerInfo = {
       name: 'Test Mobile User',

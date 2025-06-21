@@ -65,7 +65,7 @@ export default function NewCheckoutPage() {
           if (database) {
             const isPayingRef = ref(database, `rooms/${roomId}/ispaying`);
             await remove(isPayingRef);
-            console.log('Cleared ispaying status due to page unload');
+            //console.log('Cleared ispaying status due to page unload');
             
             // Signal all users to clear their session storage
             const clearSessionSignalRef = ref(database, `rooms/${roomId}/clearPaymentSession`);
@@ -74,7 +74,7 @@ export default function NewCheckoutPage() {
               reason: 'newpayment_page_left',
               clearedBy: userName || 'unknown'
             });
-            console.log('Session storage clear signal sent to all users for newpayment page exit');
+            //console.log('Session storage clear signal sent to all users for newpayment page exit');
             
             // Remove the signal after a short delay to clean up
             setTimeout(() => {
@@ -137,11 +137,11 @@ export default function NewCheckoutPage() {
         carrier: undefined
       };
 
-      console.log('=== STARTING CLEAN PAYMENT PROCESS ===');
-      console.log('Customer:', customer);
-      console.log('Payment:', payment);
-      console.log('Is Mobile:', isMobile);
-      console.log('=======================================');
+      // //console.log('=== STARTING CLEAN PAYMENT PROCESS ===');
+      // //console.log('Customer:', customer);
+      // //console.log('Payment:', payment);
+      // //console.log('Is Mobile:', isMobile);
+      // //console.log('=======================================');
 
       // Request payment using the new clean function
       const { paymentId } = await requestPayment(customer, payment);
@@ -151,7 +151,7 @@ export default function NewCheckoutPage() {
         sessionStorage.setItem('newPaymentId', paymentId);
         sessionStorage.setItem('newOrderData', JSON.stringify(formData));
         sessionStorage.setItem('newRoomId', roomId || '');
-        console.log('Mobile payment initiated, awaiting redirect...');
+        //console.log('Mobile payment initiated, awaiting redirect...');
         // The rest of the flow will continue after redirect
         return;
       }
@@ -166,10 +166,10 @@ export default function NewCheckoutPage() {
         payMethod: formData.payMethod
       });
 
-      console.log('=== PAYMENT VERIFICATION RESULT ===');
-      console.log('Status:', verificationResult.status);
-      console.log('Message:', verificationResult.message);
-      console.log('================================');
+      // //console.log('=== PAYMENT VERIFICATION RESULT ===');
+      // //console.log('Status:', verificationResult.status);
+      // //console.log('Message:', verificationResult.message);
+      // //console.log('================================');
 
       if (verificationResult.status === 'success') {
         // Create payment result
@@ -223,8 +223,8 @@ export default function NewCheckoutPage() {
               // Clear Firebase ispaying status
               const isPayingRef = ref(database, `rooms/${roomId}/ispaying`);
               await remove(isPayingRef);
-              console.log('Cleared Firebase ispaying status after newpayment completion');
-              console.log('Session storage preserved - paying user can return to room');
+              // //console.log('Cleared Firebase ispaying status after newpayment completion');
+              // //console.log('Session storage preserved - paying user can return to room');
             }
           } catch (error) {
             console.error('Failed to clear ispaying status after newpayment completion:', error);
@@ -235,11 +235,11 @@ export default function NewCheckoutPage() {
         setPaymentResult(paymentResult);
         setPaymentCompleted(true);
         
-        console.log('=== PAYMENT COMPLETED SUCCESSFULLY ===');
-        console.log('Payment ID:', paymentId);
-        console.log('Amount:', formData.totalAmount);
-        console.log('Order Name:', formData.orderName);
-        console.log('===================================');
+        // //console.log('=== PAYMENT COMPLETED SUCCESSFULLY ===');
+        // //console.log('Payment ID:', paymentId);
+        // //console.log('Amount:', formData.totalAmount);
+        // //console.log('Order Name:', formData.orderName);
+        // //console.log('===================================');
         
         // Redirect to result page with room ID as backup parameter
         const redirectUrl = roomId ? `/newpayment/result?roomId=${roomId}` : '/newpayment/result';

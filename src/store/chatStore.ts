@@ -237,11 +237,11 @@ export const useChatStore = create<ChatState>((set, get) => {
         return;
       }
       
-      console.log(`Joining room: ${roomId} as ${username}`);
+      //console.log(`Joining room: ${roomId} as ${username}`);
       
       // 이전 연결 정리
       if (currentRoomRef) {
-        console.log('Cleaning up previous connections');
+        //console.log('Cleaning up previous connections');
         off(currentRoomRef);
         if (roomUsersRef) off(roomUsersRef);
         if (typingRef) off(typingRef);
@@ -250,7 +250,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       try {
         // 사용자 ID 생성
         currentUserId = uuidv4();
-        console.log(`Generated user ID: ${currentUserId}`);
+        //console.log(`Generated user ID: ${currentUserId}`);
         
         // 방 메시지 참조
         currentRoomRef = ref(db, `rooms/${roomId}/messages`);
@@ -268,7 +268,9 @@ export const useChatStore = create<ChatState>((set, get) => {
                 // 이전 연결 제거
                 const oldUserRef = ref(db, `rooms/${roomId}/users/${userId}`);
                 remove(oldUserRef)
-                  .then(() => console.log(`Removed previous connection for ${username}`))
+                  .then(() => {
+                    // //console.log(`Removed previous connection for ${username}`)
+                  })
                   .catch(err => console.error('Failed to remove previous user:', err));
               }
             });
@@ -277,7 +279,9 @@ export const useChatStore = create<ChatState>((set, get) => {
           // 새 사용자 정보 추가
           const userRef = ref(db, `rooms/${roomId}/users/${currentUserId}`);
           firebaseSet(userRef, { username })
-            .then(() => console.log('User added to room'))
+            .then(() => {
+              // console.log('User added to room')
+            })
             .catch(err => console.error('Failed to add user to room:', err));
           
           // 연결 종료시 사용자 제거 (결제 중 예외 처리)
@@ -295,7 +299,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         onValue(currentRoomRef, (snapshot) => {
           const data = snapshot.val();
           if (data) {
-            console.log('Initial messages loaded');
+            // console.log('Initial messages loaded');
             const messageArray = Object.values(data) as Message[];
             set({ messages: messageArray });
             
@@ -327,13 +331,13 @@ export const useChatStore = create<ChatState>((set, get) => {
         onChildAdded(currentRoomRef, (snapshot) => {
           const message = snapshot.val() as Message;
           if (message) {
-            console.log('New message received:', message.id);
+            // console.log('New message received:', message.id);
             // 중복 방지를 위한 체크 추가
             set(state => {
               // 메시지 ID가 이미 존재하는지 확인
               const messageExists = state.messages.some(m => m.id === message.id);
               if (messageExists) {
-                console.log('Duplicate message detected, skipping:', message.id);
+                // console.log('Duplicate message detected, skipping:', message.id);
                 return state; // 상태 변경 없음
               }
               return {
@@ -371,17 +375,17 @@ export const useChatStore = create<ChatState>((set, get) => {
                   
                   // 5분 이상 결제 중이면 제외
                   if (timeDiff > fiveMinutes) {
-                    console.log(`💳 User ${user.username} removed from room - payment timeout (${Math.round(timeDiff / 1000 / 60)} minutes)`);
+                    //console.log(`💳 User ${user.username} removed from room - payment timeout (${Math.round(timeDiff / 1000 / 60)} minutes)`);
                     return false;
                   }
                   
-                  console.log(`💳 User ${user.username} still in payment (${Math.round(timeDiff / 1000 / 60)} minutes)`);
+                  //console.log(`💳 User ${user.username} still in payment (${Math.round(timeDiff / 1000 / 60)} minutes)`);
                   return true; // 결제 중인 사용자는 유지
                 }
                 return true; // 일반 사용자는 유지
               });
             
-            console.log(`Room users updated: ${usersArray.length} actual users (including payment users)`);
+            //console.log(`Room users updated: ${usersArray.length} actual users (including payment users)`);
             set({ roomUsers: usersArray.map(user => ({ id: user.id, username: user.username })) });
           } else {
             set({ roomUsers: [] });
@@ -405,32 +409,34 @@ export const useChatStore = create<ChatState>((set, get) => {
     
     // 방 나가기
     leaveRoom: () => {
-      console.log('Leaving room');
+      //console.log('Leaving room');
       if (!db || !currentRoomRef) {
-        console.log('Nothing to leave - database or room reference not initialized');
+        //console.log('Nothing to leave - database or room reference not initialized');
         return;
       }
       
       try {
         // 구독 해제
-        console.log('Unsubscribing from room events');
+        //console.log('Unsubscribing from room events');
         off(currentRoomRef);
         if (roomUsersRef) off(roomUsersRef);
         if (typingRef) off(typingRef);
         
         // 사용자 제거
         if (currentUserId && roomUsersRef) {
-          console.log(`Removing user ${currentUserId} from room`);
+          //console.log(`Removing user ${currentUserId} from room`);
           const pathArray = roomUsersRef.toString().split('/');
           const roomId = pathArray[pathArray.length - 2]; // rooms/{roomId}/users
           const userRef = ref(db, `rooms/${roomId}/users/${currentUserId}`);
           remove(userRef)
-            .then(() => console.log('User removed from room'))
+            .then(() => {
+              // console.log('User removed from room')
+            })
             .catch(err => console.error('Failed to remove user from room:', err));
         }
         
         // 상태 초기화
-        console.log('Resetting state');
+        //console.log('Resetting state');
         set(initialState);
         
         // 참조 초기화
@@ -460,7 +466,7 @@ export const useChatStore = create<ChatState>((set, get) => {
             message.user === 'system' && 
             lastMessage.user === 'system' && 
             lastMessage.text === message.text) {
-          console.log('중복 시스템 메시지 감지됨, 추가하지 않음:', message.text);
+          // console.log('중복 시스템 메시지 감지됨, 추가하지 않음:', message.text);
           return;
         }
         
@@ -476,12 +482,12 @@ export const useChatStore = create<ChatState>((set, get) => {
           relatedIssue: relatedIssue || null, // undefined -> null
         };
         
-        console.log('Adding new message:', cleanMessage.id);
+        //console.log('Adding new message:', cleanMessage.id);
         
         // Firebase에 메시지 추가
         push(currentRoomRef, cleanMessage)
           .then(() => {
-            console.log('Message sent successfully');
+            //console.log('Message sent successfully');
             
             // 로컬 상태 즉시 업데이트 (Firebase 이벤트 기다리지 않고)
             // 중복 방지를 위해 이미 존재하는지 확인
@@ -496,7 +502,7 @@ export const useChatStore = create<ChatState>((set, get) => {
             });
             
             // 실시간 판사 분석은 useRealTimeAnalysis 훅에서 전담하므로 여기서는 제거
-            console.log('메시지 추가 완료 - 실시간 분석은 useRealTimeAnalysis에서 처리됩니다.');
+            //console.log('메시지 추가 완료 - 실시간 분석은 useRealTimeAnalysis에서 처리됩니다.');
           })
           .catch(err => console.error('Failed to send message:', err));
       } catch (error) {
@@ -522,7 +528,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         
         // 상태가 변경된 경우에만 업데이트
         if (currentIsTyping !== isTyping) {
-          console.log(`User ${username} typing status changed to: ${isTyping}`);
+          //console.log(`User ${username} typing status changed to: ${isTyping}`);
           
           firebaseSet(userTypingRef, { username, isTyping })
             .catch(err => console.error('Failed to set typing status:', err));
@@ -544,25 +550,25 @@ export const useChatStore = create<ChatState>((set, get) => {
     
     // 메시지 초기화
     clearMessages: () => {
-      console.log('Clearing messages');
+      //console.log('Clearing messages');
       set({ messages: [] });
     },
     
     // 현재 사용자 설정
     setCurrentUser: (user) => {
-      console.log(`Setting current user to: ${user}`);
+      //console.log(`Setting current user to: ${user}`);
       set({ currentUser: user });
     },
     
     // 채팅방 사용자 목록 설정
     setRoomUsers: (users) => {
-      console.log(`Setting room users: ${users.length} users`);
+      //console.log(`Setting room users: ${users.length} users`);
       set({ roomUsers: users });
     },
     
     // 통계 업데이트
     updateStats: (partial) => {
-      console.log('Updating stats:', partial);
+      //console.log('Updating stats:', partial);
       set((state) => ({
         stats: {
           ...state.stats,
@@ -656,14 +662,14 @@ export const useChatStore = create<ChatState>((set, get) => {
       
       // Don't do anything if final verdict has already been requested
       if (state.finalVerdictRequested) {
-        console.log('Final verdict already requested, skipping analysis');
+        //console.log('Final verdict already requested, skipping analysis');
         return;
       }
       
       // 중복 요청 방지 및 최소 간격 확인
       const currentTime = Date.now();
       if (state.isLoading || (!isFinal && currentTime - lastAnalysisTime < 2000)) {
-        console.log('분석 요청 무시: 이미 로딩 중이거나 최소 간격 미달');
+        //console.log('분석 요청 무시: 이미 로딩 중이거나 최소 간격 미달');
         return;
       }
       
@@ -695,7 +701,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       try {
         // Check again for verdict requested to prevent race conditions
         if (get().finalVerdictRequested) {
-          console.log('Final verdict requested during analysis, aborting');
+          //console.log('Final verdict requested during analysis, aborting');
           set({ isLoading: false });
           return;
         }
@@ -703,14 +709,14 @@ export const useChatStore = create<ChatState>((set, get) => {
         // 캐시 확인
         if (responseCache[cacheKey] && 
             (currentTime - responseCache[cacheKey].timestamp) < CACHE_EXPIRY) {
-          console.log('캐시된 응답 사용');
+          //console.log('캐시된 응답 사용');
           const cachedData = responseCache[cacheKey].interventionData;
           
           // 캐시된 응답 사용 (빠른 응답)
           if (cachedData.shouldIntervene && cachedData.type && cachedData.message) {
             // One more check before showing any messages
             if (get().finalVerdictRequested) {
-              console.log('Final verdict requested while preparing cached response, aborting');
+              //console.log('Final verdict requested while preparing cached response, aborting');
               set({ isLoading: false });
               return;
             }
@@ -719,7 +725,7 @@ export const useChatStore = create<ChatState>((set, get) => {
             setTimeout(() => {
               // Final check before actually adding the message
               if (get().finalVerdictRequested) {
-                console.log('Final verdict requested before timeout completed, aborting');
+                //console.log('Final verdict requested before timeout completed, aborting');
                 set({ isLoading: false });
                 return;
               }
@@ -749,11 +755,11 @@ export const useChatStore = create<ChatState>((set, get) => {
         }
         
         // 실제 API 호출 (캐시 없을 때)
-        console.log('Gemini API 호출 시작');
+        //console.log('Gemini API 호출 시작');
         
         // Check again before showing any messages
         if (get().finalVerdictRequested) {
-          console.log('Final verdict requested before showing loading message, aborting');
+          //console.log('Final verdict requested before showing loading message, aborting');
           set({ isLoading: false });
           return;
         }
@@ -771,7 +777,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         
         // One final check before API call
         if (get().finalVerdictRequested) {
-          console.log('Final verdict requested before API call, aborting');
+          //console.log('Final verdict requested before API call, aborting');
           set({ isLoading: false });
           return;
         }
@@ -784,7 +790,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         
         // Check again after API call
         if (get().finalVerdictRequested) {
-          console.log('Final verdict requested after API call, aborting message display');
+          //console.log('Final verdict requested after API call, aborting message display');
           set({ isLoading: false });
           return;
         }
@@ -799,7 +805,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         if (result.shouldIntervene && result.type && result.message) {
           // Final check before adding message
           if (get().finalVerdictRequested) {
-            console.log('Final verdict requested before adding intervention, aborting');
+            //console.log('Final verdict requested before adding intervention, aborting');
             set({ isLoading: false });
             return;
           }
@@ -828,7 +834,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         
         // Don't set up a new preload if final verdict requested
         if (get().finalVerdictRequested) {
-          console.log('Final verdict requested, skipping preload setup');
+          //console.log('Final verdict requested, skipping preload setup');
           set({ isLoading: false });
           return;
         }
@@ -841,11 +847,11 @@ export const useChatStore = create<ChatState>((set, get) => {
         preloadTimer = setTimeout(() => {
           // Check before starting preload
           if (get().finalVerdictRequested) {
-            console.log('Final verdict requested, skipping preload');
+            //console.log('Final verdict requested, skipping preload');
             return;
           }
           
-          console.log('백그라운드 분석 사전 로드');
+          //console.log('백그라운드 분석 사전 로드');
           // 백그라운드에서 미리 분석 수행 (결과는 캐시만 하고 UI에 표시 안 함)
           analyzeConversation(
             get().messages as GeminiMessage[], 
@@ -854,7 +860,7 @@ export const useChatStore = create<ChatState>((set, get) => {
           ).then(preloadResult => {
             // Skip caching if verdict has been requested
             if (get().finalVerdictRequested) {
-              console.log('Final verdict requested, skipping preload caching');
+              //console.log('Final verdict requested, skipping preload caching');
               return;
             }
             
@@ -864,7 +870,7 @@ export const useChatStore = create<ChatState>((set, get) => {
               timestamp: Date.now(),
               interventionData: preloadResult
             };
-            console.log('백그라운드 분석 캐시 완료');
+            //console.log('백그라운드 분석 캐시 완료');
           }).catch(error => {
             console.error('백그라운드 분석 오류:', error);
           });
@@ -907,11 +913,11 @@ export const useChatStore = create<ChatState>((set, get) => {
     
     // 최종 판결 요청
     requestFinalVerdict: async () => {
-      console.log('requestFinalVerdict 함수 호출됨');
+      //console.log('requestFinalVerdict 함수 호출됨');
       
       // 이미 최종 판결이 요청되었으면 중복 요청 방지
       if (get().finalVerdictRequested || !get().timerActive) {
-        console.log('이미 최종 판결이 요청되었거나 타이머가 비활성 상태입니다.');
+        //console.log('이미 최종 판결이 요청되었거나 타이머가 비활성 상태입니다.');
         return;
       }
       
@@ -926,7 +932,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       
       // Firebase에 로딩 상태 동기화 (모든 유저에게 표시)
       if (state.roomId && database) {
-        console.log('Firebase에 판결 로딩 상태 저장');
+        //console.log('Firebase에 판결 로딩 상태 저장');
         const verdictLoadingRef = ref(database, `rooms/${state.roomId}/verdictLoading`);
         firebaseSet(verdictLoadingRef, {
           isLoading: true,
@@ -938,27 +944,27 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
       
       try {
-        console.log('현재 메시지 수:', state.messages.length);
+        //console.log('현재 메시지 수:', state.messages.length);
         
         // 타이머 중지
         state.pauseTimer();
-        console.log('타이머 상태 중지됨');
+        //console.log('타이머 상태 중지됨');
         
         // 최종 판결 요청
-        console.log('getFinalVerdict API 호출 시작');
+        //console.log('getFinalVerdict API 호출 시작');
         const verdict = await getFinalVerdict(
           state.messages as GeminiMessage[],
           state.detectedIssues
         );
-        console.log('getFinalVerdict API 호출 완료');
+        //console.log('getFinalVerdict API 호출 완료');
         
         // 판결 데이터 저장 (모달용) - 하지만 로딩바가 끝날 때까지 모달은 표시하지 않음
         if (verdict.verdict && verdict.verdict.summary) {
-          console.log('🏛️ 최종 판결 데이터 저장 중 (Firebase 동기화 포함)');
-          console.log('📄 판결 데이터:', verdict);
+          //console.log('🏛️ 최종 판결 데이터 저장 중 (Firebase 동기화 포함)');
+          //console.log('📄 판결 데이터:', verdict);
           
           // 판결 데이터를 임시로 저장 (모달 표시는 나중에)
-          console.log('🔄 판결 데이터 임시 저장 (로딩바 완료 대기)');
+          //console.log('🔄 판결 데이터 임시 저장 (로딩바 완료 대기)');
           
           // Firebase에 판결 데이터는 저장하되, 로딩 완료 플래그는 별도로 관리
           if (state.roomId && database) {
@@ -971,7 +977,7 @@ export const useChatStore = create<ChatState>((set, get) => {
             
             firebaseSet(verdictRef, verdictData)
               .then(() => {
-                console.log('✅ Firebase에 판결 데이터 저장 성공 (로딩 미완료 상태)');
+                //console.log('✅ Firebase에 판결 데이터 저장 성공 (로딩 미완료 상태)');
               })
               .catch(error => {
                 console.error('❌ 판결 데이터 Firebase 저장 실패:', error);
@@ -991,7 +997,7 @@ export const useChatStore = create<ChatState>((set, get) => {
             text: '🏛️ 최종 판결이 완료되었습니다. 판결문을 확인해주세요.'
           });
           
-          console.log('최종 판결 데이터 저장 완료 (로딩바 완료 대기 중)');
+          //console.log('최종 판결 데이터 저장 완료 (로딩바 완료 대기 중)');
         } else {
           console.error('판결 데이터가 올바르지 않음:', verdict);
           
@@ -1080,9 +1086,9 @@ export const useChatStore = create<ChatState>((set, get) => {
     // 판결 데이터 설정 (Firebase 동기화 포함)
     setVerdictData: (data: any) => {
       const state = get();
-      console.log('setVerdictData 호출됨:', data);
-      console.log('현재 roomId:', state.roomId);
-      console.log('database 객체:', !!database);
+      //console.log('setVerdictData 호출됨:', data);
+      //console.log('현재 roomId:', state.roomId);
+      //console.log('database 객체:', !!database);
       
       set({ latestVerdictData: data });
       
@@ -1094,18 +1100,18 @@ export const useChatStore = create<ChatState>((set, get) => {
       
       // Firebase에도 저장하여 모든 참가자가 볼 수 있도록 함
       if (state.roomId && database) {
-        console.log('Firebase에 판결 데이터 저장 시작');
+        //console.log('Firebase에 판결 데이터 저장 시작');
         const verdictRef = ref(database, `rooms/${state.roomId}/verdict`);
         const verdictData = {
           data: data,
           timestamp: new Date().toISOString()
         };
         
-        console.log('저장할 데이터:', verdictData);
+        //console.log('저장할 데이터:', verdictData);
         
         firebaseSet(verdictRef, verdictData)
           .then(() => {
-            console.log('✅ Firebase에 판결 데이터 저장 성공!');
+            //console.log('✅ Firebase에 판결 데이터 저장 성공!');
           })
           .catch(error => {
             console.error('❌ 판결 데이터 Firebase 저장 실패:', error);
@@ -1122,13 +1128,13 @@ export const useChatStore = create<ChatState>((set, get) => {
 
     // 방 ID 설정
     setRoomId: (roomId: string) => {
-      console.log('🏠 roomId 설정:', roomId);
+      //console.log('🏠 roomId 설정:', roomId);
       set({ roomId });
     },
 
     // 로딩바 완료 처리
     onVerdictLoadingComplete: () => {
-      console.log('🏁 로딩바 완료 - 판결 모달 바로 표시');
+      //console.log('🏁 로딩바 완료 - 판결 모달 바로 표시');
       const state = get();
       
       // 로딩 상태 해제
@@ -1136,7 +1142,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       
       // Firebase에 로딩 완료 상태 업데이트
       if (state.roomId && database) {
-        console.log('🔄 Firebase 로딩 완료 상태 업데이트');
+        //console.log('🔄 Firebase 로딩 완료 상태 업데이트');
         
         const verdictLoadingRef = ref(database, `rooms/${state.roomId}/verdictLoading`);
         firebaseSet(verdictLoadingRef, {
@@ -1153,10 +1159,10 @@ export const useChatStore = create<ChatState>((set, get) => {
         //   firebaseGet(verdictRef).then((snapshot) => {
         //     if (snapshot.exists()) {
         //       const verdictData = snapshot.val();
-        //       console.log('📋 판결 데이터 확인:', verdictData);
+        //       //console.log('📋 판결 데이터 확인:', verdictData);
               
         //       if (verdictData.data) {
-        //         console.log('💾 로컬 판결 데이터 즉시 업데이트 - 모달 표시');
+        //         //console.log('💾 로컬 판결 데이터 즉시 업데이트 - 모달 표시');
         //         // 로컬 상태 즉시 업데이트하여 모달 표시
         //         state.setVerdictDataLocal(verdictData.data);
                 
@@ -1191,7 +1197,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         verdictHistory: [...state.verdictHistory, verdictEntry]
       }));
       
-      console.log('📚 판결이 히스토리에 추가됨:', verdictEntry.id);
+      //console.log('📚 판결이 히스토리에 추가됨:', verdictEntry.id);
     },
 
     // 판결 히스토리 조회
@@ -1202,7 +1208,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     // 판결 히스토리 초기화
     clearVerdictHistory: () => {
       set({ verdictHistory: [] });
-      console.log('🗑️ 판결 히스토리 초기화됨');
+      //console.log('🗑️ 판결 히스토리 초기화됨');
     },
 
     // 즉시 판결 관련 함수
@@ -1210,11 +1216,11 @@ export const useChatStore = create<ChatState>((set, get) => {
       const state = get();
       
       if (!state.timerActive || state.finalVerdictRequested || state.instantVerdictRequested) {
-        console.log('즉시 판결 요청 불가: 타이머 비활성화 또는 이미 요청됨');
+        //console.log('즉시 판결 요청 불가: 타이머 비활성화 또는 이미 요청됨');
         return;
       }
       
-      console.log('🚨 즉시 판결 요청 시작');
+      //console.log('🚨 즉시 판결 요청 시작');
       
       // Check Firebase for paid users instead of localStorage
       // Note: This should be passed from the component that has access to Firebase data
@@ -1235,7 +1241,7 @@ export const useChatStore = create<ChatState>((set, get) => {
           agreedUsers: initialAgreedUsers,
           startedBy: currentUsername || 'system'
         }).then(() => {
-          console.log('Firebase에 즉시 판결 요청 저장 완료');
+          //console.log('Firebase에 즉시 판결 요청 저장 완료');
         }).catch(error => {
           console.error('Firebase 즉시 판결 요청 저장 실패:', error);
         });
@@ -1253,11 +1259,11 @@ export const useChatStore = create<ChatState>((set, get) => {
       const state = get();
       
       if (!state.instantVerdictRequested) {
-        console.log('즉시 판결이 요청되지 않음');
+        //console.log('즉시 판결이 요청되지 않음');
         return;
       }
       
-      console.log(`🤝 ${username}님 즉시 판결 동의`);
+      //console.log(`🤝 ${username}님 즉시 판결 동의`);
       
       set(currentState => ({
         instantVerdictAgreedUsers: {
@@ -1270,7 +1276,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       if (state.roomId && database) {
         const agreedUsersRef = ref(database, `rooms/${state.roomId}/instantVerdict/agreedUsers/${username}`);
         firebaseSet(agreedUsersRef, true).then(() => {
-          console.log('Firebase에 즉시 판결 동의 저장 완료');
+          //console.log('Firebase에 즉시 판결 동의 저장 완료');
           
           // 동의 후 즉시 만장일치 체크
           state.checkInstantVerdictConsensus();
@@ -1302,7 +1308,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         if (state.roomId && database) {
           const instantVerdictRef = ref(database, `rooms/${state.roomId}/instantVerdict`);
           remove(instantVerdictRef).then(() => {
-            console.log('Firebase에서 즉시 판결 요청 제거 완료');
+            //console.log('Firebase에서 즉시 판결 요청 제거 완료');
           }).catch(error => {
             console.error('Firebase 즉시 판결 요청 제거 실패:', error);
           });
@@ -1323,11 +1329,11 @@ export const useChatStore = create<ChatState>((set, get) => {
       // Do NOT auto-include paid users - they must manually agree to instant verdict
       const agreedCount = Object.keys(state.instantVerdictAgreedUsers).length;
       
-      console.log(`즉시 판결 동의 현황: ${agreedCount}/${totalUsers} (명시적 동의만 카운트)`);
+      //console.log(`즉시 판결 동의 현황: ${agreedCount}/${totalUsers} (명시적 동의만 카운트)`);
       
       // 모든 사용자가 명시적으로 동의했을 때만
       if (agreedCount >= totalUsers && totalUsers > 0) {
-        console.log('🎉 즉시 판결 만장일치! 판결 시작');
+        //console.log('🎉 즉시 판결 만장일치! 판결 시작');
         
         // 모달 닫기
         set({ 

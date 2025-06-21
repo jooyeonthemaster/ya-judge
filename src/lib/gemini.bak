@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // API 키 확인
 const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
-console.log('Gemini API 키 존재 여부:', !!apiKey);
+//console.log('Gemini API 키 존재 여부:', !!apiKey);
 
 const genAI = new GoogleGenerativeAI(apiKey);
 
@@ -62,11 +62,11 @@ export const analyzeConversation = async (
   try {
     // 메시지가 너무 적으면 개입하지 않음
     if (messages.filter(m => m.user === 'user-general').length < 3) {
-      console.log('대화가 충분하지 않아 분석을 건너뜁니다.');
+      //console.log('대화가 충분하지 않아 분석을 건너뜁니다.');
       return { shouldIntervene: false };
     }
     
-    console.log('실시간 대화 분석 시작');
+    //console.log('실시간 대화 분석 시작');
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
     // 참가자 정보 추출
@@ -177,14 +177,14 @@ export const analyzeConversation = async (
       공격적 언어는 다음과 같은 단어를 포함합니다: 씨발, 개새끼, 병신, 미친놈, 등
     `;
     
-    console.log('Gemini 프롬포트 생성 완료, API 요청 시작');
+    //console.log('Gemini 프롬포트 생성 완료, API 요청 시작');
     
     const result = await model.generateContent(prompt);
-    console.log('Gemini API 응답 받음');
+    //console.log('Gemini API 응답 받음');
 
     // API 응답 처리
     const responseText = result.response.text();
-    console.log('응답 길이:', responseText.length);
+    //console.log('응답 길이:', responseText.length);
     
     // 'undefined' 문자열 제거
     const cleanedResponse = responseText.replace(/undefined/g, '');
@@ -213,12 +213,12 @@ export const analyzeConversation = async (
       
       // JSON 파싱
       const parsedResponse: InterventionData = JSON.parse(cleanedText);
-      console.log('파싱된 응답:', JSON.stringify(parsedResponse).substring(0, 200) + '...');
+      //console.log('파싱된 응답:', JSON.stringify(parsedResponse).substring(0, 200) + '...');
       
       return parsedResponse;
     } catch (parseError) {
       console.error('응답 파싱 오류:', parseError);
-      console.log('원본 응답:', cleanedResponse);
+      //console.log('원본 응답:', cleanedResponse);
       
       // 응답이 JSON 형식이 아니면 개입하지 않음
       return {
@@ -307,13 +307,13 @@ export const generateIssues = async (messages: Message[]): Promise<IssuesData> =
     
     // 쟁점 개수를 최대 5개로 제한
     if (data.issues && data.issues.length > 5) {
-      console.log(`쟁점 선별 필요: ${data.issues.length}개 쟁점 발견`);
+      //console.log(`쟁점 선별 필요: ${data.issues.length}개 쟁점 발견`);
       
       // 주요 쟁점 선별 로직
       const selectedIssues = selectImportantIssues(data.issues, messages);
       data.issues = selectedIssues;
       
-      console.log(`선별된 주요 쟁점 ${selectedIssues.length}개`);
+      //console.log(`선별된 주요 쟁점 ${selectedIssues.length}개`);
     }
     
     // 유효하지 않은 쟁점 필터링
@@ -513,7 +513,7 @@ export const generateVerdict = async (messages: Message[]): Promise<VerdictData>
 export const generateJudgeMessage = async (messages: Message[], stage: string): Promise<JudgeMessageData> => {
   try {
     const response = await getJudgeResponse(messages, stage);
-    console.log('API 응답 결과:', response.substring(0, 100) + '...');
+    //console.log('API 응답 결과:', response.substring(0, 100) + '...');
     
     // 모든 undefined 문자열 제거를 여러 패턴으로 수행
     let cleanedResponse = response;
@@ -546,7 +546,7 @@ export const generateJudgeMessage = async (messages: Message[], stage: string): 
     cleanedResponse = cleanedResponse.replace(/"([^"]*?)undefined([^"]*?)"/g, '"$1$2"'); // JSON 문자열 내부의 undefined
     cleanedResponse = cleanedResponse.replace(/:\s*undefined\s*([,}])/g, ':null$1'); // JSON 값으로서의 undefined
     
-    console.log('undefined 제거 후 응답:', cleanedResponse.substring(0, 100) + '...');
+    //console.log('undefined 제거 후 응답:', cleanedResponse.substring(0, 100) + '...');
     
     // JSON 파싱 시도
     const parsed = JSON.parse(cleanedResponse) as JudgeMessageData;
@@ -630,7 +630,7 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
   }
   
   try {
-    console.log('Gemini API 호출 시작');
+    //console.log('Gemini API 호출 시작');
     // 모델 인스턴스 생성
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
@@ -641,7 +641,7 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
         .map(msg => msg.name)
     ));
     
-    console.log('대화 참가자:', participants);
+    //console.log('대화 참가자:', participants);
     
     // 대화 이력 구성 (발화자 정보와 발화 시간도 포함)
     const conversationHistory = messages
@@ -910,15 +910,15 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
       `;
     }
     
-    console.log('Gemini 프롬포트 생성 완료, API 요청 시작');
-    console.log('프롬프트 일부:', prompt.substring(0, 200) + '...');
+    //console.log('Gemini 프롬포트 생성 완료, API 요청 시작');
+    //console.log('프롬프트 일부:', prompt.substring(0, 200) + '...');
     
     const result = await model.generateContent(prompt);
-    console.log('Gemini API 응답 받음');
+    //console.log('Gemini API 응답 받음');
 
     // API 응답 처리
     const responseText = result.response.text();
-    console.log('API 응답 받음, 응답 길이:', responseText.length);
+    //console.log('API 응답 받음, 응답 길이:', responseText.length);
     
     // JSON 부분 추출 시도
     try {
@@ -928,15 +928,15 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
       // 마크다운 코드 블록 제거
       cleanedText = cleanedText.replace(/```json\s*([\s\S]*?)\s*```/g, '$1');
       cleanedText = cleanedText.replace(/```\s*([\s\S]*?)\s*```/g, '$1');
-      console.log('코드 블록 제거 후 응답 길이:', cleanedText.length);
+      //console.log('코드 블록 제거 후 응답 길이:', cleanedText.length);
       
       // 유효한 JSON이 아닌 경우
       if (!cleanedText.trim().startsWith("{")) {
-        console.log('유효한 JSON 형식이 아님, JSON 추출 시도 중');
+        //console.log('유효한 JSON 형식이 아님, JSON 추출 시도 중');
         const jsonMatch = cleanedText.match(/(\{[\s\S]*\})/);
         if (jsonMatch && jsonMatch[1]) {
           cleanedText = jsonMatch[1];
-          console.log('JSON 추출 성공, 길이:', cleanedText.length);
+          //console.log('JSON 추출 성공, 길이:', cleanedText.length);
         } else {
           console.error('JSON 추출 실패');
           throw new Error('유효한 JSON 형식이 아닙니다.');
@@ -944,9 +944,9 @@ export const getJudgeResponse = async (messages: Message[], stage?: string, cont
       }
       
       // JSON 파싱 후 반환
-      console.log('JSON 파싱 시도 중');
+      //console.log('JSON 파싱 시도 중');
       const parsedData = JSON.parse(cleanedText) as VerdictData;
-      console.log('JSON 파싱 성공:', parsedData.verdict ? '판결 있음' : '판결 없음');
+      //console.log('JSON 파싱 성공:', parsedData.verdict ? '판결 있음' : '판결 없음');
       return parsedData;
     } catch (error) {
       console.error('최종 판결 응답 파싱 오류:', error);
@@ -999,16 +999,16 @@ export const getFinalVerdict = async (
   }
   
   try {
-    console.log('최종 판결 요청 시작');
-    console.log('메시지 수:', messages.length);
-    console.log('감지된 쟁점 수:', detectedIssues?.length || 0);
-    console.log('사용자 욕설 레벨 정보:', userCurseLevels);
+    //console.log('최종 판결 요청 시작');
+    //console.log('메시지 수:', messages.length);
+    //console.log('감지된 쟁점 수:', detectedIssues?.length || 0);
+    //console.log('사용자 욕설 레벨 정보:', userCurseLevels);
     
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
     // 시스템 메시지 제외한 사용자와 판사 메시지만 필터링
     const filteredMessages = messages.filter(msg => msg.user !== 'system');
-    console.log('필터링된 메시지 수:', filteredMessages.length);
+    //console.log('필터링된 메시지 수:', filteredMessages.length);
     
     // 쟁점 목록 문자열화
     const issuesStr = detectedIssues && detectedIssues.length > 0
@@ -1080,7 +1080,7 @@ export const getFinalVerdict = async (
         .filter(msg => msg.user === 'user-general')
         .map(msg => msg.name)
     ));
-    console.log('대화 참가자:', participants);
+    //console.log('대화 참가자:', participants);
     
     const prompt = `항상 반드시 한국어로만 응답하세요. 영어로 응답하면 안 됩니다. 답변의 모든 부분(JSON 포함)은 한국어로만 작성하세요.
     
@@ -1139,13 +1139,13 @@ export const getFinalVerdict = async (
       }
     `;
     
-    console.log('최종 판결 프롬프트 생성 완료, API 요청 시작');
+    //console.log('최종 판결 프롬프트 생성 완료, API 요청 시작');
     const result = await model.generateContent(prompt);
-    console.log('최종 판결 API 응답 받음');
+    //console.log('최종 판결 API 응답 받음');
     
     // API 응답 처리
     const responseText = result.response.text();
-    console.log('API 응답 받음, 응답 길이:', responseText.length);
+    //console.log('API 응답 받음, 응답 길이:', responseText.length);
     
     // JSON 부분 추출 시도
     try {
@@ -1155,15 +1155,15 @@ export const getFinalVerdict = async (
       // 마크다운 코드 블록 제거
       cleanedText = cleanedText.replace(/```json\s*([\s\S]*?)\s*```/g, '$1');
       cleanedText = cleanedText.replace(/```\s*([\s\S]*?)\s*```/g, '$1');
-      console.log('코드 블록 제거 후 응답 길이:', cleanedText.length);
+      //console.log('코드 블록 제거 후 응답 길이:', cleanedText.length);
       
       // 유효한 JSON이 아닌 경우
       if (!cleanedText.trim().startsWith("{")) {
-        console.log('유효한 JSON 형식이 아님, JSON 추출 시도 중');
+        //console.log('유효한 JSON 형식이 아님, JSON 추출 시도 중');
         const jsonMatch = cleanedText.match(/(\{[\s\S]*\})/);
         if (jsonMatch && jsonMatch[1]) {
           cleanedText = jsonMatch[1];
-          console.log('JSON 추출 성공, 길이:', cleanedText.length);
+          //console.log('JSON 추출 성공, 길이:', cleanedText.length);
         } else {
           console.error('JSON 추출 실패');
           throw new Error('유효한 JSON 형식이 아닙니다.');
@@ -1171,9 +1171,9 @@ export const getFinalVerdict = async (
       }
       
       // JSON 파싱 후 반환
-      console.log('JSON 파싱 시도 중');
+      //console.log('JSON 파싱 시도 중');
       const parsedData = JSON.parse(cleanedText) as VerdictData;
-      console.log('JSON 파싱 성공:', parsedData.verdict ? '판결 있음' : '판결 없음');
+      //console.log('JSON 파싱 성공:', parsedData.verdict ? '판결 있음' : '판결 없음');
       return parsedData;
     } catch (error) {
       console.error('최종 판결 응답 파싱 오류:', error);

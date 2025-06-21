@@ -12,13 +12,13 @@ interface Message {
 
 export async function POST(request: Request) {
   try {
-    console.log('Judge API called');
+    // //console.log('Judge API called');
     
     const { messages } = await request.json();
-    console.log('Messages:', messages);
+    // //console.log('Messages:', messages);
     
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    console.log('API Key exists:', !!apiKey);
+    // //console.log('API Key exists:', !!apiKey);
     
     if (!apiKey) {
       throw new Error('API key not found');

@@ -23,20 +23,20 @@ let database: Database | undefined;
 
 // Initialize Firebase (works on both server and client)
 try {
-  console.log('Initializing Firebase...');
+  //console.log('Initializing Firebase...');
   // Prevent multiple app initialization
   if (getApps().length === 0) {
-    console.log('Creating new Firebase app...');
+    //console.log('Creating new Firebase app...');
     firebaseApp = initializeApp(firebaseConfig);
   } else {
-    console.log('Using existing Firebase app...');
+    //console.log('Using existing Firebase app...');
     firebaseApp = getApps()[0];
   }
   
-  console.log('Initializing Firestore and Database...');
+  //console.log('Initializing Firestore and Database...');
   firestore = getFirestore(firebaseApp);
   database = getDatabase(firebaseApp);
-  console.log('Database initialized:', !!database);
+  //console.log('Database initialized:', !!database);
   
   // Auth only on client side
   if (typeof window !== 'undefined') {

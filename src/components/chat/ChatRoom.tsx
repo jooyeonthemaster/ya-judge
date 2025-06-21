@@ -192,7 +192,7 @@ export default function ChatRoom({
   // 판결 데이터 감지 및 자동 모달 표시 (최초 판결 완료 시)
   useEffect(() => {
     if (latestVerdictData && !showVerdictModal) {
-      console.log('📋 최초 판결 데이터 감지 - 자동 모달 표시 (모든 사용자)');
+      //console.log('📋 최초 판결 데이터 감지 - 자동 모달 표시 (모든 사용자)');
       setShowVerdictModal(true);
       // Save the verdict data for later viewing
       setSavedVerdictData(latestVerdictData);
@@ -202,32 +202,32 @@ export default function ChatRoom({
   // roomId를 store에 설정
   useEffect(() => {
     if (roomId) {
-      console.log('📍 ChatRoom에서 roomId 설정:', roomId);
+      //console.log('📍 ChatRoom에서 roomId 설정:', roomId);
       setRoomId(roomId);
     }
   }, [roomId, setRoomId]);
 
   // CourtReadyModal 상태 변경 추적
   useEffect(() => {
-    console.log('🎯 CourtReadyModal 상태 변경:', {
-      isOpen: chatState.showCourtReadyModal,
-      isRetrial: isModalForRetrial,
-      isRoomHost: chatState.isRoomHost,
-      showRetrialModal: showRetrialModal
-    });
+    // //console.log('🎯 CourtReadyModal 상태 변경:', {
+    //   isOpen: chatState.showCourtReadyModal,
+    //   isRetrial: isModalForRetrial,
+    //   isRoomHost: chatState.isRoomHost,
+    //   showRetrialModal: showRetrialModal
+    // });
   }, [chatState.showCourtReadyModal, isModalForRetrial, chatState.isRoomHost, showRetrialModal]);
 
   // Firebase 로딩 상태 실시간 리스너 (모든 참가자용)
   useEffect(() => {
     if (!roomId || !database) return;
 
-    console.log(`로딩 상태 리스너 설정: ${roomId}`);
+    //console.log(`로딩 상태 리스너 설정: ${roomId}`);
     const verdictLoadingRef = ref(database, `rooms/${roomId}/verdictLoading`);
     
     const loadingUnsubscribe = onValue(verdictLoadingRef, (snapshot) => {
       if (snapshot.exists()) {
         const loadingInfo = snapshot.val();
-        console.log('Firebase 로딩 상태 수신:', loadingInfo);
+        //console.log('Firebase 로딩 상태 수신:', loadingInfo);
         
         // 모든 유저에게 로딩 상태 동기화
         if (loadingInfo.isLoading !== undefined) {
@@ -237,7 +237,7 @@ export default function ChatRoom({
     });
 
     return () => {
-      console.log('로딩 상태 리스너 정리');
+      //console.log('로딩 상태 리스너 정리');
       off(verdictLoadingRef, 'value', loadingUnsubscribe);
     };
   }, [roomId, database]);
@@ -246,33 +246,33 @@ export default function ChatRoom({
   useEffect(() => {
     if (!roomId || !database) return;
 
-    console.log(`📡 판결 리스너 설정: ${roomId}`);
+    //console.log(`📡 판결 리스너 설정: ${roomId}`);
     const verdictRef = ref(database, `rooms/${roomId}/verdict`);
     
     const verdictUnsubscribe = onValue(verdictRef, (snapshot) => {
-      console.log('🔍 Firebase 판결 데이터 확인:', snapshot.exists());
+      //console.log('🔍 Firebase 판결 데이터 확인:', snapshot.exists());
       
       if (snapshot.exists()) {
         const verdictInfo = snapshot.val();
-        console.log('📥 Firebase에서 판결 데이터 수신:', verdictInfo);
+        //console.log('📥 Firebase에서 판결 데이터 수신:', verdictInfo);
         
         // 판결 데이터가 있으면 바로 로컬 상태 업데이트
         if (verdictInfo.data && (!latestVerdictData || 
             JSON.stringify(verdictInfo.data) !== JSON.stringify(latestVerdictData))) {
-          console.log('💾 판결 데이터 로컬 업데이트 시작');
+          //console.log('💾 판결 데이터 로컬 업데이트 시작');
           
           // 로컬만 업데이트하는 함수 사용 (Firebase 저장 안 함)
           setVerdictDataLocal(verdictInfo.data);
           
-          console.log('✅ 판결 데이터 로컬 업데이트 완료');
+          //console.log('✅ 판결 데이터 로컬 업데이트 완료');
         }
       } else {
-        console.log('❌ Firebase에 판결 데이터 없음');
+        //console.log('❌ Firebase에 판결 데이터 없음');
       }
     });
 
     return () => {
-      console.log('🧹 판결 리스너 정리');
+      //console.log('🧹 판결 리스너 정리');
       off(verdictRef, 'value', verdictUnsubscribe);
     };
   }, [roomId, database, latestVerdictData]);
@@ -337,7 +337,7 @@ export default function ChatRoom({
         
         // If all users are ready, show the court ready modal
         if (readyCount >= expectedCount && expectedCount > 0) {
-          console.log('🎯 모든 사용자가 준비 완료 - CourtReadyModal 표시');
+          //console.log('🎯 모든 사용자가 준비 완료 - CourtReadyModal 표시');
           setIsModalForRetrial(false); // This is a new trial, not a retrial
           chatState.setShowCourtReadyModal(true);
           
@@ -381,12 +381,12 @@ export default function ChatRoom({
       // Mobile detection
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       
-      console.log('📱 Host presence changed:', { 
-        isHostPresent, 
-        isCurrentUserHost: chatState.isRoomHost,
-        isMobile,
-        userAgent: navigator.userAgent.substring(0, 50)
-      });
+      // console.log('📱 Host presence changed:', { 
+      //   isHostPresent, 
+      //   isCurrentUserHost: chatState.isRoomHost,
+      //   isMobile,
+      //   userAgent: navigator.userAgent.substring(0, 50)
+      // });
       
       // Handle host returning from payment
       if (isHostPresent === true && !chatState.isRoomHost) {
@@ -400,7 +400,7 @@ export default function ChatRoom({
         );
         
         if (hasMobilePaymentMessage) {
-          console.log('📱 Host returned from mobile payment');
+          //console.log('📱 Host returned from mobile payment');
           addMessage({
             user: 'system',
             name: '시스템',
@@ -411,12 +411,12 @@ export default function ChatRoom({
       }
       
       if (isHostPresent === false && !chatState.isRoomHost) {
-        console.log('📱 Host presence is false, checking for mobile payment exceptions...');
+        //console.log('📱 Host presence is false, checking for mobile payment exceptions...');
         
         // Check if host is currently in payment (mobile exception)
         // Don't show HostLeftModal if host is paying on mobile
         if (!database) {
-          console.log('📱 No database connection, showing HostLeftModal');
+          //console.log('📱 No database connection, showing HostLeftModal');
           chatState.setShowHostLeftModal(true);
           return;
         }
@@ -425,20 +425,20 @@ export default function ChatRoom({
           const isPayingRef = ref(database, `rooms/${roomId}/ispaying`);
           const isPayingSnapshot = await get(isPayingRef);
           
-          console.log('📱 Payment status check:', {
-            exists: isPayingSnapshot.exists(),
-            data: isPayingSnapshot.exists() ? isPayingSnapshot.val() : null
-          });
+          // console.log('📱 Payment status check:', {
+          //   exists: isPayingSnapshot.exists(),
+          //   data: isPayingSnapshot.exists() ? isPayingSnapshot.val() : null
+          // });
           
           if (isPayingSnapshot.exists()) {
             const paymentData = isPayingSnapshot.val();
             const isHostPaying = paymentData && paymentData.status === true;
             
-            console.log('📱 Host presence check - Host is paying:', isHostPaying);
-            console.log('📱 Payment data:', paymentData);
+            //console.log('📱 Host presence check - Host is paying:', isHostPaying);
+            //console.log('📱 Payment data:', paymentData);
             
             if (isHostPaying) {
-              console.log('📱 Mobile Payment Exception: Host is in payment process, not showing HostLeftModal');
+              //console.log('📱 Mobile Payment Exception: Host is in payment process, not showing HostLeftModal');
               
               // Add system message to inform other users that host is in payment
               addMessage({
@@ -451,7 +451,7 @@ export default function ChatRoom({
               // Set a timeout to show the modal after 10 minutes of payment activity
               // This prevents users from waiting indefinitely if something goes wrong
               setTimeout(() => {
-                console.log('📱 Payment timeout reached (10 minutes), checking host presence again');
+                //console.log('📱 Payment timeout reached (10 minutes), checking host presence again');
                 // Re-check if host is still paying and host presence is still false
                 get(isPayingRef).then((timeoutPaymentSnapshot) => {
                   const timeoutPaymentData = timeoutPaymentSnapshot.exists() ? timeoutPaymentSnapshot.val() : null;
@@ -461,7 +461,7 @@ export default function ChatRoom({
                     const isStillHostPresent = timeoutHostSnapshot.val();
                     
                     if (!isStillHostPresent && isStillPaying) {
-                      console.log('📱 Host still absent and payment still active after 10 minutes - showing HostLeftModal');
+                      //console.log('📱 Host still absent and payment still active after 10 minutes - showing HostLeftModal');
                       addMessage({
                         user: 'system',
                         name: '시스템',
@@ -490,30 +490,30 @@ export default function ChatRoom({
              msg.text.includes('항소권을 구매하고 재판 준비가 완료되었습니다'))
           );
           
-          console.log('📱 Recent payment completion check:', {
-            hasRecentPaymentCompletion,
-            recentMessages: recentMessages.map(m => ({ user: m.user, text: m.text.substring(0, 50) }))
-          });
+          // console.log('📱 Recent payment completion check:', {
+          //   hasRecentPaymentCompletion,
+          //   recentMessages: recentMessages.map(m => ({ user: m.user, text: m.text.substring(0, 50) }))
+          // });
           
           if (hasRecentPaymentCompletion) {
-            console.log('📱 Mobile Payment Return Grace Period: Recent payment completion detected, delaying HostLeftModal check');
+            //console.log('📱 Mobile Payment Return Grace Period: Recent payment completion detected, delaying HostLeftModal check');
             
             // Give a 30-second grace period for the user to fully reconnect
             setTimeout(() => {
-              console.log('📱 Grace period ended, re-checking host presence');
+              //console.log('📱 Grace period ended, re-checking host presence');
               get(hostPresenceRef).then((graceHostSnapshot) => {
                 const isStillHostAbsent = graceHostSnapshot.val() === false;
                 
-                console.log('📱 Grace period check result:', {
-                  isStillHostAbsent,
-                  hostPresence: graceHostSnapshot.val()
-                });
+                // console.log('📱 Grace period check result:', {
+                //   isStillHostAbsent,
+                //   hostPresence: graceHostSnapshot.val()
+                // });
                 
                 if (isStillHostAbsent) {
-                  console.log('📱 Host still absent after grace period - showing HostLeftModal');
+                  //console.log('📱 Host still absent after grace period - showing HostLeftModal');
                   chatState.setShowHostLeftModal(true);
                 } else {
-                  console.log('📱 Host reconnected during grace period - not showing HostLeftModal');
+                  //console.log('📱 Host reconnected during grace period - not showing HostLeftModal');
                 }
               }).catch(error => {
                 console.error('Error in grace period host check:', error);
@@ -525,33 +525,33 @@ export default function ChatRoom({
           
           // MOBILE SPECIFIC: Additional check for mobile users
           if (isMobile) {
-            console.log('📱 Mobile user detected, adding extra grace period for mobile payment return');
+            //console.log('📱 Mobile user detected, adding extra grace period for mobile payment return');
             
             // Check session storage for payment indicators
             const hasPaymentSession = sessionStorage.getItem('newPaymentId') || 
                                     sessionStorage.getItem('newRoomId') ||
                                     sessionStorage.getItem('username');
             
-            console.log('📱 Mobile payment session check:', {
-              hasPaymentSession: !!hasPaymentSession,
-              newPaymentId: !!sessionStorage.getItem('newPaymentId'),
-              newRoomId: !!sessionStorage.getItem('newRoomId'),
-              username: !!sessionStorage.getItem('username')
-            });
+            // console.log('📱 Mobile payment session check:', {
+            //   hasPaymentSession: !!hasPaymentSession,
+            //   newPaymentId: !!sessionStorage.getItem('newPaymentId'),
+            //   newRoomId: !!sessionStorage.getItem('newRoomId'),
+            //   username: !!sessionStorage.getItem('username')
+            // });
             
             if (hasPaymentSession) {
-              console.log('📱 Mobile payment session detected, extending grace period to 60 seconds');
+              //console.log('📱 Mobile payment session detected, extending grace period to 60 seconds');
               
               setTimeout(() => {
-                console.log('📱 Extended mobile grace period ended, re-checking host presence');
+                //console.log('📱 Extended mobile grace period ended, re-checking host presence');
                 get(hostPresenceRef).then((mobileGraceHostSnapshot) => {
                   const isStillHostAbsent = mobileGraceHostSnapshot.val() === false;
                   
                   if (isStillHostAbsent) {
-                    console.log('📱 Host still absent after extended mobile grace period - showing HostLeftModal');
+                    //console.log('📱 Host still absent after extended mobile grace period - showing HostLeftModal');
                     chatState.setShowHostLeftModal(true);
                   } else {
-                    console.log('📱 Host reconnected during extended mobile grace period - not showing HostLeftModal');
+                    //console.log('📱 Host reconnected during extended mobile grace period - not showing HostLeftModal');
                   }
                 }).catch(error => {
                   console.error('Error in extended mobile grace period host check:', error);
@@ -573,30 +573,30 @@ export default function ChatRoom({
                                   sessionStorage.getItem('newPaymentId') ||
                                   localStorage.getItem('mobilePaymentDebugLogs');
             
-            console.log('📱 Current user payment return check:', {
-              isFromPaymentResult,
-              hasPaymentData: !!hasPaymentData,
-              referrer: referrer.substring(0, 100),
-              currentUsername: chatState.username
-            });
+            // console.log('📱 Current user payment return check:', {
+            //   isFromPaymentResult,
+            //   hasPaymentData: !!hasPaymentData,
+            //   referrer: referrer.substring(0, 100),
+            //   currentUsername: chatState.username
+            // });
             
             return isFromPaymentResult || hasPaymentData;
           };
           
           if (currentUserJustReturnedFromPayment()) {
-            console.log('📱 CRITICAL: Current user just returned from payment, preventing HostLeftModal for 2 minutes');
+            //console.log('📱 CRITICAL: Current user just returned from payment, preventing HostLeftModal for 2 minutes');
             
             // Extended grace period for users returning from payment
             setTimeout(() => {
-              console.log('📱 Payment return grace period ended, final host presence check');
+              //console.log('📱 Payment return grace period ended, final host presence check');
               get(hostPresenceRef).then((finalHostSnapshot) => {
                 const isStillHostAbsent = finalHostSnapshot.val() === false;
                 
                 if (isStillHostAbsent) {
-                  console.log('📱 Host still absent after payment return grace period - showing HostLeftModal');
+                  //console.log('📱 Host still absent after payment return grace period - showing HostLeftModal');
                   chatState.setShowHostLeftModal(true);
                 } else {
-                  console.log('📱 Host reconnected after payment return - not showing HostLeftModal');
+                  //console.log('📱 Host reconnected after payment return - not showing HostLeftModal');
                 }
               }).catch(error => {
                 console.error('Error in payment return grace period host check:', error);
@@ -610,7 +610,7 @@ export default function ChatRoom({
           console.error('Error checking payment status:', error);
         }
         
-        console.log('📱 No payment exceptions found, showing HostLeftModal');
+        //console.log('📱 No payment exceptions found, showing HostLeftModal');
         chatState.setShowHostLeftModal(true);
       }
     });
@@ -634,13 +634,13 @@ export default function ChatRoom({
   useEffect(() => {
     if (!roomId || !database) return;
 
-    console.log(`⚡ 즉시 판결 리스너 설정: ${roomId}`);
+    //console.log(`⚡ 즉시 판결 리스너 설정: ${roomId}`);
     const instantVerdictRef = ref(database, `rooms/${roomId}/instantVerdict`);
     
     const instantVerdictUnsubscribe = onValue(instantVerdictRef, (snapshot) => {
       if (snapshot.exists()) {
         const instantVerdictData = snapshot.val();
-        console.log('⚡ Firebase 즉시 판결 상태 수신:', instantVerdictData);
+        //console.log('⚡ Firebase 즉시 판결 상태 수신:', instantVerdictData);
         
         // 모든 유저에게 즉시 판결 요청 상태 동기화
         if (instantVerdictData.requested) {
@@ -655,7 +655,7 @@ export default function ChatRoom({
         }
       } else {
         // 즉시 판결 요청이 취소되었을 때
-        console.log('⚡ 즉시 판결 요청 취소됨');
+        //console.log('⚡ 즉시 판결 요청 취소됨');
         
         // 타이머 재개 (서버에서 취소된 경우)
         if (timerState.timerActive && timerState.timerPaused) {
@@ -680,7 +680,7 @@ export default function ChatRoom({
     });
 
     return () => {
-      console.log('🧹 즉시 판결 리스너 정리');
+      //console.log('🧹 즉시 판결 리스너 정리');
       off(instantVerdictRef, 'value', instantVerdictUnsubscribe);
     };
   }, [roomId, database, paidUsers]);
@@ -689,18 +689,18 @@ export default function ChatRoom({
   useEffect(() => {
     if (!roomId || !database) return;
 
-    console.log(`🏛️ CourtReadyModal 상태 리스너 설정: ${roomId}`);
+    //console.log(`🏛️ CourtReadyModal 상태 리스너 설정: ${roomId}`);
     const courtReadyModalRef = ref(database, `rooms/${roomId}/courtReadyModal`);
     
     const courtReadyModalUnsubscribe = onValue(courtReadyModalRef, (snapshot) => {
       if (snapshot.exists()) {
         const modalData = snapshot.val();
-        console.log('🏛️ Firebase CourtReadyModal 상태 수신:', modalData);
+        //console.log('🏛️ Firebase CourtReadyModal 상태 수신:', modalData);
         
         // 호스트가 아닌 사용자들에게 모달 상태 동기화 (버튼 비활성화용)
         if (!chatState.isRoomHost && modalData.isOpen !== undefined) {
           setIsHostViewingCourtReadyModal(modalData.isOpen);
-          console.log(`비호스트 사용자: CourtReadyModal 상태 = ${modalData.isOpen} -> 버튼 ${modalData.isOpen ? '비활성화' : '활성화'}`);
+          //console.log(`비호스트 사용자: CourtReadyModal 상태 = ${modalData.isOpen} -> 버튼 ${modalData.isOpen ? '비활성화' : '활성화'}`);
         }
       } else {
         // 모달 데이터가 없으면 기본적으로 활성화
@@ -711,7 +711,7 @@ export default function ChatRoom({
     });
 
     return () => {
-      console.log('🧹 CourtReadyModal 상태 리스너 정리');
+      //console.log('🧹 CourtReadyModal 상태 리스너 정리');
       off(courtReadyModalRef, 'value', courtReadyModalUnsubscribe);
     };
   }, [roomId, database, chatState.isRoomHost]);
@@ -720,7 +720,7 @@ export default function ChatRoom({
   useEffect(() => {
     if (!roomId || !database) return;
 
-    console.log(`🔄 재심 리스너 설정: ${roomId}`);
+    //console.log(`🔄 재심 리스너 설정: ${roomId}`);
     const retrialRef = ref(database, `rooms/${roomId}/retrial`);
     
     // 재심 만장일치 체크 함수
@@ -742,28 +742,28 @@ export default function ChatRoom({
       const agreedCount = effectivelyAgreedUsers.size;
       const totalRealUsers = realUsers.length;
       
-      console.log(`재심 동의 현황: ${agreedCount}/${totalRealUsers}`);
-      console.log('Real users:', realUsers.map(u => u.username));
-      console.log('Explicitly agreed users:', explicitlyAgreedUsers);
-      console.log('Paid users (implicitly agreed):', paidUsernames);
-      console.log('Effectively agreed users:', Array.from(effectivelyAgreedUsers));
-      console.log('Is room host:', chatState.isRoomHost);
+      //console.log(`재심 동의 현황: ${agreedCount}/${totalRealUsers}`);
+      //console.log('Real users:', realUsers.map(u => u.username));
+      //console.log('Explicitly agreed users:', explicitlyAgreedUsers);
+      //console.log('Paid users (implicitly agreed):', paidUsernames);
+      //console.log('Effectively agreed users:', Array.from(effectivelyAgreedUsers));
+      //console.log('Is room host:', chatState.isRoomHost);
       
       // 모든 사용자가 동의했을 때만 (실제 동의한 수 = 전체 실제 사용자 수)
       if (agreedCount === totalRealUsers && totalRealUsers > 0) {
-        console.log('🎉 재심 만장일치! 호스트에게 CourtReadyModal 표시');
-        console.log(`확인: ${agreedCount}명이 동의했고, 총 ${totalRealUsers}명의 실제 사용자가 있음`);
+        //console.log('🎉 재심 만장일치! 호스트에게 CourtReadyModal 표시');
+        //console.log(`확인: ${agreedCount}명이 동의했고, 총 ${totalRealUsers}명의 실제 사용자가 있음`);
         
         // 추가 검증: 실제로 모든 실제 사용자가 동의했는지 확인
         const realUsernames = realUsers.map(u => u.username);
         const allRealUsersAgreed = realUsernames.every(username => effectivelyAgreedUsers.has(username));
         
-        console.log('실제 사용자 목록:', realUsernames);
-        console.log('실질적으로 동의한 사용자 목록:', Array.from(effectivelyAgreedUsers));
-        console.log('모든 실제 사용자가 동의했는가?', allRealUsersAgreed);
+        //console.log('실제 사용자 목록:', realUsernames);
+        //console.log('실질적으로 동의한 사용자 목록:', Array.from(effectivelyAgreedUsers));
+        //console.log('모든 실제 사용자가 동의했는가?', allRealUsersAgreed);
         
         if (!allRealUsersAgreed) {
-          console.log('🚫 일부 실제 사용자가 아직 동의하지 않음 - 모달 표시 중단');
+          //console.log('🚫 일부 실제 사용자가 아직 동의하지 않음 - 모달 표시 중단');
           return;
         }
         
@@ -779,8 +779,8 @@ export default function ChatRoom({
         
         // 호스트에게만 CourtReadyModal 표시
         if (chatState.isRoomHost) {
-          console.log('🎯 호스트에게 재심 CourtReadyModal 표시 시작');
-          console.log('Setting isModalForRetrial to true');
+          //console.log('🎯 호스트에게 재심 CourtReadyModal 표시 시작');
+          //console.log('Setting isModalForRetrial to true');
           setIsModalForRetrial(true);
           chatState.setShowCourtReadyModal(true);
           
@@ -794,9 +794,9 @@ export default function ChatRoom({
             });
           }
           
-          console.log('✅ 재심 CourtReadyModal shown to host');
+          //console.log('✅ 재심 CourtReadyModal shown to host');
         } else {
-          console.log('👥 비호스트 사용자 - CourtReadyModal 표시 안 함');
+          //console.log('👥 비호스트 사용자 - CourtReadyModal 표시 안 함');
         }
         
         // 시스템 메시지 추가
@@ -809,14 +809,14 @@ export default function ChatRoom({
           });
         }
       } else {
-        console.log(`아직 모든 사용자가 동의하지 않음: ${agreedCount}/${totalRealUsers} (최소 2명 필요)`);
+        //console.log(`아직 모든 사용자가 동의하지 않음: ${agreedCount}/${totalRealUsers} (최소 2명 필요)`);
       }
     };
     
     const retrialUnsubscribe = onValue(retrialRef, (snapshot) => {
       if (snapshot.exists()) {
         const retrialData = snapshot.val();
-        console.log('🔄 Firebase 재심 상태 수신:', retrialData);
+        //console.log('🔄 Firebase 재심 상태 수신:', retrialData);
         
         // 모든 유저에게 재심 요청 상태 동기화
         if (retrialData.requested) {
@@ -824,21 +824,21 @@ export default function ChatRoom({
           const agreedUsers = retrialData.agreedUsers || {};
           setRetrialAgreedUsers(agreedUsers);
           
-          console.log('Firebase에서 받은 동의자 목록:', agreedUsers);
+          //console.log('Firebase에서 받은 동의자 목록:', agreedUsers);
           
           // 동의 현황 변경 시 만장일치 체크
           checkRetrialConsensus(agreedUsers);
         }
       } else {
         // 재심 요청이 취소되었을 때
-        console.log('🔄 재심 요청 취소됨');
+        //console.log('🔄 재심 요청 취소됨');
         setShowRetrialModal(false);
         setRetrialAgreedUsers({});
       }
     });
 
     return () => {
-      console.log('🧹 재심 리스너 정리');
+      //console.log('🧹 재심 리스너 정리');
       off(retrialRef, 'value', retrialUnsubscribe);
     };
   }, [roomId, database, roomUsers, chatState.isRoomHost, paidUsers]);
@@ -847,13 +847,13 @@ export default function ChatRoom({
   useEffect(() => {
     if (!roomId || !database) return;
 
-    console.log(`💳 결제 사용자 리스너 설정: ${roomId}`);
+    //console.log(`💳 결제 사용자 리스너 설정: ${roomId}`);
     const paidUsersRef = ref(database, `rooms/${roomId}/paidUsers`);
     
     const paidUsersUnsubscribe = onValue(paidUsersRef, (snapshot) => {
       if (snapshot.exists()) {
         const paidUsersData = snapshot.val();
-        console.log('💳 Firebase 결제 사용자 상태 수신:', paidUsersData);
+        //console.log('💳 Firebase 결제 사용자 상태 수신:', paidUsersData);
         
         // Convert to simple username -> boolean mapping
         const paidUsersMap: Record<string, boolean> = {};
@@ -864,15 +864,15 @@ export default function ChatRoom({
         });
         
         setPaidUsers(paidUsersMap);
-        console.log('💳 결제 사용자 맵 업데이트:', paidUsersMap);
+        //console.log('💳 결제 사용자 맵 업데이트:', paidUsersMap);
       } else {
-        console.log('💳 결제 사용자 데이터 없음');
+        //console.log('💳 결제 사용자 데이터 없음');
         setPaidUsers({});
       }
     });
 
     return () => {
-      console.log('🧹 결제 사용자 리스너 정리');
+      //console.log('🧹 결제 사용자 리스너 정리');
       off(paidUsersRef, 'value', paidUsersUnsubscribe);
     };
   }, [roomId, database]);
@@ -883,18 +883,18 @@ export default function ChatRoom({
     
     // Only auto-mark as ready if final verdict has been triggered (post-verdict state)
     if (!timerState.finalVerdictTriggered) {
-      console.log('⚠️ Payment completed but not in post-verdict state, not auto-marking as ready');
+      //console.log('⚠️ Payment completed but not in post-verdict state, not auto-marking as ready');
       return;
     }
     
     // Check if user is already marked as ready
     if (chatState.postVerdictReadyUsers[chatState.currentUserId]) {
-      console.log('⚠️ User already marked as ready, clearing payment completion flag');
+      //console.log('⚠️ User already marked as ready, clearing payment completion flag');
       clearPaymentCompleted();
       return;
     }
     
-    console.log('💳 Payment completed - auto-marking user as ready and storing paid status');
+    //console.log('💳 Payment completed - auto-marking user as ready and storing paid status');
     
     // Mark user as ready in Firebase (same logic as handleTrialReady)
     const userId = chatState.currentUserId;
@@ -917,7 +917,7 @@ export default function ChatRoom({
       remove(isPayingRef) // Clear ispaying status to allow other users to pay
     ])
       .then(() => {
-        console.log('✅ Auto-marked user as ready after payment, stored paid status, and cleared ispaying status');
+        //console.log('✅ Auto-marked user as ready after payment, stored paid status, and cleared ispaying status');
         
         // Add system message
         addMessage({
@@ -1051,7 +1051,7 @@ export default function ChatRoom({
   // Handle verdict history viewing - use local state only (no synchronization)
   const handleViewVerdictHistory = () => {
     if (savedVerdictData) {
-      console.log('📖 개별 판결 다시보기 - 로컬 상태만 사용 (다른 사용자에게 영향 없음)');
+      //console.log('📖 개별 판결 다시보기 - 로컬 상태만 사용 (다른 사용자에게 영향 없음)');
       // Use local state that doesn't affect other users
       setIndividualVerdictData(savedVerdictData);
       setShowIndividualVerdictModal(true);
@@ -1060,7 +1060,7 @@ export default function ChatRoom({
 
   // Re-trial handlers
   const handleRequestRetrial = () => {
-    console.log('🔄 재심 요청 시작');
+    //console.log('🔄 재심 요청 시작');
     setRetrialAgreedUsers({});
     setShowRetrialModal(true);
     
@@ -1073,7 +1073,7 @@ export default function ChatRoom({
         agreedUsers: {},
         requestedBy: chatState.username
       }).then(() => {
-        console.log('Firebase에 재심 요청 저장 완료');
+        //console.log('Firebase에 재심 요청 저장 완료');
       }).catch(error => {
         console.error('Firebase 재심 요청 저장 실패:', error);
       });
@@ -1090,15 +1090,15 @@ export default function ChatRoom({
   };
 
   const handleAgreeToRetrial = () => {
-    console.log(`🤝 ${chatState.username}님 재심 동의`);
-    console.log('현재 roomUsers:', roomUsers);
-    console.log('현재 재심 동의자:', retrialAgreedUsers);
+    //console.log(`🤝 ${chatState.username}님 재심 동의`);
+    //console.log('현재 roomUsers:', roomUsers);
+    //console.log('현재 재심 동의자:', retrialAgreedUsers);
     
     // Update Firebase with agreement
     if (roomId && database) {
       const agreedUserRef = ref(database, `rooms/${roomId}/retrial/agreedUsers/${chatState.username}`);
       set(agreedUserRef, true).then(() => {
-        console.log('Firebase에 재심 동의 저장 완료');
+        //console.log('Firebase에 재심 동의 저장 완료');
         
         // Update local state immediately
         setRetrialAgreedUsers(prev => ({
@@ -1121,7 +1121,7 @@ export default function ChatRoom({
   };
 
   const handleStartRetrial = () => {
-    console.log('🔄 재심 시작');
+    //console.log('🔄 재심 시작');
     
     // Reset states for new trial
     timerState.setFinalVerdictTriggered(false);
@@ -1134,7 +1134,7 @@ export default function ChatRoom({
     
     // Immediately clear local paidUsers state
     setPaidUsers({});
-    console.log('💳 로컬 결제 사용자 상태 즉시 초기화');
+    //console.log('💳 로컬 결제 사용자 상태 즉시 초기화');
     
     // Clear Firebase data
     if (roomId && database) {
@@ -1159,7 +1159,7 @@ export default function ChatRoom({
       reason: 'retrial_start',
       clearedBy: chatState.username
     }).then(() => {
-      console.log('✅ Session storage clear signal sent to all users for retrial');
+      //console.log('✅ Session storage clear signal sent to all users for retrial');
       // Remove the signal after a short delay to clean up
       setTimeout(() => {
         remove(clearSessionSignalRef).catch(error => {
@@ -1170,7 +1170,7 @@ export default function ChatRoom({
       console.error('❌ Failed to send session storage clear signal for retrial:', error);
     });
     
-    console.log('💳 재심 시작으로 인해 항소권 자동 준비 상태 및 결제 상태를 초기화했습니다.');
+    //console.log('💳 재심 시작으로 인해 항소권 자동 준비 상태 및 결제 상태를 초기화했습니다.');
     }
     
     // Reset timer and start new trial
@@ -1191,7 +1191,7 @@ export default function ChatRoom({
   };
 
   const handleCancelRetrial = () => {
-    console.log('🔄 재심 요청 취소');
+    //console.log('🔄 재심 요청 취소');
     setShowRetrialModal(false);
     setRetrialAgreedUsers({});
     
@@ -1199,7 +1199,7 @@ export default function ChatRoom({
     if (roomId && database) {
       const retrialRef = ref(database, `rooms/${roomId}/retrial`);
       remove(retrialRef).then(() => {
-        console.log('Firebase에서 재심 요청 제거 완료');
+        //console.log('Firebase에서 재심 요청 제거 완료');
       }).catch(error => {
         console.error('Firebase 재심 요청 제거 실패:', error);
       });
@@ -1249,7 +1249,7 @@ export default function ChatRoom({
     
     // Immediately clear local paidUsers state
     setPaidUsers({});
-    console.log('💳 로컬 결제 사용자 상태 즉시 초기화');
+    //console.log('💳 로컬 결제 사용자 상태 즉시 초기화');
     
     // Clear Firebase data
     const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
@@ -1274,7 +1274,7 @@ export default function ChatRoom({
       reason: 'trial_start',
       clearedBy: chatState.username
     }).then(() => {
-      console.log('✅ Session storage clear signal sent to all users for trial');
+      //console.log('✅ Session storage clear signal sent to all users for trial');
       // Remove the signal after a short delay to clean up
       setTimeout(() => {
         remove(clearSessionSignalRef).catch(error => {
@@ -1285,12 +1285,12 @@ export default function ChatRoom({
       console.error('❌ Failed to send session storage clear signal for trial:', error);
     });
     
-    console.log('💳 결제 상태 초기화 - 새로운 결제가 가능합니다.');
+    //console.log('💳 결제 상태 초기화 - 새로운 결제가 가능합니다.');
     
     if (isModalForRetrial) {
-      console.log('💳 재심 시작으로 인해 항소권 자동 준비 상태를 초기화했습니다.');
+      //console.log('💳 재심 시작으로 인해 항소권 자동 준비 상태를 초기화했습니다.');
     } else {
-      console.log('💳 새 재판 시작으로 인해 항소권 상태를 초기화했습니다.');
+      //console.log('💳 새 재판 시작으로 인해 항소권 상태를 초기화했습니다.');
     }
     
     // For fresh new trials (not re-trials), clear Firebase messages
@@ -1344,7 +1344,7 @@ export default function ChatRoom({
     
     set(trialReadyRef, true)
       .then(() => {
-        console.log('Trial ready status updated successfully');
+        //console.log('Trial ready status updated successfully');
       })
       .catch(error => {
         console.error('Error updating trial ready status:', error);
@@ -1361,14 +1361,14 @@ export default function ChatRoom({
   };
 
   const handleStartNewTrial = () => {
-    console.log('🚨 handleStartNewTrial called - regular new trial flow');
-    console.log('isRetrialInProgress (showRetrialModal):', showRetrialModal);
+    //console.log('🚨 handleStartNewTrial called - regular new trial flow');
+    //console.log('isRetrialInProgress (showRetrialModal):', showRetrialModal);
     
     if (!roomId || !database) return;
     
     // Prevent regular new trial if retrial is in progress
     if (showRetrialModal) {
-      console.log('🚫 Blocking regular new trial - retrial in progress');
+      //console.log('🚫 Blocking regular new trial - retrial in progress');
       return;
     }
     
@@ -1386,7 +1386,7 @@ export default function ChatRoom({
       });
     }
     
-    console.log('✅ CourtReadyModal shown for regular new trial');
+    //console.log('✅ CourtReadyModal shown for regular new trial');
   };
 
   const handleRedirectToHome = () => {
@@ -1492,13 +1492,13 @@ export default function ChatRoom({
       <CourtReadyModal
         isOpen={chatState.showCourtReadyModal}
         onClose={() => {
-          console.log('🔴 CourtReadyModal 닫기');
+          //console.log('🔴 CourtReadyModal 닫기');
           
           // Firebase에서 CourtReadyModal 상태 제거 (버튼 다시 활성화)
           if (roomId && database) {
             const courtReadyModalRef = ref(database, `rooms/${roomId}/courtReadyModal`);
             remove(courtReadyModalRef).then(() => {
-              console.log('Firebase CourtReadyModal 상태 제거 완료 - 버튼 활성화');
+              //console.log('Firebase CourtReadyModal 상태 제거 완료 - 버튼 활성화');
             });
           }
           
