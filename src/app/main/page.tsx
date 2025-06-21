@@ -502,34 +502,41 @@ export default function Home() {
       </section>
 
       {/* 푸터 */}
-      <footer className="py-10 bg-gradient-to-t from-pink-50 to-white relative overflow-hidden">
-        <div className="px-5 relative z-10 text-center">
-          <div className="flex items-center justify-center gap-2 mb-5">
-            <span className="font-extrabold text-xl text-pink-600">야 판사야!</span>
+      <footer className="bg-white text-white">
+        <div className="w-full border-t border-gray-300 py-[38px] flex-col pl-7">
+          <div className="flex-col">
+            <p className="text-black">NEANDER CO.,LTD</p>
+            <p className="text-gray-400 text-[14px]">AC'SCENT</p>
           </div>
-          
-          <div className="mb-5">
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={createRoom}
-              className="w-full py-4 bg-gradient-to-r from-pink-500 to-pink-600 text-white font-bold rounded-xl shadow-lg hover:from-pink-600 hover:to-pink-700 transition-all"
-            >
-              지금 바로 판결받기
-            </motion.button>
+          <div className="flex mt-[30px]">
+            <div className="text-black text-[14px] mr-20 xs:mr-5">
+              <p>TERMS OF SERVICES</p>
+              <p>PRIVACY POLICY</p>
+            </div>
+            <div className="text-gray-400 text-[14px]">
+              <p>이용약관</p>
+              <p>개인정보처리방침</p>
+            </div>
           </div>
-          
-          <p className="text-gray-500 text-xs mb-3">
-            &copy; {new Date().getFullYear()} 야 판사야! 모든 권리 보유
-          </p>
-          <p className="text-gray-400 text-xs mb-5">
-            연인 간 갈등 해결을 위한 AI 판결 플랫폼
-          </p>
-          
-          <div className="flex justify-center gap-6 mb-2">
-            <button className="text-pink-500 text-xs font-medium hover:text-pink-600 transition-colors">이용약관</button>
-            <button className="text-pink-500 text-xs font-medium hover:text-pink-600 transition-colors">개인정보처리방침</button>
-            <button className="text-pink-500 text-xs font-medium hover:text-pink-600 transition-colors">문의하기</button>
+          <div className="flex-col mt-[30px] text-black text-[14px]">
+            <p>SNS</p>
+            <p className="text-gray-400">INSTAGRAM @AC_SCENT</p>
+          </div>
+          <div className="flex-col mt-[30px] text-black text-[14px]">
+            <p>CONTACT</p>
+            <p className="text-gray-400">T. 02-336-3368</p>
+            <p className="text-gray-400">E. neander@neander.co.kr</p>
+          </div>
+          <div className="flex-col mt-[30px] text-black text-[14px]">
+            <div>
+              <p>HONGDAE STORE</p>
+              <p className="text-gray-400">서울특별시 마포구 와우산로29라길 22 지하 1층</p>
+            </div>
+            <div className="mt-[30px]">
+              <p className="text-gray-400">사업자등록번호: 683-86-02812</p>
+              <p className="text-gray-400 pt-1">통신판매신고번호: 2033-서울서대문-1558</p>
+              <p className="text-gray-400 pt-1">CEO. 유재영, 이동주</p>
+            </div>
           </div>
         </div>
       </footer>
