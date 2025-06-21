@@ -566,7 +566,7 @@ export default function ChatRoom({
           const currentUserJustReturnedFromPayment = () => {
             // Check if current page was accessed from payment result page
             const referrer = document.referrer;
-            const isFromPaymentResult = referrer.includes('/newpayment/result') || referrer.includes('/payment/result');
+            const isFromPaymentResult = referrer.includes('/newpayment/result');
             
             // Check if user has payment-related session storage
             const hasPaymentData = sessionStorage.getItem('newRoomId') || 

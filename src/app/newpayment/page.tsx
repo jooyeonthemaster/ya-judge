@@ -1,280 +1,157 @@
 "use client"
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useNewPaymentStore, usePaymentStatus, usePaymentSession, usePaymentResult } from "@/app/store/newPaymentStore";
-import { isMobileBrowser } from "@/lib/newpayment";
-import { useState, useEffect } from "react";
-import { CreditCard, CheckCircle, Settings, TestTube, ArrowRight, Smartphone, Monitor } from "lucide-react";
+import { Lock, User } from "lucide-react";
 
-export default function NewPaymentIndexPage() {
+export default function AdminPaymentPage() {
   const router = useRouter();
-  const { initializePaymentSession, clearAllPaymentData } = useNewPaymentStore();
-  const { isInProgress, isCompleted, hasError, error } = usePaymentStatus();
-  const { roomId, userName, isSessionReady } = usePaymentSession();
-  const { hasResult, result } = usePaymentResult();
-  
-  const [isMobile, setIsMobile] = useState(false);
+  const [formData, setFormData] = useState({
+    id: "",
+    password: ""
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    setIsMobile(isMobileBrowser());
-  }, []);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
-  const handleQuickSession = () => {
-    const testRoomId = `room_${Date.now()}`;
-    const testUserName = `User_${Math.random().toString(36).substring(2, 8)}`;
-    initializePaymentSession(testRoomId, testUserName);
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
+    try {
+      // Call authentication API
+      const response = await fetch('/api/newpayment/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: formData.id,
+          password: formData.password
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        // Store admin session
+        sessionStorage.setItem('adminUser', JSON.stringify(result.user));
+        sessionStorage.setItem('adminAuthenticated', 'true');
+        
+        // Redirect to admin dashboard
+        router.push('/newpayment/admin');
+      } else {
+        setError(result.error || 'Authentication failed');
+      }
+      
+    } catch (error) {
+      console.error('Login failed:', error);
+      setError('Network error. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
-      <div className="max-w-6xl mx-auto p-6">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">
-            New Payment System
-          </h1>
-          <p className="text-lg text-gray-600 mb-2">
-            Clean, Simple, and Reliable Payment Processing
-          </p>
-          <p className="text-sm text-purple-600">
-            ✨ Local logging • No external API calls • Clean architecture
-          </p>
-        </div>
-
-        {/* Device Info */}
-        <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center justify-center space-x-4">
-            {isMobile ? (
-              <Smartphone className="text-purple-600 w-5 h-5" />
-            ) : (
-              <Monitor className="text-purple-600 w-5 h-5" />
-            )}
-            <span className="text-sm text-gray-600">
-              Detected Device: <span className="font-medium">{isMobile ? 'Mobile' : 'Desktop'}</span>
-            </span>
-          </div>
-        </div>
-
-        {/* System Status */}
-        <div className="mb-8 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">System Status</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className={`w-12 h-12 mx-auto mb-2 rounded-full flex items-center justify-center ${
-                isSessionReady ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-              }`}>
-                <Settings className="w-6 h-6" />
-              </div>
-              <p className="text-sm font-medium text-gray-700">Session Ready</p>
-              <p className="text-xs text-gray-500">{isSessionReady ? 'Active' : 'Not Set'}</p>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
+      <div className="max-w-md w-full mx-4">
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 mx-auto mb-4 bg-purple-100 rounded-full flex items-center justify-center">
+              <Lock className="w-8 h-8 text-purple-600" />
             </div>
-            
-            <div className="text-center">
-              <div className={`w-12 h-12 mx-auto mb-2 rounded-full flex items-center justify-center ${
-                isInProgress ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-400'
-              }`}>
-                <CreditCard className="w-6 h-6" />
-              </div>
-              <p className="text-sm font-medium text-gray-700">Payment Status</p>
-              <p className="text-xs text-gray-500">
-                {isInProgress ? 'In Progress' : 'Idle'}
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <div className={`w-12 h-12 mx-auto mb-2 rounded-full flex items-center justify-center ${
-                isCompleted ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-              }`}>
-                <CheckCircle className="w-6 h-6" />
-              </div>
-              <p className="text-sm font-medium text-gray-700">Completion</p>
-              <p className="text-xs text-gray-500">
-                {isCompleted ? 'Completed' : 'Pending'}
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <div className={`w-12 h-12 mx-auto mb-2 rounded-full flex items-center justify-center ${
-                hasError ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
-              }`}>
-                <TestTube className="w-6 h-6" />
-              </div>
-              <p className="text-sm font-medium text-gray-700">Error Status</p>
-              <p className="text-xs text-gray-500">
-                {hasError ? 'Has Error' : 'No Errors'}
-              </p>
-            </div>
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">
+              Admin Payment
+            </h1>
+            <p className="text-gray-600">
+              관리자 결제 시스템에 로그인하세요
+            </p>
           </div>
 
-          {/* Session Details */}
-          {isSessionReady && (
-            <div className="mt-4 p-3 bg-purple-50 rounded-md">
-              <p className="text-sm text-purple-700">
-                <span className="font-medium">Room:</span> {roomId} | 
-                <span className="font-medium"> User:</span> {userName}
-              </p>
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md text-sm">
+              {error}
             </div>
           )}
 
-          {/* Error Details */}
-          {hasError && (
-            <div className="mt-4 p-3 bg-red-50 rounded-md">
-              <p className="text-sm text-red-700">
-                <span className="font-medium">Error:</span> {error}
-              </p>
-            </div>
-          )}
-
-          {/* Payment Result */}
-          {hasResult && result && (
-            <div className="mt-4 p-3 bg-green-50 rounded-md">
-              <p className="text-sm text-green-700">
-                <span className="font-medium">Last Payment:</span> {result.paymentId} 
-                ({result.amount.toLocaleString()}원)
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Main Actions */}
-        <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Checkout */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-purple-100 rounded-full flex items-center justify-center">
-                <CreditCard className="w-8 h-8 text-purple-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">Checkout Page</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Start a new payment process with the clean checkout interface
-              </p>
-              <button
-                onClick={() => router.push('/newpayment/checkout')}
-                className="w-full px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center justify-center space-x-2"
-              >
-                <span>Go to Checkout</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Result Page */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
-                <CheckCircle className="w-8 h-8 text-green-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">Result Page</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                View payment results and completion status
-              </p>
-              <button
-                onClick={() => router.push('/newpayment/result')}
-                className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center justify-center space-x-2"
-              >
-                <span>View Results</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Test Page */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
-                <TestTube className="w-8 h-8 text-blue-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">Test Page</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Test payment functionality and API endpoints
-              </p>
-              <button
-                onClick={() => router.push('/newpayment/test')}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
-              >
-                <span>Run Tests</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="mb-8 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">Quick Actions</h2>
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={handleQuickSession}
-              className="px-4 py-2 bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200 transition-colors text-sm"
-            >
-              Initialize Test Session
-            </button>
-            <button
-              onClick={clearAllPaymentData}
-              className="px-4 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors text-sm"
-            >
-              Clear All Data
-            </button>
-            <button
-              onClick={() => router.push('/payment/test')}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
-            >
-              Old Payment System
-            </button>
-            <button
-              onClick={() => router.push('/')}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
-            >
-              Home
-            </button>
-          </div>
-        </div>
-
-        {/* Feature Comparison */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">New vs Old System</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Login Form */}
+          <form onSubmit={handleLogin} className="space-y-6">
+            {/* ID Input */}
             <div>
-              <h3 className="font-medium text-green-700 mb-3">✅ New Payment System</h3>
-              <ul className="space-y-2 text-sm">
-                <li className="flex items-start space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                  <span>Clean and simplified code structure</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                  <span>Local logging instead of external API calls</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                  <span>Better error handling and user feedback</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                  <span>Improved state management with Zustand</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                  <span>Mobile-first responsive design</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                  <span>Development mode support</span>
-                </li>
-              </ul>
+              <label htmlFor="id" className="block text-sm font-medium text-gray-700 mb-2">
+                아이디
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  id="id"
+                  name="id"
+                  value={formData.id}
+                  onChange={handleInputChange}
+                  required
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="아이디를 입력하세요"
+                />
+              </div>
             </div>
-            
+
+            {/* Password Input */}
             <div>
-              <h3 className="font-medium text-gray-600 mb-3">📋 Old Payment System</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li>• External API calls to record payments</li>
-                <li>• More complex code structure</li>
-                <li>• Basic error handling</li>
-                <li>• Standard state management</li>
-                <li>• Traditional responsive approach</li>
-                <li>• Production-focused setup</li>
-              </ul>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                비밀번호
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  required
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="비밀번호를 입력하세요"
+                />
+              </div>
             </div>
+
+            {/* Login Button */}
+            <button
+              type="submit"
+              disabled={isLoading || !formData.id || !formData.password}
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isLoading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>로그인 중...</span>
+                </div>
+              ) : (
+                '로그인'
+              )}
+            </button>
+          </form>
+
+          {/* Footer */}
+          <div className="mt-6 text-center">
+            <p className="text-xs text-gray-500">
+              관리자 권한이 필요한 페이지입니다
+            </p>
           </div>
         </div>
       </div>

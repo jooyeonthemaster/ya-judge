@@ -28,6 +28,21 @@ export default function NewPaymentResultPage() {
   const [loading, setLoading] = useState(true);
   const [localError, setLocalError] = useState<ErrorInfo | null>(null);
 
+  const paymentMethodToKorean = (paymentMethod: string) => {
+    switch (paymentMethod) {
+      case 'CARD':
+        return '신용카드';
+      case 'MOBILE':
+        return '휴대폰결제';
+      case 'TRANSFER':
+        return '계좌이체';
+      case 'VIRTUAL_ACCOUNT':
+        return '가상계좌';
+      default:
+        return paymentMethod;
+    }
+  };
+
   // Mobile debugging helper function
   function logMobilePaymentDebug(message: string, data?: any) {
     const timestamp = new Date().toISOString();
@@ -116,8 +131,48 @@ export default function NewPaymentResultPage() {
             if (verificationResult.status === 'success' && verificationResult.payment) {
               const paymentData = verificationResult.payment;
               
-              // Save completion to Firebase instead of external API call
-              await logPaymentCompletion(paymentData);
+              // Get user info for proper room-specific saving
+              const storedUsername = sessionStorage.getItem('username') || 
+                                   sessionStorage.getItem('currentUsername') ||
+                                   localStorage.getItem('username');
+              
+              // Detect if this user is the host by checking Firebase
+              let isHost = false;
+              if (detectedRoomId && storedUsername) {
+                try {
+                  const { database } = await import('@/lib/firebase');
+                  const { ref, get } = await import('firebase/database');
+                  
+                  if (database) {
+                    const hostRef = ref(database, `rooms/${detectedRoomId}/host`);
+                    const hostSnapshot = await get(hostRef);
+                    
+                    if (hostSnapshot.exists()) {
+                      const hostUserId = hostSnapshot.val();
+                      
+                      // Check if current user is the host
+                      const roomUsersRef = ref(database, `rooms/${detectedRoomId}/users`);
+                      const usersSnapshot = await get(roomUsersRef);
+                      
+                      if (usersSnapshot.exists()) {
+                        const users = usersSnapshot.val();
+                        const currentUserEntry = Object.entries(users).find(([userId, user]: [string, any]) => 
+                          (user.username || user) === storedUsername
+                        );
+                        
+                        if (currentUserEntry && currentUserEntry[0] === hostUserId) {
+                          isHost = true;
+                        }
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.warn('Could not determine host status:', error);
+                }
+              }
+              
+              // Save completion to Firebase instead of external API call with room context
+              await logPaymentCompletion(paymentData, detectedRoomId || undefined, storedUsername || undefined, isHost);
               
               // Update store with successful payment
               setPaymentResult(paymentData);
@@ -271,8 +326,48 @@ export default function NewPaymentResultPage() {
                 'SUCCESS'
               );
               
-              // Save completion to Firebase instead of external API call
-              await logPaymentCompletion(paymentData);
+              // Get user info for proper room-specific saving
+              const storedUsername = sessionStorage.getItem('username') || 
+                                   sessionStorage.getItem('currentUsername') ||
+                                   localStorage.getItem('username');
+              
+              // Detect if this user is the host by checking Firebase
+              let isHost = false;
+              if (newRoomId && storedUsername) {
+                try {
+                  const { database } = await import('@/lib/firebase');
+                  const { ref, get } = await import('firebase/database');
+                  
+                  if (database) {
+                    const hostRef = ref(database, `rooms/${newRoomId}/host`);
+                    const hostSnapshot = await get(hostRef);
+                    
+                    if (hostSnapshot.exists()) {
+                      const hostUserId = hostSnapshot.val();
+                      
+                      // Check if current user is the host
+                      const roomUsersRef = ref(database, `rooms/${newRoomId}/users`);
+                      const usersSnapshot = await get(roomUsersRef);
+                      
+                      if (usersSnapshot.exists()) {
+                        const users = usersSnapshot.val();
+                        const currentUserEntry = Object.entries(users).find(([userId, user]: [string, any]) => 
+                          (user.username || user) === storedUsername
+                        );
+                        
+                        if (currentUserEntry && currentUserEntry[0] === hostUserId) {
+                          isHost = true;
+                        }
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.warn('Could not determine host status:', error);
+                }
+              }
+              
+              // Save completion to Firebase instead of external API call with room context
+              await logPaymentCompletion(paymentData, newRoomId || undefined, storedUsername || undefined, isHost);
               
               // Update store with successful payment
               setPaymentResult(paymentData);
@@ -522,33 +617,15 @@ export default function NewPaymentResultPage() {
           </div>
           
           {/* Payment Title */}
-          <h1 className="text-xl font-bold text-center mb-1 text-black">결제 완료</h1>
-          <p className="text-center text-sm text-green-600 mb-4">New Payment System</p>
-          
+          <h1 className="text-xl font-bold text-center mb-1 text-black mb-10">결제 완료</h1>          
           {/* Mobile Success Indicator */}
           <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-4">
             <p className="text-sm text-green-700 text-center font-medium">
-              ✅ 모바일 결제가 성공적으로 완료되었습니다
+              ✅ 결제가 성공적으로 완료되었습니다
             </p>
             <p className="text-xs text-green-600 text-center mt-1">
               아래 버튼을 눌러 채팅방으로 돌아가세요
             </p>
-            {/* Room ID Debug Info */}
-            {(() => {
-              const detectedRoomId = roomId || 
-                                   sessionStorage.getItem('newRoomId') || 
-                                   sessionStorage.getItem('roomId') ||
-                                   localStorage.getItem('roomId');
-              return detectedRoomId ? (
-                <p className="text-xs text-green-500 text-center mt-2 font-mono">
-                  🏠 방 ID: {detectedRoomId}
-                </p>
-              ) : (
-                <p className="text-xs text-red-500 text-center mt-2">
-                  ⚠️ 방 ID를 찾을 수 없습니다
-                </p>
-              );
-            })()}
           </div>
           
           {/* Order Name */}
@@ -570,18 +647,15 @@ export default function NewPaymentResultPage() {
           <div className="border-t border-b border-gray-200 py-4 mb-4">
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-600">결제 ID</span>
-                <span className="font-medium text-black text-sm">{paymentResult.paymentId}</span>
-              </div>
-              
-              <div className="flex justify-between">
                 <span className="text-gray-600">결제수단</span>
-                <span className="font-medium text-black">{paymentResult.paymentMethod}</span>
+                <span className="font-medium text-black">{paymentMethodToKorean(paymentResult.paymentMethod)}</span>
               </div>
               
               <div className="flex justify-between">
                 <span className="text-gray-600">상태</span>
-                <span className="font-medium text-green-600">{paymentResult.paymentStatus}</span>
+                <span className="font-medium text-green-600">
+                  {paymentResult.paymentStatus === 'SUCCESS' ? '결제성공' : paymentResult.paymentStatus}
+                </span>
               </div>
             </div>
           </div>
@@ -607,20 +681,11 @@ export default function NewPaymentResultPage() {
             </div>
           </div>
           
-          {/* System Info */}
-          <div className="bg-purple-50 p-3 rounded-md mb-4">
-            <p className="text-xs text-purple-700 text-center">
-              ✨ New Payment System - Clean & Simple
-            </p>
-            <p className="text-xs text-purple-600 text-center mt-1">
-              로깅 기반 결제 완료 처리
-            </p>
-          </div>
+
           
           {/* Footer */}
           <div className="text-black text-xs text-center space-y-1">
-            <p>결제해 주셔서 감사합니다</p>
-            <p>영수증을 보관해 주세요</p>
+            <h1 className="text-lg font-bold">결제해 주셔서 감사합니다.</h1>
           </div>
           
           {/* Action Buttons */}
@@ -666,52 +731,7 @@ export default function NewPaymentResultPage() {
               </button>
             )}
             
-            {/* Alternative Actions */}
-            <div className="flex space-x-2">
-              <button 
-                onClick={() => {
-                  // Enhanced room ID detection for mobile
-                  const targetRoomId = roomId || 
-                                     sessionStorage.getItem('newRoomId') || 
-                                     sessionStorage.getItem('roomId') ||
-                                     localStorage.getItem('roomId');
-                  
-                  logMobilePaymentDebug('Appeal button clicked - DETAILED DEBUG', { 
-                    targetRoomId,
-                    roomId,
-                    sessionNewRoomId: sessionStorage.getItem('newRoomId'),
-                    sessionRoomId: sessionStorage.getItem('roomId'),
-                    localRoomId: localStorage.getItem('roomId'),
-                    allSessionKeys: Object.keys(sessionStorage),
-                    allLocalKeys: Object.keys(localStorage),
-                    currentUrl: window.location.href,
-                    referrer: document.referrer
-                  });
-                  
-                  if (targetRoomId) {
-                    logMobilePaymentDebug('Appeal: Navigating to room', { targetRoomId });
-                    router.push(`/room/${targetRoomId}`);
-                  } else {
-                    logMobilePaymentDebug('Appeal: No room ID found - redirecting to home', {
-                      reason: 'No room ID available from any source'
-                    });
-                    router.push('/');
-                  }
-                }}
-                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm transition-colors touch-manipulation"
-              >
-                항소하러가기
-              </button>
-              <button 
-                onClick={() => {
-                  logMobilePaymentDebug('Home button clicked');
-                  router.push('/');
-                }}
-                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm transition-colors touch-manipulation"
-              >
-                홈으로
-              </button>
-            </div>
+
           </div>
         </div>
       </div>

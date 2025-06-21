@@ -8,7 +8,8 @@ import {
   verifyPayment, 
   logPaymentCompletion, 
   createPaymentResult,
-  isMobileBrowser 
+  isMobileBrowser,
+  initializePayment
 } from '@/lib/newpayment';
 import type { CustomerInfo, PaymentDetails } from '@/lib/newpayment';
 
@@ -150,7 +151,7 @@ export default function NewPaymentTestPage() {
       if (verificationResult.status === 'success') {
         // Create and save payment result
         const paymentResult = createPaymentResult(mockPaymentId, customer, payment, 'SUCCESS');
-        await logPaymentCompletion(paymentResult);
+        await logPaymentCompletion(paymentResult, undefined, undefined, false); // Test page - no room context
         
         // Update store
         setPaymentResult(paymentResult);
@@ -223,6 +224,72 @@ export default function NewPaymentTestPage() {
     console.log('=== CLEARED ALL TEST DATA ===');
   };
 
+  // Test mobile payment with KCP V2 bypass parameters
+  const testMobilePayment = async () => {
+    console.log('=== TESTING MOBILE PAYMENT ===');
+    
+    const customer: CustomerInfo = {
+      name: 'Test Mobile User',
+      email: 'test@mobile.com',
+      phone: '010-1234-5678'
+    };
+    
+    const payment: PaymentDetails = {
+      orderName: 'Mobile Payment Test',
+      totalAmount: 1000,
+      payMethod: 'MOBILE',
+      productType: 'DIGITAL',
+      carrier: undefined // Let user choose in payment modal
+    };
+    
+    setTestResults(prev => [...prev, {
+      success: true,
+      message: 'Starting mobile payment test...',
+      timestamp: new Date().toISOString()
+    }]);
+    
+    try {
+      const { paymentRequest, paymentId } = await initializePayment(customer, payment);
+      
+      setTestResults(prev => [...prev, {
+        success: true,
+        message: 'Mobile payment initialization successful',
+        data: {
+          paymentId,
+          storeId: paymentRequest.storeId,
+          bypass: paymentRequest.bypass,
+          hasShopUserId: !!(paymentRequest.bypass as any)?.shop_user_id
+        },
+        timestamp: new Date().toISOString()
+      }]);
+      
+      // Check if required bypass parameters are present
+      const bypass = paymentRequest.bypass as any;
+      if (!bypass?.shop_user_id) {
+        throw new Error('Missing required shop_user_id in bypass parameters for KCP V2 mobile payment');
+      }
+      
+      setTestResults(prev => [...prev, {
+        success: true,
+        message: 'KCP V2 bypass parameters validated successfully',
+        data: {
+          shop_user_id: bypass.shop_user_id,
+          digital: bypass.digital,
+          carrier: bypass.carrier
+        },
+        timestamp: new Date().toISOString()
+      }]);
+      
+    } catch (error) {
+      setTestResults(prev => [...prev, {
+        success: false,
+        message: 'Mobile payment test failed',
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
+      }]);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-4xl">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">
@@ -250,7 +317,7 @@ export default function NewPaymentTestPage() {
       <div className="mb-6 space-y-4">
         <h2 className="text-xl font-semibold text-gray-800">Test Controls</h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <button
             onClick={handleApiTest}
             disabled={loading}
@@ -265,6 +332,14 @@ export default function NewPaymentTestPage() {
             className="px-4 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-400 transition-colors"
           >
             {loading ? 'Testing...' : 'Test Payment Flow'}
+          </button>
+          
+          <button
+            onClick={testMobilePayment}
+            disabled={loading}
+            className="px-4 py-3 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:bg-orange-400 transition-colors"
+          >
+            Test Mobile Payment
           </button>
           
           <button

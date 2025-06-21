@@ -35,7 +35,7 @@ export default function NewCheckoutPage() {
     email: "",
     phone: "",
     address: "",
-    orderName: "재판 참가비",
+    orderName: "재심 참가비",
     totalAmount: 1000,
     payMethod: "CARD",
   });
@@ -130,7 +130,11 @@ export default function NewCheckoutPage() {
       const payment: PaymentDetails = {
         orderName: formData.orderName,
         totalAmount: formData.totalAmount,
-        payMethod: formData.payMethod
+        payMethod: formData.payMethod,
+        // Always use DIGITAL for mobile payments, undefined for others
+        productType: formData.payMethod === 'MOBILE' ? 'DIGITAL' : undefined,
+        // Don't specify carrier - let users choose in payment modal
+        carrier: undefined
       };
 
       console.log('=== STARTING CLEAN PAYMENT PROCESS ===');
@@ -171,8 +175,43 @@ export default function NewCheckoutPage() {
         // Create payment result
         const paymentResult = createPaymentResult(paymentId, customer, payment, 'SUCCESS');
 
-        // Save completion to Firebase instead of external API call
-        await logPaymentCompletion(paymentResult);
+        // Detect if this user is the host by checking Firebase
+        let isHost = false;
+        if (roomId && userName) {
+          try {
+            const { database } = await import('@/lib/firebase');
+            const { ref, get } = await import('firebase/database');
+            
+            if (database) {
+              const hostRef = ref(database, `rooms/${roomId}/host`);
+              const hostSnapshot = await get(hostRef);
+              
+              if (hostSnapshot.exists()) {
+                const hostUserId = hostSnapshot.val();
+                
+                // Check if current user is the host
+                const roomUsersRef = ref(database, `rooms/${roomId}/users`);
+                const usersSnapshot = await get(roomUsersRef);
+                
+                if (usersSnapshot.exists()) {
+                  const users = usersSnapshot.val();
+                  const currentUserEntry = Object.entries(users).find(([userId, user]: [string, any]) => 
+                    (user.username || user) === userName
+                  );
+                  
+                  if (currentUserEntry && currentUserEntry[0] === hostUserId) {
+                    isHost = true;
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.warn('Could not determine host status:', error);
+          }
+        }
+
+        // Save completion to Firebase instead of external API call with room context
+        await logPaymentCompletion(paymentResult, roomId || undefined, userName || undefined, isHost);
         
         // Clear Firebase ispaying status but preserve session storage for user return
         if (roomId) {
@@ -226,7 +265,7 @@ export default function NewCheckoutPage() {
     <div className="min-h-screen bg-white">
       <div className="max-w-4xl mx-auto p-4 sm:p-6 bg-white">
         <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-black">
-          New Payment System - 결제 페이지
+          재심 참가비 - 결제 페이지
         </h1>
 
         {hasError && (
@@ -305,69 +344,60 @@ export default function NewCheckoutPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label htmlFor="orderName" className="block text-sm font-medium text-black mb-1">
-                  주문명 *
+                  주문명
                 </label>
-                <input
-                  id="orderName"
-                  name="orderName"
-                  type="text"
-                  required
-                  value={formData.orderName}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                />
+                <div className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-700">
+                  {formData.orderName}
+                </div>
               </div>
 
               <div>
                 <label htmlFor="totalAmount" className="block text-sm font-medium text-black mb-1">
-                  결제금액 (KRW) *
+                  결제금액 (KRW)
                 </label>
-                <input
-                  id="totalAmount"
-                  name="totalAmount"
-                  type="number"
-                  min="1000"
-                  required
-                  value={formData.totalAmount}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                />
+                <div className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-700 font-medium">
+                  {formData.totalAmount.toLocaleString()}원
+                </div>
               </div>
             </div>
           </div>
 
           <div className="bg-white p-4 sm:p-6 rounded-lg shadow mb-4 sm:mb-6 border border-gray-200">
             <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-black">결제수단</h2>
-            <div>
-              <label htmlFor="payMethod" className="block text-sm font-medium text-black mb-1">
-                결제수단 *
-              </label>
-              <select
-                id="payMethod"
-                name="payMethod"
-                required
-                value={formData.payMethod}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              >
-                <option value="CARD">신용카드</option>
-                <option value="VIRTUAL_ACCOUNT">가상계좌</option>
-                <option value="PHONE">휴대폰결제</option>
-                <option value="TRANSFER">계좌이체</option>
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+              <div>
+                <label htmlFor="payMethod" className="block text-sm font-medium text-black mb-1">
+                  결제수단 *
+                </label>
+                <select
+                  id="payMethod"
+                  name="payMethod"
+                  required
+                  value={formData.payMethod}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                >
+                  <option value="CARD">신용카드</option>
+                  <option value="MOBILE">휴대폰결제</option>
+                  <option value="TRANSFER">계좌이체</option>
+                </select>
+              </div>
             </div>
           </div>
 
           {/* Payment Info Display */}
-          <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+          {/* <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
             <h3 className="text-sm font-medium text-purple-800 mb-2">결제 정보</h3>
             <div className="text-sm text-purple-600">
               <p>• 기기: {isMobile ? '모바일' : '데스크톱'}</p>
               <p>• 결제 시스템: New Payment System (Clean)</p>
-              <p>• 로깅: 콘솔 로그 방식</p>
+              <p>• 로깅: Firebase 기반 로깅</p>
               {roomId && <p>• 룸 ID: {roomId}</p>}
+              {formData.payMethod === 'MOBILE' && (
+                <p>• 상품 유형: 디지털 콘텐츠</p>
+              )}
             </div>
-          </div>
+          </div> */}
 
           <div className="mt-4 sm:mt-6">
             <button

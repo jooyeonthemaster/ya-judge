@@ -27,6 +27,8 @@ export interface PaymentDetails {
   orderName: string;
   totalAmount: number;
   payMethod: string;
+  productType?: 'REAL' | 'DIGITAL'; // Required for mobile payments
+  carrier?: 'SKT' | 'KT' | 'LGU' | 'MVNO'; // Optional for mobile payments
 }
 
 /**
@@ -66,15 +68,27 @@ export async function initializePayment(
   payment: PaymentDetails
 ): Promise<{ paymentRequest: PaymentRequest; paymentId: string }> {
   
+  // Validate required environment variables
+  const storeId = process.env.NEXT_PUBLIC_PORTONE_STORE_ID;
+  const channelKey = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY;
+  
+  if (!storeId) {
+    throw new Error('NEXT_PUBLIC_PORTONE_STORE_ID environment variable is required');
+  }
+  
+  if (!channelKey) {
+    throw new Error('NEXT_PUBLIC_PORTONE_CHANNEL_KEY environment variable is required');
+  }
+  
   // Generate payment ID using timestamp and random string (max 40 chars)
   const randomPart = Math.random().toString(36).substring(2, 10);
   const timestamp = Date.now().toString().slice(-10);
   const paymentId = `ord_${timestamp}_${randomPart}`;
   
-  // Create payment request
-  const paymentRequest: PaymentRequest = {
-    storeId: process.env.NEXT_PUBLIC_PORTONE_STORE_ID || "",
-    channelKey: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY || "",
+  // Base payment request configuration
+  const basePaymentRequest: PaymentRequest = {
+    storeId: storeId,
+    channelKey: channelKey,
     paymentId: paymentId,
     orderName: payment.orderName,
     totalAmount: payment.totalAmount,
@@ -88,13 +102,45 @@ export async function initializePayment(
     redirectUrl: window.location.origin + '/newpayment/result',
   };
 
+  // Add method-specific configurations
+  let paymentRequest: PaymentRequest = { ...basePaymentRequest };
+
+  // Add bypass parameters for mobile payments (KCP V2 requirement)
+  if (payment.payMethod === 'MOBILE') {
+    paymentRequest = {
+      ...basePaymentRequest,
+      bypass: {
+        // KCP V2 requires shop_user_id for mobile payments
+        shop_user_id: customer.email || customer.phone || paymentId,
+        // Add product type information for mobile payments (always DIGITAL for this service)
+        digital: '1' // Always digital content for this service
+        // Carrier will be selected by user in payment modal
+      } as any // Type assertion to handle KCP-specific bypass parameters
+    };
+  }
+
   console.log('=== PAYMENT INITIALIZATION ===');
+  console.log('Store ID:', storeId ? `${storeId.substring(0, 8)}...` : 'NOT SET');
+  console.log('Channel Key:', channelKey ? 'SET' : 'NOT SET');
   console.log('Payment ID:', paymentId);
   console.log('Order Name:', payment.orderName);
   console.log('Amount:', payment.totalAmount);
   console.log('Customer:', customer.name);
   console.log('Pay Method:', payment.payMethod);
+  console.log('Product Type:', payment.payMethod === 'MOBILE' ? 'DIGITAL (auto)' : 'N/A');
+  console.log('Carrier:', payment.payMethod === 'MOBILE' ? 'User will select' : 'N/A');
   console.log('Mobile Browser:', isMobileBrowser());
+  
+  // Log bypass parameters for mobile payments
+  if (payment.payMethod === 'MOBILE') {
+    console.log('=== MOBILE PAYMENT BYPASS PARAMS ===');
+    console.log('Shop User ID:', customer.email || customer.phone || paymentId);
+    console.log('Digital Product: 1 (Always digital content)');
+    console.log('Carrier: User will select in payment modal');
+    console.log('==================================');
+  }
+  
+  console.log('Payment Request Config:', JSON.stringify(paymentRequest, null, 2));
   console.log('=============================');
 
   return { paymentRequest, paymentId };
@@ -177,7 +223,10 @@ export async function verifyPayment(
  * This replaces the external API recording functionality
  */
 export async function logPaymentCompletion(
-  paymentResult: PaymentResult
+  paymentResult: PaymentResult,
+  roomId?: string,
+  username?: string,
+  isHost?: boolean
 ): Promise<void> {
   try {
     // Import Firebase functions
@@ -200,23 +249,93 @@ export async function logPaymentCompletion(
     const paymentData = {
       ...paymentResult,
       savedAt: new Date().toISOString(),
+      roomId: roomId || null,
+      username: username || null,
+      isHost: isHost || false,
       browser: {
         isMobile: isMobileBrowser(),
         userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'server'
       }
     };
     
-    // Save to Firebase
+    // Save to global Firebase path
     await set(paymentRef, paymentData);
     
-    console.log('=== PAYMENT SAVED TO FIREBASE ===');
+    console.log('=== PAYMENT SAVED TO FIREBASE (GLOBAL) ===');
     console.log('Firebase Path:', paymentPath);
     console.log('Payment ID:', paymentResult.paymentId);
     console.log('Amount:', paymentResult.amount);
     console.log('Customer Name:', paymentResult.customerName);
     console.log('Payment Status:', paymentResult.paymentStatus);
+    console.log('Room ID:', roomId || 'N/A');
+    console.log('Username:', username || 'N/A');
+    console.log('Is Host:', isHost || false);
     console.log('Timestamp:', paymentResult.timestamp);
-    console.log('===============================');
+    console.log('=========================================');
+
+    // CRITICAL: Also save to room-specific path with order ID for both host and non-host users
+    if (roomId && username) {
+      try {
+        // Save payment information to room's paidUsers structure with order ID
+        const roomPaidUserRef = ref(database, `rooms/${roomId}/paidUsers/${username}`);
+        const roomPaymentData = {
+          username: username,
+          isPaid: true,
+          paymentId: paymentResult.paymentId, // This is the order ID
+          orderId: paymentResult.paymentId,   // Explicit order ID field
+          amount: paymentResult.amount,
+          orderName: paymentResult.orderName,
+          paymentMethod: paymentResult.paymentMethod,
+          timestamp: paymentResult.timestamp,
+          isHost: isHost || false,
+          paymentStatus: paymentResult.paymentStatus
+        };
+
+        await set(roomPaidUserRef, roomPaymentData);
+
+        console.log('=== PAYMENT SAVED TO FIREBASE (ROOM-SPECIFIC) ===');
+        console.log('Room Path:', `rooms/${roomId}/paidUsers/${username}`);
+        console.log('Username:', username);
+        console.log('Order ID:', paymentResult.paymentId);
+        console.log('Amount:', paymentResult.amount);
+        console.log('Is Host:', isHost || false);
+        console.log('Payment Status:', paymentResult.paymentStatus);
+        console.log('===============================================');
+
+        // Also save a separate entry in room's orders for easier order tracking
+        const roomOrderRef = ref(database, `rooms/${roomId}/orders/${paymentResult.paymentId}`);
+        const orderData = {
+          orderId: paymentResult.paymentId,
+          paymentId: paymentResult.paymentId,
+          username: username,
+          customerName: paymentResult.customerName,
+          amount: paymentResult.amount,
+          orderName: paymentResult.orderName,
+          paymentMethod: paymentResult.paymentMethod,
+          paymentStatus: paymentResult.paymentStatus,
+          timestamp: paymentResult.timestamp,
+          isHost: isHost || false,
+          savedAt: new Date().toISOString()
+        };
+
+        await set(roomOrderRef, orderData);
+
+        console.log('=== ORDER SAVED TO FIREBASE (ROOM ORDERS) ===');
+        console.log('Room Order Path:', `rooms/${roomId}/orders/${paymentResult.paymentId}`);
+        console.log('Order ID:', paymentResult.paymentId);
+        console.log('Username:', username);
+        console.log('Is Host:', isHost || false);
+        console.log('==========================================');
+
+      } catch (roomError) {
+        console.error('Error saving payment to room-specific Firebase paths:', roomError);
+        // Don't throw - let the global save succeed even if room save fails
+      }
+    } else {
+      console.warn('⚠️ Room ID or username not provided - payment saved to global path only');
+      console.warn('   Room ID:', roomId || 'NOT PROVIDED');
+      console.warn('   Username:', username || 'NOT PROVIDED');
+    }
     
   } catch (error) {
     console.error('Error saving payment to Firebase:', error);
@@ -232,6 +351,9 @@ export async function logPaymentCompletion(
     console.log('Payment Status:', paymentResult.paymentStatus);
     console.log('Payment Method:', paymentResult.paymentMethod);
     console.log('Timestamp:', paymentResult.timestamp);
+    console.log('Room ID:', roomId || 'N/A');
+    console.log('Username:', username || 'N/A');
+    console.log('Is Host:', isHost || false);
     console.log('Mobile Browser:', isMobileBrowser());
     console.log('=======================================');
   }
