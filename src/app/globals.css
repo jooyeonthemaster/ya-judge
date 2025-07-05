@@ -25,7 +25,10 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 
+               'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo',
+               'Noto Sans KR', Arial, Helvetica, sans-serif;
+  line-height: 1.6; /* Better for Korean text */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   height: 100%;
@@ -42,6 +45,28 @@ html {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* Korean IME support */
+.korean-input {
+  ime-mode: active;           /* Enable Korean input method */
+  composition-style: inline;  /* Inline composition for Korean */
+  letter-spacing: -0.025em;   /* Slight negative spacing for Korean */
+  word-break: keep-all;       /* Prevent breaking Korean words */
+  line-height: 1.7;           /* Increased line height for readability */
+}
+
+.korean-input:focus {
+  outline: none;
+  border-color: var(--pink-500);
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.1);
+}
+
+/* Korean text styling */
+.korean-text {
+  letter-spacing: -0.025em;  /* Slight negative spacing for Korean */
+  word-break: keep-all;      /* Prevent breaking Korean words */
+  line-height: 1.7;          /* Increased line height for readability */
 }
 
 /* 스크롤바 커스텀 */

@@ -151,7 +151,7 @@ function getJudgePersona(level: number) {
     {
       title: '신입 판사 훈련생', 
       expertise: '일상적 갈등 중재', 
-      style: '친근한 디시인사이드 말투'
+      style: '공격적인 디시인사이드 말투'
     },
     {
       title: '지방법원 판사', 

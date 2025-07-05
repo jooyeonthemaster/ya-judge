@@ -38,7 +38,48 @@ interface VerdictModalProps {
   verdictData: VerdictData | null;
 }
 
-// 책임 비율 진행 막대 컴포넌트
+// Optimized animation variants
+const backdropVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 }
+};
+
+const modalVariants = {
+  hidden: {
+    opacity: 0,
+    scale: 0.95,
+    y: 20
+  },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.95,
+    y: 10
+  }
+};
+
+const contentVariants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { 
+      staggerChildren: 0.1,
+      delayChildren: 0.1 
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0 }
+};
+
+// 책임 비율 진행 막대 컴포넌트 - 최적화됨
 const ResponsibilityBar = ({ percentage, name }: { percentage: number; name: string }) => {
   const getColorClass = (pct: number) => {
     if (pct >= 70) return 'from-red-500 to-red-600'; // 높은 책임
@@ -53,7 +94,10 @@ const ResponsibilityBar = ({ percentage, name }: { percentage: number; name: str
   };
 
   return (
-    <div className="space-y-3">
+    <motion.div 
+      variants={itemVariants}
+      className="space-y-3"
+    >
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-gray-700">{name}님 갈등 책임도</span>
         <span className={`text-lg font-bold ${getTextColor(percentage)}`}>
@@ -64,21 +108,20 @@ const ResponsibilityBar = ({ percentage, name }: { percentage: number; name: str
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${percentage}%` }}
-          transition={{ duration: 1, ease: "easeOut" }}
-          className={`h-full bg-gradient-to-r ${getColorClass(percentage)} rounded-full relative`}
-        >
-          <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
-        </motion.div>
+          transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
+          className={`h-full bg-gradient-to-r ${getColorClass(percentage)} rounded-full`}
+          style={{ willChange: 'width' }}
+        />
       </div>
       <div className="text-xs text-gray-500 text-center">
         {percentage >= 70 ? '높은 책임' : 
          percentage >= 40 ? '중간 책임' : '낮은 책임'}
       </div>
-    </div>
+    </motion.div>
   );
 };
 
-// 승자 표시 컴포넌트
+// 승자 표시 컴포넌트 - 최적화됨
 const WinnerDisplay = ({ responses }: { responses: VerdictData['responses'] }) => {
   if (!responses || responses.length === 0) return null;
   
@@ -91,8 +134,16 @@ const WinnerDisplay = ({ responses }: { responses: VerdictData['responses'] }) =
     prev.percentage > current.percentage ? prev : current
   );
 
+  // 승자와 패자의 책임도를 100%로 정규화
+  const totalPercentage = winner.percentage + loser.percentage;
+  const normalizedWinnerPercentage = totalPercentage > 0 ? Math.round((winner.percentage / totalPercentage) * 100) : 50;
+  const normalizedLoserPercentage = 100 - normalizedWinnerPercentage;
+
   return (
-    <div className="bg-gradient-to-br from-emerald-50 to-green-50 p-6 rounded-xl border border-emerald-200 mb-6">
+    <motion.div 
+      variants={itemVariants}
+      className="bg-gradient-to-br from-emerald-50 to-green-50 p-6 rounded-xl border border-emerald-200 mb-6"
+    >
       <div className="flex items-center space-x-2 mb-4">
         <Award className="h-6 w-6 text-emerald-600" />
         <h3 className="text-xl font-bold text-emerald-900">갈등 분석 결과</h3>
@@ -105,7 +156,7 @@ const WinnerDisplay = ({ responses }: { responses: VerdictData['responses'] }) =
             <span className="text-sm font-medium text-emerald-700">더 합리적</span>
           </div>
           <div className="text-lg font-bold text-emerald-800">{winner.targetUser}님</div>
-          <div className="text-sm text-emerald-600">책임도: {winner.percentage}%</div>
+          <div className="text-sm text-emerald-600">책임도: {normalizedWinnerPercentage}%</div>
         </div>
         
         <div className="bg-red-100 p-4 rounded-lg">
@@ -114,10 +165,10 @@ const WinnerDisplay = ({ responses }: { responses: VerdictData['responses'] }) =
             <span className="text-sm font-medium text-red-700">더 많은 책임</span>
           </div>
           <div className="text-lg font-bold text-red-800">{loser.targetUser}님</div>
-          <div className="text-sm text-red-600">책임도: {loser.percentage}%</div>
+          <div className="text-sm text-red-600">책임도: {normalizedLoserPercentage}%</div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -127,23 +178,61 @@ export default function VerdictModal({ isOpen, onClose, verdictData }: VerdictMo
   
   if (!verdictData) return null;
 
+  // 정규화된 퍼센티지 계산 (요약 탭과 동일한 로직)
+  const getNormalizedPercentage = (targetUser: string) => {
+    if (!verdictData.responses || verdictData.responses.length < 2) return null;
+    
+    const winner = verdictData.responses.reduce((prev, current) => 
+      prev.percentage < current.percentage ? prev : current
+    );
+    const loser = verdictData.responses.reduce((prev, current) => 
+      prev.percentage > current.percentage ? prev : current
+    );
+    
+    const totalPercentage = winner.percentage + loser.percentage;
+    if (totalPercentage === 0) return 50;
+    
+    if (targetUser === winner.targetUser) {
+      return Math.round((winner.percentage / totalPercentage) * 100);
+    } else if (targetUser === loser.targetUser) {
+      return 100 - Math.round((winner.percentage / totalPercentage) * 100);
+    }
+    
+    return null;
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+        <motion.div
+          variants={backdropVariants}
+          initial="hidden"
+          animate="visible"
+          exit="hidden"
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4"
+          style={{ willChange: 'opacity' }}
+        >
           <motion.div
-            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.9, opacity: 0, y: 10 }}
-            transition={{ duration: 0.3, type: "spring", stiffness: 300 }}
+            variants={modalVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            transition={{ 
+              duration: 0.3, 
+              type: "spring", 
+              stiffness: 400,
+              damping: 25 
+            }}
             className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden border border-gray-200"
+            style={{ willChange: 'transform, opacity' }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Header - 모바일 최적화 */}
-            <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-3 sm:p-6 text-white relative overflow-hidden">
-              <div className="absolute inset-0 bg-black/10"></div>
-              <div className="relative z-10 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-3 sm:p-6 text-white relative">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2 sm:space-x-3">
-                  <div className="p-2 sm:p-3 bg-white/20 rounded-full backdrop-blur-sm">
+                  <div className="p-2 sm:p-3 bg-white/20 rounded-full">
                     <Gavel className="h-5 w-5 sm:h-8 sm:w-8" />
                   </div>
                   <div>
@@ -190,160 +279,174 @@ export default function VerdictModal({ isOpen, onClose, verdictData }: VerdictMo
 
             {/* Content - 모바일 최적화 */}
             <div className="overflow-y-auto max-h-[calc(95vh-120px)] sm:max-h-[calc(90vh-180px)]">
-              <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+              <motion.div 
+                variants={contentVariants}
+                initial="hidden"
+                animate="visible"
+                className="p-3 sm:p-6 space-y-4 sm:space-y-6"
+              >
                 
                 {/* 판결 요약 탭 */}
                 {activeTab === 'summary' && (
                   <>
                     {/* 승자 표시 */}
                     <WinnerDisplay responses={verdictData.responses} />
+                    {/* add level here */}
                     
+                    {/* 책임도 분석 */}
+                    {/* {verdictData.responses && verdictData.responses.length > 0 && (
+                      <motion.div variants={itemVariants} className="space-y-4 sm:space-y-6">
+                        <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center">
+                          <Target className="h-5 w-5 mr-2 text-indigo-600" />
+                          갈등 책임도 분석
+                        </h3>
+                        {verdictData.responses.map((response, index) => (
+                          <ResponsibilityBar
+                            key={index}
+                            percentage={getNormalizedPercentage(response.targetUser) || response.percentage}
+                            name={response.targetUser}
+                          />
+                        ))}
+                      </motion.div>
+                    )} */}
+
                     {/* 판결 요약 */}
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 sm:p-6 rounded-xl border border-blue-200">
-                      <div className="flex items-center space-x-2 mb-3 sm:mb-4">
-                        <Scale className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
-                        <h3 className="text-lg sm:text-xl font-bold text-blue-900">판결 요약</h3>
-                      </div>
-                      <p className="text-gray-800 text-sm sm:text-lg leading-relaxed whitespace-pre-line">
+                    <motion.div variants={itemVariants} className="bg-gray-50 p-4 sm:p-6 rounded-xl border border-gray-200">
+                      <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                        <Scale className="h-5 w-5 mr-2 text-indigo-600" />
+                        판결 요약
+                      </h3>
+                      <p className="text-gray-700 text-sm sm:text-base leading-relaxed">
                         {verdictData.verdict.summary}
                       </p>
-                    </div>
+                    </motion.div>
 
-                    {/* 갈등 원인 분석 */}
-                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 sm:p-6 rounded-xl border border-amber-200">
-                      <div className="flex items-center space-x-2 mb-3 sm:mb-4">
-                        <AlertTriangle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
-                        <h3 className="text-lg sm:text-xl font-bold text-amber-900">갈등 원인 분석</h3>
-                      </div>
-                      <p className="text-gray-800 text-sm sm:text-base leading-relaxed whitespace-pre-line">
+                    {/* 갈등 원인 */}
+                    <motion.div variants={itemVariants} className="bg-red-50 p-4 sm:p-6 rounded-xl border border-red-200">
+                      <h3 className="text-lg sm:text-xl font-bold text-red-900 mb-3 sm:mb-4 flex items-center">
+                        <AlertTriangle className="h-5 w-5 mr-2 text-red-600" />
+                        갈등의 근본 원인
+                      </h3>
+                      <p className="text-red-800 text-sm sm:text-base leading-relaxed">
                         {verdictData.verdict.conflict_root_cause}
                       </p>
-                    </div>
+                    </motion.div>
 
-                    {/* 권고사항 */}
-                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 sm:p-6 rounded-xl border border-green-200">
-                      <div className="flex items-center space-x-2 mb-3 sm:mb-4">
-                        <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
-                        <h3 className="text-lg sm:text-xl font-bold text-green-900">향후 권고사항</h3>
-                      </div>
-                      <p className="text-gray-800 text-sm sm:text-base leading-relaxed whitespace-pre-line">
+                    {/* 해결 방안 */}
+                    <motion.div variants={itemVariants} className="bg-blue-50 p-4 sm:p-6 rounded-xl border border-blue-200">
+                      <h3 className="text-lg sm:text-xl font-bold text-blue-900 mb-3 sm:mb-4 flex items-center">
+                        <CheckCircle2 className="h-5 w-5 mr-2 text-blue-600" />
+                        개선 권고사항
+                      </h3>
+                      <p className="text-blue-800 text-sm sm:text-base leading-relaxed">
                         {verdictData.verdict.recommendation}
                       </p>
-                    </div>
+                    </motion.div>
                   </>
                 )}
 
-                {/* 개별 참가자 분석 탭 */}
-                {activeTab === 'individual' && verdictData.responses && verdictData.responses.length > 0 && (
-                  <div className="space-y-4 sm:space-y-6">
-                    <div className="flex items-center space-x-2 mb-4 sm:mb-6">
-                      <Target className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" />
-                      <h3 className="text-lg sm:text-xl font-bold text-gray-900">개별 참가자 분석</h3>
-                      <span className="text-xs sm:text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                        {verdictData.responses.length}명 분석 완료
-                      </span>
-                    </div>
-
+                {/* 개별 분석 탭 */}
+                {activeTab === 'individual' && verdictData.responses && (
+                  <motion.div variants={contentVariants} className="space-y-4 sm:space-y-6">
                     {/* 참가자 선택 버튼들 - 모바일 최적화 */}
-                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-4 sm:mb-6">
+                    <div className="flex flex-wrap gap-2">
                       {verdictData.responses.map((response, index) => (
-                        <button
+                        <motion.button
                           key={index}
+                          variants={itemVariants}
                           onClick={() => setActiveParticipant(index)}
-                          className={`flex items-center justify-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 sm:py-3 rounded-lg transition-all text-xs sm:text-sm ${
+                          className={`px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-colors ${
                             activeParticipant === index
-                              ? 'bg-purple-600 text-white shadow-lg'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                           }`}
                         >
-                          <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                            activeParticipant === index
-                              ? 'bg-white text-purple-600'
-                              : 'bg-purple-600 text-white'
-                          }`}>
-                            {index + 1}
-                          </div>
-                          <span className="font-medium truncate">{response.targetUser}님</span>
-                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                            response.percentage <= 30 ? 'bg-green-500' :
-                            response.percentage <= 60 ? 'bg-yellow-500' :
-                            'bg-red-500'
-                          }`}></div>
-                        </button>
+                          {response.targetUser}님
+                        </motion.button>
                       ))}
                     </div>
 
                     {/* 선택된 참가자의 상세 분석 */}
                     {verdictData.responses[activeParticipant] && (
-                      <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-4 sm:p-6 rounded-xl border border-purple-200 shadow-sm space-y-4 sm:space-y-6">
-                        
-                        {/* 참가자 정보 헤더 */}
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-                          <h4 className="text-lg sm:text-2xl font-bold text-purple-900 flex items-center space-x-2 sm:space-x-3">
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm sm:text-lg font-bold">
-                              {activeParticipant + 1}
-                            </div>
-                            <span>{verdictData.responses[activeParticipant].targetUser}님 분석</span>
-                          </h4>
-                        </div>
-
-                        {/* 책임 비율 표시 */}
-                        <ResponsibilityBar 
-                          percentage={verdictData.responses[activeParticipant].percentage}
+                      <motion.div
+                        key={activeParticipant}
+                        variants={contentVariants}
+                        initial="hidden"
+                        animate="visible"
+                        className="space-y-4 sm:space-y-6"
+                      >
+                        {/* 책임도 표시 */}
+                        <ResponsibilityBar
+                          percentage={getNormalizedPercentage(verdictData.responses[activeParticipant].targetUser) || verdictData.responses[activeParticipant].percentage}
                           name={verdictData.responses[activeParticipant].targetUser}
                         />
 
                         {/* 상세 분석 */}
-                        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm space-y-4">
-                          <div>
-                            <h5 className="font-bold text-gray-900 mb-2 text-sm sm:text-base">📝 상세 분석</h5>
-                            <p className="text-gray-700 leading-relaxed text-sm sm:text-base whitespace-pre-line">
-                              {verdictData.responses[activeParticipant].analysis}
-                            </p>
-                          </div>
-
-                          <div>
-                            <h5 className="font-bold text-gray-900 mb-2 text-sm sm:text-base">💬 판사 메시지</h5>
-                            <p className="text-gray-700 leading-relaxed text-sm sm:text-base whitespace-pre-line">
-                              {verdictData.responses[activeParticipant].message}
-                            </p>
-                          </div>
-
-                          <div>
-                            <h5 className="font-bold text-gray-900 mb-2 text-sm sm:text-base">🎭 말투 & 성향</h5>
-                            <p className="text-gray-600 text-sm sm:text-base">
-                              {verdictData.responses[activeParticipant].style}
-                            </p>
-                          </div>
-
-                          {verdictData.responses[activeParticipant].reasoning && verdictData.responses[activeParticipant].reasoning.length > 0 && (
+                        <motion.div variants={itemVariants} className="bg-white p-4 sm:p-6 rounded-xl border border-gray-200 shadow-sm">
+                          <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                            <Users className="h-5 w-5 mr-2 text-indigo-600" />
+                            {verdictData.responses[activeParticipant].targetUser}님에 대한 분석
+                          </h4>
+                          <div className="space-y-4">
                             <div>
-                              <h5 className="font-bold text-gray-900 mb-2 text-sm sm:text-base">🔍 판단 근거</h5>
-                              <ul className="list-disc list-inside space-y-1 text-gray-700 text-sm sm:text-base">
-                                {verdictData.responses[activeParticipant].reasoning.map((reason, idx) => (
-                                  <li key={idx}>{reason}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {verdictData.responses[activeParticipant].punishment && (
-                            <div>
-                              <h5 className="font-bold text-gray-900 mb-2 text-sm sm:text-base">⚖️ 권고 조치</h5>
-                              <p className="text-red-600 font-medium text-sm sm:text-base">
-                                {verdictData.responses[activeParticipant].punishment}
+                              <span className="text-sm font-medium text-gray-600 block mb-2">분석 내용:</span>
+                              <p className="text-gray-800 text-sm leading-relaxed bg-gray-50 p-3 rounded-lg">
+                                {verdictData.responses[activeParticipant].analysis}
                               </p>
                             </div>
-                          )}
-                        </div>
-                      </div>
+                            <div>
+                              <span className="text-sm font-medium text-gray-600 block mb-2">판사 메시지:</span>
+                              <p className="text-gray-800 text-sm leading-relaxed bg-blue-50 p-3 rounded-lg border-l-4 border-blue-400">
+                                {verdictData.responses[activeParticipant].message}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-sm font-medium text-gray-600 block mb-2">말투 & 성향:</span>
+                              <p className="text-gray-800 text-sm bg-purple-50 p-3 rounded-lg">
+                                {verdictData.responses[activeParticipant].style}
+                              </p>
+                            </div>
+                          </div>
+                        </motion.div>
+
+                        {/* 판단 근거 */}
+                        <motion.div variants={itemVariants} className="bg-yellow-50 p-4 sm:p-6 rounded-xl border border-yellow-200">
+                          <h4 className="text-lg font-bold text-yellow-900 mb-4 flex items-center">
+                            <FileText className="h-5 w-5 mr-2 text-yellow-600" />
+                            판단 근거
+                          </h4>
+                          <div className="space-y-2">
+                            {verdictData.responses[activeParticipant].reasoning.map((reason, reasonIndex) => (
+                              <motion.div
+                                key={reasonIndex}
+                                variants={itemVariants}
+                                className="flex items-start space-x-2"
+                              >
+                                <span className="text-yellow-600 font-bold text-sm mt-1">{reasonIndex + 1}.</span>
+                                <p className="text-yellow-800 text-sm leading-relaxed">{reason}</p>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </motion.div>
+
+                        {/* 처벌/개선사항 */}
+                        <motion.div variants={itemVariants} className="bg-red-50 p-4 sm:p-6 rounded-xl border border-red-200">
+                          <h4 className="text-lg font-bold text-red-900 mb-4 flex items-center">
+                            <Gavel className="h-5 w-5 mr-2 text-red-600" />
+                            개선 및 처벌 사항
+                          </h4>
+                          <p className="text-red-800 text-sm leading-relaxed">
+                            {verdictData.responses[activeParticipant].punishment}
+                          </p>
+                        </motion.div>
+                      </motion.div>
                     )}
-                  </div>
+                  </motion.div>
                 )}
-              </div>
+              </motion.div>
             </div>
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );

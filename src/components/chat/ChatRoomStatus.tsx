@@ -914,7 +914,7 @@ export default function ChatRoomStatus({
         <div className="w-full max-w-[280px] py-2 px-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-center">
           <Scale className="w-3.5 h-3.5 mr-2 text-yellow-600" />
           <span className="text-xs text-yellow-700">
-            재심 기능은 준비중입니다!
+            항소권 구매 후 재심 요청을 해보세요!
           </span>
         </div>
       </div>

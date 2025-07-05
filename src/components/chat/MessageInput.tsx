@@ -10,6 +10,7 @@ export default function MessageInput({
   onTypingStatus
 }: MessageInputProps) {
   const [input, setInput] = useState('');
+  const [isComposing, setIsComposing] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -36,8 +37,22 @@ export default function MessageInput({
     }
   };
 
+  // Korean IME composition handlers
+  const handleCompositionStart = () => {
+    setIsComposing(true);
+  };
+
+  const handleCompositionEnd = () => {
+    setIsComposing(false);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
+      // Prevent submission during Korean IME composition
+      if (isComposing || (e.nativeEvent as any).isComposing) {
+        return;
+      }
+      
       e.preventDefault();
       if (input.trim()) {
         onSendMessage(input);
@@ -59,8 +74,10 @@ export default function MessageInput({
         value={input}
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
+        onCompositionStart={handleCompositionStart}
+        onCompositionEnd={handleCompositionEnd}
         placeholder="변론 내용을 작성하세요..."
-        className="flex-1 h-[60px] min-h-[60px] max-h-[60px] px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-200 border border-pink-200 transition-all resize-none placeholder:text-gray-400"
+        className="flex-1 h-[60px] min-h-[60px] max-h-[60px] px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-200 border border-pink-200 transition-all resize-none placeholder:text-gray-400 korean-input"
         disabled={disabled}
       />
       <motion.button
