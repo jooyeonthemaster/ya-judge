@@ -50,6 +50,10 @@ export default function Home() {
     }
   };
 
+  const goToRoomless = () => {
+    router.push('/roomless');
+  };
+
   // 실제 커플 갈등 사례
   const coupleConflicts = [
     {
@@ -234,6 +238,15 @@ export default function Home() {
               className="w-full py-4 bg-gradient-to-r from-pink-600 to-purple-700 text-white font-extrabold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5"
             >
               {isCreating ? '판결방 생성 중...' : '지금 즉시 판결받기 →'}
+            </motion.button>
+            
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={goToRoomless}
+              className="w-full py-4 mt-3 bg-gradient-to-r from-pink-600 to-purple-700 text-white font-extrabold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5"
+            >
+              혼자서 판결받기 →
             </motion.button>
             
             <div className="mt-4 px-3 py-2.5 bg-gradient-to-r from-pink-50 to-purple-50 rounded-lg border border-pink-200 flex items-center gap-2 shadow-sm">
