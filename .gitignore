@@ -40,4 +40,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# cursor editor
+.cursor/
+.cursor.rules
+.cursor-tutor
+*.cursor-*
+.cursorrules
+.cursor-config.json
+
 .vercel

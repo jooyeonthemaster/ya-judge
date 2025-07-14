@@ -382,6 +382,16 @@ export default function NewCheckoutPage() {
                   <option value="TRANSFER">계좌이체</option>
                 </select>
               </div>
+              
+            </div>
+          </div>
+          <div className="bg-red-50 p-4 sm:p-6 rounded-lg shadow mb-4 sm:mb-6 border border-blue-200">
+            <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">환불규정</h2>
+            <div className="text-sm space-y-2">
+              <p>• 결제 후 <strong>10일 이내</strong> 환불 신청이 가능합니다.</p>
+              <p>• 환불을 원하시는 경우 <strong>nadr110619@gmail.com</strong>으로 연락주시기 바랍니다.</p>
+              <p>• 환불 처리는 영업일 기준 3-5일 소요됩니다.</p>
+              <p>• 환불 신청 시 환불 사유를 명시해 주세요.</p>
             </div>
           </div>
 

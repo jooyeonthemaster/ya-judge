@@ -543,7 +543,7 @@ export default function Home() {
           <div className="flex-col mt-[30px] text-black text-[14px]">
             <div>
               <p>HONGDAE STORE</p>
-              <p className="text-gray-400">서울특별시 마포구 와우산로29라길 22 지하 1층</p>
+              <p className="text-gray-400">서울 서대문구 연세로9길 16</p>
             </div>
             <div className="mt-[30px]">
               <p className="text-gray-400">사업자등록번호: 683-86-02812</p>
