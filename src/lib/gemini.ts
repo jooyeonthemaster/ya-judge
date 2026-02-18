@@ -1,4 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { buildFinalVerdictPrompt } from "./prompts/verdictPrompt";
+import type { ExtendedVerdictData, ExtendedPersonalizedResponse, DimensionalScores } from "../types/verdict";
 
 // API 키 및 초기화
 const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
@@ -40,24 +42,20 @@ export interface InterventionData {
   reasoning?: string;
 }
 
-export interface PersonalizedResponse {
-  targetUser: string;
-  analysis: string;
-  message: string;
-  style: string;
-  percentage: number;
-  reasoning: string[];
-  punishment: string;
-}
+// 기존 호환용 타입 (ExtendedPersonalizedResponse로 확장)
+export type PersonalizedResponse = ExtendedPersonalizedResponse;
 
-export interface VerdictData {
-  responses?: PersonalizedResponse[];
-  verdict: {
-    summary: string;
-    conflict_root_cause: string;
-    recommendation: string;
-  };
-}
+// 기존 호환용 타입 (ExtendedVerdictData로 확장)
+export type VerdictData = ExtendedVerdictData;
+
+// dimensionalScores 기본값 생성
+const DEFAULT_DIMENSIONAL_SCORES: DimensionalScores = {
+  emotional: 50,
+  logical: 50,
+  communication: 50,
+  empathy: 50,
+  responsibility: 50,
+};
 
 // ==================== 실시간 쟁점 분석 AI ====================
 
@@ -287,10 +285,10 @@ export const getFinalVerdict = async (
     // 참가자별 메시지 수 및 패턴 분석
     const participants = Array.from(new Set(
       messages
-        .filter(msg => msg.user === 'user-general')
-        .map(msg => msg.name)
+        .filter(msg => msg.user === 'user-general' && msg.name)
+        .map(msg => msg.name as string)
     ));
-    
+
     const participantStats = participants.map(name => {
       const userMsgs = messages.filter(msg => msg.user === 'user-general' && msg.name === name);
       return {
@@ -305,129 +303,12 @@ export const getFinalVerdict = async (
     const issuesStr = detectedIssues && detectedIssues.length > 0
       ? `주요 감지된 쟁점들:\n${detectedIssues.map((issue, i) => `${i + 1}. ${issue}`).join('\n')}\n`
       : '';
-    
-    // 참가자 통계 정보
-    const statsStr = `참가자별 대화 패턴 분석:
-${participantStats.map(stat => 
-  `${stat.name}: 메시지 ${stat.messageCount}개, 평균 길이 ${Math.round(stat.averageLength)}자, 언어 수위 ${stat.curseLevel}/30`
-).join('\n')}\n`;
-    
-    const prompt = `당신은 관계 갈등 전문가이자 유쾌한 AI 판사입니다! 🏛️✨
 
-전문적인 분석 능력과 재치 있는 말솜씨로 각 참가자의 성향에 맞는 개인화된 피드백을 제공하세요.
-이모티콘, 드립, 비유를 적극 활용하면서도 공정하고 건설적인 판결을 내려주세요.
-
-${statsStr}
-
-${issuesStr}
-
-시계열 대화 분석:
-${userMessages}
-
-## 🎯 판결 우선순위 (매우 중요!)
-
-### 1. 🚨 최고 심각도 (85-100% 책임)
-- **성추행/성희롱**: 동의 없는 신체 접촉, 성적 괴롭힘 발언
-- **협박/위협**: 물리적 폭력이나 보복 위협
-- **스토킹/사생활 침해**: 개인정보 노출, 지속적 괴롭힘
-
-### 2. ⚠️ 높은 심각도 (60-84% 책임)  
-- **심각한 욕설/모독**: 인격 모독, 가족 욕설
-- **논리적 파괴**: 억지 주장, 사실 왜곡
-- **관계 파괴적 행동**: 지속적 공격, 화해 거부
-
-### 3. 📢 중간 심각도 (40-59% 책임)
-- **감정적 대응**: 일시적 화남, 방어적 반응  
-- **의사소통 미숙**: 오해 유발, 배려 부족
-- **자기중심적 태도**: 상대방 입장 무시
-
-### 4. 💡 낮은 심각도 (0-39% 책임)
-- **합리적 대응**: 논리적 반박, 차분한 대화
-- **건설적 제안**: 해결책 제시, 화해 시도
-- **상대방 배려**: 이해하려는 노력, 공감 표현
-
-## 🎨 개인화된 말투 가이드
-
-각 참가자의 대화 패턴을 분석해서 그들이 공감할 수 있는 말투와 비유를 사용하세요:
-
-- **공격적인 성향**: "야야, 진정해! 🔥 화날 만하지만..."
-- **논리적인 성향**: "음... 데이터를 보면 🤓 이런 부분이..."  
-- **감정적인 성향**: "마음이 많이 아프셨겠어요 😢 하지만..."
-- **유머러스한 성향**: "ㅋㅋㅋ 이런 상황은 처음이네요 😂 근데..."
-- **진지한 성향**: "진심으로 말씀드리면 🙏 이 부분은..."
-
-## 🧠 심층 분석 프레임워크
-
-### 심리적 분석
-- 감정 상태, 심리적 동기, 방어기제
-- 내재된 불안이나 욕구
-
-### 관계 역학 분석  
-- 권력 관계, 의사소통 스타일
-- 상호 영향 관계, 반응 패턴
-
-### 도덕적/윤리적 평가
-- 상대방 배려, 공정성, 책임감
-- 사회적 규범 준수 정도
-
-### 성장 가능성 평가
-- 자기성찰 능력, 변화 의지
-- 관계 개선 잠재력
-
-반드시 다음 JSON 형식으로 응답하세요:
-{
-  "responses": [
-    {
-      "targetUser": "참가자 이름",
-      "analysis": "이 참가자에 대한 깊이 있는 심리적, 관계적 분석 (200자 이상, 전문적이면서도 친근하게)",
-      "message": "이 참가자에게 전달할 개인 맞춤형 피드백 메시지 (150자 이상, 이모티콘과 그들의 성향에 맞는 말투 사용)",
-      "style": "참가자의 의사소통 스타일과 성격적 특성에 대한 재치 있는 분석",
-      "percentage": 숫자(0-100),
-      "reasoning": ["심리적 동기", "행동 패턴", "의사소통 평가", "갈등 기여도", "성장 가능성"],
-      "punishment": "개인 맞춤형 관계 개선 방안 (현실적이고 구체적인 조치 제시)"
-    }
-  ],
-  "verdict": {
-    "summary": "갈등의 핵심과 각 참가자 역할에 대한 유쾌하면서도 전문적인 종합 분석 (300자 이상, 드립과 이모티콘 활용)",
-    "conflict_root_cause": "갈등의 심층적 근본 원인 (심리적, 관계적, 의사소통적 측면을 재치 있게 분석)",
-    "recommendation": "관계 회복과 갈등 예방을 위한 구체적이고 실행 가능한 권고사항 (200자 이상, 유머러스하면서도 실용적으로)"
-  }
-}
-
-🎯 핵심 포인트:
-- 성추행/성희롱이 욕설보다 훨씬 심각한 범죄임을 반드시 반영하세요
-- 각 참가자의 말투와 성향을 파악해서 그에 맞는 개인화된 메시지를 작성하세요  
-- 이모티콘과 재치 있는 표현을 적극 활용하되, 판결의 공정성은 유지하세요
-- 관계 회복 가능성과 구체적 개선 방안을 제시하세요
-- 단순 욕설보다는 전체적인 관계적 성숙도와 도덕적 수준을 중시하세요
-
-💡 현실적인 권고 조치 예시:
-**연인 관계:**
-- 상대방 밥 3번 해주기
-- 좋아하는 음식 사서 가기  
-- 데이트 비용 본인이 부담
-- 소원권 3개 제공
-- 마사지 쿠폰 제공
-
-**친구 관계:**
-- 치킨/피자 한 번 쏘기
-- 카페 음료 일주일 사주기
-- 게임 아이템 선물
-- 영화표 끊어주기
-- 노래방/PC방 비용 부담
-
-**가족 관계:**
-- 집안일 일주일 대신하기
-- 용돈 일부 양보
-- 설거지/청소 담당
-- 부모님께 같이 안마 받기
-- 가족 외식 비용 부담
-
-**일반적:**
-- 진심 어린 사과 편지 쓰기
-- 24시간 욕설 금지 약속
-- 상대방 말 끝까지 듣기 연습
-- 하루 칭찬 3개씩 하기`;
+    const prompt = buildFinalVerdictPrompt({
+      userMessages,
+      participantStats,
+      issuesStr,
+    });
 
     //console.log('최종 판결 API 요청 시작');
     const result = await model.generateContent(prompt);
@@ -438,20 +319,36 @@ ${userMessages}
     try {
       const cleanedText = text.replace(/```json\s*|\s*```/g, '').trim();
       const parsedData = JSON.parse(cleanedText);
-      
-      //console.log('JSON 파싱 성공:', parsedData.verdict ? '판결 있음' : '판결 없음');
-      return parsedData;
-      
+
+      // 새 필드 fallback 처리 (기존 데이터 호환)
+      if (parsedData.responses) {
+        parsedData.responses = parsedData.responses.map((r: ExtendedPersonalizedResponse) => ({
+          ...r,
+          dimensionalScores: r.dimensionalScores || DEFAULT_DIMENSIONAL_SCORES,
+          penaltyInfo: r.penaltyInfo && r.penaltyInfo.amount ? r.penaltyInfo : null,
+        }));
+      }
+      if (parsedData.verdict) {
+        parsedData.verdict = {
+          ...parsedData.verdict,
+          giftSuggestions: parsedData.verdict.giftSuggestions || [],
+          overallSeverity: parsedData.verdict.overallSeverity || 'medium',
+        };
+      }
+
+      return parsedData as ExtendedVerdictData;
+
     } catch (parseError) {
       console.error('최종 판결 응답 파싱 오류:', parseError);
-      //console.log('원본 응답:', text);
-      
+
       return {
         responses: [],
         verdict: {
           summary: '판결 과정에서 오류가 발생했습니다.',
           conflict_root_cause: '알 수 없음',
-          recommendation: '다시 시도해주세요.'
+          recommendation: '다시 시도해주세요.',
+          giftSuggestions: [],
+          overallSeverity: 'medium' as const,
         }
       };
     }

@@ -16,6 +16,18 @@ import { v4 as uuidv4 } from 'uuid';
 import { Message as GeminiMessage, InterventionData, InterventionType } from '../lib/gemini';
 import { analyzeConversation, getFinalVerdict } from '../lib/gemini';
 
+// Firebase는 undefined 값을 허용하지 않으므로 null로 치환
+function sanitizeForFirebase(obj: any): any {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeForFirebase);
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    result[key] = sanitizeForFirebase(value);
+  }
+  return result;
+}
+
 // 타이머 관련 상수
 const TIMER_DURATION = 60000; // 60초 (밀리초)
 const MIN_INTERVENTION_INTERVAL = 8000; // 최소 판사 개입 간격 (밀리초)
@@ -91,7 +103,10 @@ interface ChatState {
   
   // 최종 판결 로딩 상태
   isVerdictLoading: boolean;
-  
+
+  // API 응답 준비 완료 여부 (로딩바가 이 플래그를 확인 후 완료 처리)
+  isVerdictReady: boolean;
+
   // 판결 데이터
   latestVerdictData: any;
   
@@ -197,7 +212,10 @@ export const useChatStore = create<ChatState>((set, get) => {
     
     // 최종 판결 로딩 상태
     isVerdictLoading: false,
-    
+
+    // API 응답 준비 완료 여부
+    isVerdictReady: false,
+
     // 판결 데이터
     latestVerdictData: null,
     
@@ -924,10 +942,11 @@ export const useChatStore = create<ChatState>((set, get) => {
       const state = get();
       
       // 최종 판결 요청 플래그 설정 - 다른 호출이 진행되는 것을 즉시 방지
-      set({ 
+      set({
         isLoading: true,
         finalVerdictRequested: true,
-        isVerdictLoading: true
+        isVerdictLoading: true,
+        isVerdictReady: false
       });
       
       // Firebase에 로딩 상태 동기화 (모든 유저에게 표시)
@@ -969,12 +988,12 @@ export const useChatStore = create<ChatState>((set, get) => {
           // Firebase에 판결 데이터는 저장하되, 로딩 완료 플래그는 별도로 관리
           if (state.roomId && database) {
             const verdictRef = ref(database, `rooms/${state.roomId}/verdict`);
-            const verdictData = {
+            const verdictData = sanitizeForFirebase({
               data: verdict,
               timestamp: new Date().toISOString(),
               isLoadingComplete: false // 로딩바 완료 전까지는 false
-            };
-            
+            });
+
             firebaseSet(verdictRef, verdictData)
               .then(() => {
                 //console.log('✅ Firebase에 판결 데이터 저장 성공 (로딩 미완료 상태)');
@@ -1011,18 +1030,30 @@ export const useChatStore = create<ChatState>((set, get) => {
             });
           }
           
-          set({ 
+          set({
             isLoading: false,
             isVerdictLoading: false,
+            isVerdictReady: false,
             error: '판결 데이터가 올바르지 않습니다.'
           });
         }
         
-        // API 호출은 완료되었지만 로딩바 완료는 별도로 처리
-        set({ 
-          isLoading: false
+        // API 호출 완료 - 로딩바에게 API 준비됨을 알림
+        set({
+          isLoading: false,
+          isVerdictReady: true
           // isVerdictLoading은 로딩바 완료 시에 false로 설정
         });
+
+        // Firebase에도 verdictReady 상태 동기화 (다른 참가자도 로딩바 완료 가능)
+        if (state.roomId && database) {
+          const verdictLoadingRef = ref(database, `rooms/${state.roomId}/verdictLoading`);
+          firebaseSet(verdictLoadingRef, {
+            isLoading: true,
+            isReady: true,
+            timestamp: new Date().toISOString()
+          }).catch(() => {});
+        }
       } catch (error) {
         console.error('최종 판결 오류:', error);
         
@@ -1036,9 +1067,10 @@ export const useChatStore = create<ChatState>((set, get) => {
           });
         }
         
-        set({ 
+        set({
           isLoading: false,
           isVerdictLoading: false,
+          isVerdictReady: false,
           error: '최종 판결 중 오류가 발생했습니다.'
         });
         // 오류 발생 시 finalVerdictRequested 플래그를 재설정하지 않음
@@ -1056,6 +1088,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         timerDuration: TIMER_DURATION,
         timerActive: false,
         finalVerdictRequested: false,
+        isVerdictReady: false,
         error: null,
         verdictHistory: [],
         latestVerdictData: null
@@ -1102,13 +1135,13 @@ export const useChatStore = create<ChatState>((set, get) => {
       if (state.roomId && database) {
         //console.log('Firebase에 판결 데이터 저장 시작');
         const verdictRef = ref(database, `rooms/${state.roomId}/verdict`);
-        const verdictData = {
+        const verdictData = sanitizeForFirebase({
           data: data,
           timestamp: new Date().toISOString()
-        };
-        
+        });
+
         //console.log('저장할 데이터:', verdictData);
-        
+
         firebaseSet(verdictRef, verdictData)
           .then(() => {
             //console.log('✅ Firebase에 판결 데이터 저장 성공!');
@@ -1136,9 +1169,9 @@ export const useChatStore = create<ChatState>((set, get) => {
     onVerdictLoadingComplete: () => {
       //console.log('🏁 로딩바 완료 - 판결 모달 바로 표시');
       const state = get();
-      
+
       // 로딩 상태 해제
-      set({ isVerdictLoading: false });
+      set({ isVerdictLoading: false, isVerdictReady: false });
       
       // Firebase에 로딩 완료 상태 업데이트
       if (state.roomId && database) {

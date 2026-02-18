@@ -547,8 +547,149 @@ ${baseContext}
     "communicationIssues": "소통 문제의 구체적 원인과 패턴 분석 (피상적 분석 금지)",
     "underlyingNeeds": "표면 갈등 뒤의 진짜 욕구와 두려움 파악 (${analysis.hiddenNeeds}를 구체화)"
   },
+  "stakeholderMap": {
+    "stakeholders": [
+      {
+        "id": "plaintiff",
+        "name": "${formData.plaintiff}",
+        "role": "primary",
+        "relationship": "원고 (신청인)",
+        "involvementLevel": 100,
+        "description": "이 사건에서 원고의 역할과 특징"
+      },
+      {
+        "id": "defendant",
+        "name": "${formData.defendant}",
+        "role": "primary",
+        "relationship": "피고 (상대방)",
+        "involvementLevel": 100,
+        "description": "이 사건에서 피고의 역할과 특징"
+      }
+    ],
+    "relationships": [
+      {
+        "from": "plaintiff",
+        "to": "defendant",
+        "type": "갈등 상황의 관계 유형 (romantic/family/friend/colleague/conflict)",
+        "quality": "관계 품질 (positive/neutral/negative/complicated)",
+        "description": "이 사건 맥락에서의 구체적 관계 설명"
+      }
+    ]
+  },
+  "conflictTimeline": {
+    "events": [
+      {
+        "id": "evt1",
+        "order": 1,
+        "type": "trigger",
+        "title": "갈등의 시작점",
+        "description": "무슨 일이 있었는지 구체적으로",
+        "involvedParties": ["관련자"],
+        "emotionalImpact": -30
+      },
+      {
+        "id": "evt2",
+        "order": 2,
+        "type": "escalation",
+        "title": "갈등 격화",
+        "description": "어떻게 악화되었는지",
+        "involvedParties": ["관련자"],
+        "emotionalImpact": -60
+      },
+      {
+        "id": "evt3",
+        "order": 3,
+        "type": "breakdown|turning_point|attempt_resolution",
+        "title": "결정적 순간",
+        "description": "현재 상황 설명",
+        "involvedParties": ["관련자"],
+        "emotionalImpact": -80
+      }
+    ],
+    "totalDuration": "갈등 기간",
+    "peakMoment": "가장 격렬했던 순간",
+    "resolutionAttempts": 0
+  },
+  "faultAnalysis": {
+    "plaintiff": [
+      {
+        "id": "pf1",
+        "targetPerson": "${formData.plaintiff}",
+        "category": "communication|emotional|behavioral|moral|responsibility",
+        "behavior": "원고의 구체적 과실 행동",
+        "severity": "minor|moderate|serious|critical",
+        "impact": "이 과실이 갈등에 미친 영향"
+      }
+    ],
+    "defendant": [
+      {
+        "id": "df1",
+        "targetPerson": "${formData.defendant}",
+        "category": "communication|emotional|behavioral|moral|responsibility",
+        "behavior": "피고의 구체적 과실 행동",
+        "severity": "minor|moderate|serious|critical",
+        "impact": "이 과실이 갈등에 미친 영향"
+      }
+    ]
+  },
+  "faultSummaries": [
+    {
+      "person": "${formData.plaintiff}",
+      "totalFaults": 0,
+      "faultsBySeverity": { "minor": 0, "moderate": 0, "serious": 0, "critical": 0 },
+      "mainIssues": ["주요 문제"]
+    },
+    {
+      "person": "${formData.defendant}",
+      "totalFaults": 0,
+      "faultsBySeverity": { "minor": 0, "moderate": 0, "serious": 0, "critical": 0 },
+      "mainIssues": ["주요 문제"]
+    }
+  ],
+  "behavioralPatterns": {
+    "plaintiff": [
+      {
+        "pattern": "패턴명",
+        "category": "positive|negative|neutral",
+        "frequency": "rare|occasional|frequent|constant",
+        "examples": ["구체적 사례"],
+        "recommendation": "개선 방안"
+      }
+    ],
+    "defendant": [
+      {
+        "pattern": "패턴명",
+        "category": "positive|negative|neutral",
+        "frequency": "rare|occasional|frequent|constant",
+        "examples": ["구체적 사례"],
+        "recommendation": "개선 방안"
+      }
+    ]
+  },
+  "communicationStyles": {
+    "plaintiff": {
+      "primary": "주된 소통 유형",
+      "secondary": "보조 소통 유형 (없으면 null)",
+      "strengths": ["강점"],
+      "weaknesses": ["약점"],
+      "triggers": ["소통 파괴 트리거"]
+    },
+    "defendant": {
+      "primary": "주된 소통 유형",
+      "secondary": "보조 소통 유형 (없으면 null)",
+      "strengths": ["강점"],
+      "weaknesses": ["약점"],
+      "triggers": ["소통 파괴 트리거"]
+    }
+  },
   "verdict": "위 강도와 말투에 맞춰 판결 내용을 4-5문장으로 (마크다운 없이, 구체적이고 현실적으로)",
   "reasoning": "판결 근거를 3-4문장으로 상세히 (일반론 아닌 이 사건만의 특수성 반영)",
+  "keyInsights": [
+    "핵심 통찰 1: 표면 아래 진짜 문제",
+    "핵심 통찰 2: 양측이 모르는 패턴",
+    "핵심 통찰 3: 관계 역학의 핵심"
+  ],
+  "relationshipPrognosis": "현재 상태로 봤을 때 관계 예후와 향후 전망 (구체적으로)",
   "solutions": [
     "즉시 실행할 수 있는 구체적 행동 (교과서적 답변 금지)",
     "단기간 내 개선 방법 (실제 실행 가능한 구체적 방법)",
@@ -559,16 +700,72 @@ ${baseContext}
     "plaintiff": ${analysis.plaintiffFault},
     "defendant": ${analysis.defendantFault}
   },
+  "dimensionalScores": {
+    "plaintiff": {
+      "emotional": 0, "logical": 0, "communication": 0, "empathy": 0, "responsibility": 0
+    },
+    "defendant": {
+      "emotional": 0, "logical": 0, "communication": 0, "empathy": 0, "responsibility": 0
+    }
+  },
+  "expandedScores": {
+    "plaintiff": {
+      "emotional": 0, "logical": 0, "communication": 0, "empathy": 0, "responsibility": 0,
+      "moralEthical": 0, "emotionalMaturity": 0, "conflictContribution": 0, "growthPotential": 0
+    },
+    "defendant": {
+      "emotional": 0, "logical": 0, "communication": 0, "empathy": 0, "responsibility": 0,
+      "moralEthical": 0, "emotionalMaturity": 0, "conflictContribution": 0, "growthPotential": 0
+    }
+  },
+  "verdictConfidence": {
+    "overall": 0,
+    "factors": {
+      "evidenceQuality": 0,
+      "informationCompleteness": 0,
+      "patternClarity": 0,
+      "contextUnderstanding": 0
+    },
+    "limitations": ["한계점1"]
+  },
+  "giftSuggestions": [
+    { "item": "소소한 선물 이름 (5000원 이하)", "price": 5000, "reason": "추천 이유", "category": "small" },
+    { "item": "적당한 선물 이름 (1~2만원)", "price": 15000, "reason": "추천 이유", "category": "medium" },
+    { "item": "진심어린 선물 이름 (3만원+)", "price": 35000, "reason": "추천 이유", "category": "large" }
+  ],
+  "penaltyInfo": {
+    "target": "plaintiff 또는 defendant (책임도 60% 이상인 쪽, 없으면 null)",
+    "amount": 5000,
+    "reason": "유머러스한 벌금 사유",
+    "description": "벌금 이행 방법"
+  },
   "coreAdvice": "가장 중요한 핵심 조언 한 문장 (일반론 아닌 맞춤형 조언)",
   "finalMessage": "위 강도와 말투에 맞춰 마무리 메시지 (마크다운 없이)"
 }
+
+9차원 평가 기준 (expandedScores의 각 숫자를 0-100으로):
+1. emotional: 감정 관리 - 화를 참는 정도, 감정 조절
+2. logical: 논리력 - 주장의 논리성, 근거 제시
+3. communication: 소통 능력 - 경청, 명확한 표현
+4. empathy: 공감 능력 - 상대 입장 이해
+5. responsibility: 책임감 - 자기 잘못 인정
+6. moralEthical: 도덕/윤리 - 상대방 존중, 공정성
+7. emotionalMaturity: 감정 성숙도 - 성인다운 대처
+8. conflictContribution: 갈등 해소력 - 높을수록 갈등 해소에 기여 (=좋음). 갈등을 부추겼으면 낮은 점수, 해결하려 노력했으면 높은 점수
+9. growthPotential: 성장 가능성 - 변화 의지, 자기성찰
 
 절대 규칙:
 1. 마크다운 문법 사용 금지 (**, *, #, - 등)
 2. 교과서적, 일반론적 답변 금지
 3. 이 사건의 특수성을 반영한 맞춤형 분석
 4. 구체적이고 실행 가능한 해결책 제시
-5. 폭력/학대 상황에서는 피해자 보호 우선`;
+5. 폭력/학대 상황에서는 피해자 보호 우선
+6. 화해 선물은 관계 유형(${formData.relationship})에 맞게 현실적으로 추천
+7. 벌금은 책임도 60% 이상인 쪽에만 유머러스하게 부과 (60% 미만이면 penaltyInfo를 null로)
+8. stakeholderMap에는 설명에서 언급된 제3자(친구, 가족, 직장동료 등)도 포함
+9. conflictTimeline은 설명에서 추론 가능한 사건 흐름을 시간순으로 정리
+10. faultAnalysis의 각 과실은 설명에서 구체적으로 추론 가능한 행동만 포함
+11. keyInsights는 이 사건만의 독특한 통찰 - 뻔한 일반론 금지`;
 }
 
 function getAdvancedJudgePersona(character: string, intensity: string) {

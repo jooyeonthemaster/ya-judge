@@ -249,12 +249,16 @@ export default function Home() {
               혼자서 판결받기 →
             </motion.button>
             
-            <div className="mt-4 px-3 py-2.5 bg-gradient-to-r from-pink-50 to-purple-50 rounded-lg border border-pink-200 flex items-center gap-2 shadow-sm">
-              <Sparkles className="w-5 h-5 text-pink-600 flex-shrink-0" />
-              <p className="text-sm text-pink-800 font-semibold">
-                <span className="font-black">4,200쌍</span> 이상의 커플이 <span className="underline decoration-wavy decoration-pink-400 underline-offset-2">관계 회복</span> 성공!
+            <button
+              onClick={() => router.push('/team')}
+              className="mt-4 w-full px-3 py-2.5 bg-gradient-to-r from-gray-900 to-gray-800 rounded-lg border border-gray-700 flex items-center gap-2 shadow-sm hover:from-gray-800 hover:to-gray-700 transition-all group"
+            >
+              <Users className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+              <p className="text-sm text-white font-semibold flex-1 text-left">
+                <span className="font-black">팀 & BM</span> 소개 보기
               </p>
-            </div>
+              <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
+            </button>
           </motion.div>
         </div>
       </section>
@@ -514,44 +518,45 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 푸터 */}
-      <footer className="bg-white text-white">
-        <div className="w-full border-t border-gray-300 py-[38px] flex-col pl-7">
-          <div className="flex-col">
-            <p className="text-black">NEANDER CO.,LTD</p>
-            <p className="text-gray-400 text-[14px]">AC'SCENT</p>
-          </div>
-          <div className="flex mt-[30px]">
-            <div className="text-black text-[14px] mr-20 xs:mr-5">
-              <p>TERMS OF SERVICES</p>
-              <p>PRIVACY POLICY</p>
-            </div>
-            <div className="text-gray-400 text-[14px]">
-              <p>이용약관</p>
-              <p>개인정보처리방침</p>
-            </div>
-          </div>
-          <div className="flex-col mt-[30px] text-black text-[14px]">
-            <p>SNS</p>
-            <p className="text-gray-400">INSTAGRAM @AC_SCENT</p>
-          </div>
-          <div className="flex-col mt-[30px] text-black text-[14px]">
-            <p>CONTACT</p>
-            <p className="text-gray-400">T. 02-336-3368</p>
-            <p className="text-gray-400">E. neander@neander.co.kr</p>
-          </div>
-          <div className="flex-col mt-[30px] text-black text-[14px]">
-            <div>
-              <p>HONGDAE STORE</p>
-              <p className="text-gray-400">서울 서대문구 연세로9길 16</p>
-            </div>
-            <div className="mt-[30px]">
-              <p className="text-gray-400">사업자등록번호: 683-86-02812</p>
-              <p className="text-gray-400 pt-1">통신판매신고번호: 2033-서울서대문-1558</p>
-              <p className="text-gray-400 pt-1">CEO. 유재영, 이동주</p>
-            </div>
-          </div>
+      {/* 해커톤 배너 */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-500 rounded-full blur-[128px]" />
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-500 rounded-full blur-[128px]" />
         </div>
+        <div className="relative px-6 py-16 sm:py-20 text-center">
+          <p className="text-emerald-400 font-mono text-sm tracking-[0.3em] uppercase mb-4">
+            2026 Hackathon
+          </p>
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white leading-tight mb-6">
+            조코딩 × OpenAI × Primer AI
+            <br />
+            <span className="block bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent text-xl sm:text-3xl md:text-4xl">
+              해커톤 참여 프로젝트
+            </span>
+          </h2>
+          <div className="flex items-center justify-center gap-3 flex-wrap mb-8">
+            <span className="px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full text-white text-sm font-medium">
+              조코딩
+            </span>
+            <span className="text-white/40">×</span>
+            <span className="px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full text-white text-sm font-medium">
+              OpenAI
+            </span>
+            <span className="text-white/40">×</span>
+            <span className="px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full text-white text-sm font-medium">
+              Primer AI
+            </span>
+          </div>
+          <p className="text-gray-400 text-sm max-w-md mx-auto">
+            AI 기반 커플 갈등 해결 서비스 &mdash; 야 판사야!
+          </p>
+        </div>
+      </section>
+
+      {/* 푸터 */}
+      <footer className="bg-gray-950 border-t border-white/10 py-6 text-center">
+        <p className="text-gray-500 text-xs">&copy; 2026 야 판사야! All rights reserved.</p>
       </footer>
     </main>
   );

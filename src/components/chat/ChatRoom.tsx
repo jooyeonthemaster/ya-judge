@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import { v4 as uuidv4 } from 'uuid';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 // Component imports
 import MessageList from './MessageList';
@@ -45,6 +45,8 @@ export default function ChatRoom({
   initialStage = 'waiting',
   activeChattersCount = 0
 }: ChatRoomProps) {
+  const router = useRouter();
+
   // Local state
   const [isLoading, setIsLoading] = useState(false);
   const [hasNewIssues, setHasNewIssues] = useState(false);
@@ -85,6 +87,7 @@ export default function ChatRoom({
     setVerdictDataLocal,
     setRoomId,
     isVerdictLoading,
+    isVerdictReady,
     onVerdictLoadingComplete,
 
     // 즉시 판결 관련
@@ -232,6 +235,10 @@ export default function ChatRoom({
         // 모든 유저에게 로딩 상태 동기화
         if (loadingInfo.isLoading !== undefined) {
           useChatStore.setState({ isVerdictLoading: loadingInfo.isLoading });
+        }
+        // API 응답 준비 상태도 동기화
+        if (loadingInfo.isReady !== undefined) {
+          useChatStore.setState({ isVerdictReady: loadingInfo.isReady });
         }
       }
     });
@@ -1427,8 +1434,9 @@ export default function ChatRoom({
         )}
 
         {/* 최종 판결 로딩 바 */}
-        <VerdictLoadingBar 
-          isVisible={isVerdictLoading} 
+        <VerdictLoadingBar
+          isVisible={isVerdictLoading}
+          isVerdictReady={isVerdictReady}
           onComplete={onVerdictLoadingComplete}
         />
 
@@ -1527,7 +1535,7 @@ export default function ChatRoom({
           // Stop timer and ensure final verdict state is set
           useChatStore.setState({ timerActive: false });
           timerState.setFinalVerdictTriggered(true);
-          
+
           // Also update Firebase to prevent sync from overriding local state
           if (roomId && database) {
             const timerRef = ref(database, `rooms/${roomId}/timer`);
@@ -1537,7 +1545,7 @@ export default function ChatRoom({
               completedAt: new Date().toISOString(),
               endReason: 'verdict_complete'
             });
-            
+
             const verdictStatusRef = ref(database, `rooms/${roomId}/verdictStatus`);
             set(verdictStatusRef, {
               inProgress: false,
@@ -1545,11 +1553,44 @@ export default function ChatRoom({
               completedAt: new Date().toISOString()
             });
           }
-          
+
           setShowVerdictModal(false);
           setVerdictData(null);
         }}
         verdictData={latestVerdictData}
+        showRetrialCTA={true}
+        onRequestRetrial={() => {
+          setShowVerdictModal(false);
+          // 결제 세션 정보 저장 후 결제 페이지로 이동
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('newRoomId', roomId || '');
+            sessionStorage.setItem('newUserName', chatState.username);
+            sessionStorage.setItem('isHost', 'false');
+          }
+          router.push('/newpayment/checkout');
+        }}
+        onPayPenalty={(amount, reason) => {
+          setShowVerdictModal(false);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('newRoomId', roomId || '');
+            sessionStorage.setItem('newUserName', chatState.username);
+            sessionStorage.setItem('paymentType', 'penalty');
+            sessionStorage.setItem('paymentAmount', String(amount));
+            sessionStorage.setItem('paymentReason', reason);
+          }
+          router.push(`/newpayment/checkout?type=penalty&amount=${amount}`);
+        }}
+        onPayGift={(gift) => {
+          setShowVerdictModal(false);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('newRoomId', roomId || '');
+            sessionStorage.setItem('newUserName', chatState.username);
+            sessionStorage.setItem('paymentType', 'gift');
+            sessionStorage.setItem('paymentAmount', String(gift.price));
+            sessionStorage.setItem('paymentReason', gift.item);
+          }
+          router.push(`/newpayment/checkout?type=gift&amount=${gift.price}&item=${encodeURIComponent(gift.item)}`);
+        }}
       />
 
       <InstantVerdictModal
@@ -1576,6 +1617,38 @@ export default function ChatRoom({
           setIndividualVerdictData(null);
         }}
         verdictData={individualVerdictData}
+        showRetrialCTA={true}
+        onRequestRetrial={() => {
+          setShowIndividualVerdictModal(false);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('newRoomId', roomId || '');
+            sessionStorage.setItem('newUserName', chatState.username);
+            sessionStorage.setItem('isHost', 'false');
+          }
+          router.push('/newpayment/checkout');
+        }}
+        onPayPenalty={(amount, reason) => {
+          setShowIndividualVerdictModal(false);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('newRoomId', roomId || '');
+            sessionStorage.setItem('newUserName', chatState.username);
+            sessionStorage.setItem('paymentType', 'penalty');
+            sessionStorage.setItem('paymentAmount', String(amount));
+            sessionStorage.setItem('paymentReason', reason);
+          }
+          router.push(`/newpayment/checkout?type=penalty&amount=${amount}`);
+        }}
+        onPayGift={(gift) => {
+          setShowIndividualVerdictModal(false);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('newRoomId', roomId || '');
+            sessionStorage.setItem('newUserName', chatState.username);
+            sessionStorage.setItem('paymentType', 'gift');
+            sessionStorage.setItem('paymentAmount', String(gift.price));
+            sessionStorage.setItem('paymentReason', gift.item);
+          }
+          router.push(`/newpayment/checkout?type=gift&amount=${gift.price}&item=${encodeURIComponent(gift.item)}`);
+        }}
       />
 
       {/* Re-trial Modal */}
