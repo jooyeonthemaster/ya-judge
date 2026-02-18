@@ -29,7 +29,7 @@ function sanitizeForFirebase(obj: any): any {
 }
 
 // 타이머 관련 상수
-const TIMER_DURATION = 60000; // 60초 (밀리초)
+const TIMER_DURATION = 300000; // 5분 (밀리초)
 const MIN_INTERVENTION_INTERVAL = 8000; // 최소 판사 개입 간격 (밀리초)
 const MESSAGES_BEFORE_FIRST_INTERVENTION = 4; // 첫 개입 전 필요한 최소 메시지 수
 

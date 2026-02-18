@@ -43,12 +43,18 @@ ${userMessages}
 ## 분석 체계 (매우 중요! 반드시 모든 항목을 채워주세요)
 ==========================================================
 
-### 1. 이해관계자 관계도 (stakeholderMap)
-대화 내용을 꼼꼼히 분석하여 언급된 모든 인물을 파악하세요:
+### 1. 이해관계자 관계도 (stakeholderMap) ★★★ 매우 중요 ★★★
+대화 내용을 꼼꼼히 분석하여 언급된 모든 인물을 빠짐없이 파악하세요:
 - 대화 참가자들은 반드시 "primary" role로 포함
-- 대화 중 언급된 제3자 (친구, 가족, 직장동료 등)도 포함 (secondary/mentioned)
+- 대화 중 이름이 언급된 모든 제3자를 반드시 포함 (친구, 가족, 직장동료, 선후배 등)
+  - 사건에 직접 관여/영향을 준 인물: role = "secondary"
+  - 목격자: role = "witness"
+  - 간접적으로 언급만 된 인물: role = "mentioned"
+- 서사에 등장하는 인물이 3명 이상이면 stakeholders에 3명 이상 포함해야 합니다
 - 각 인물 간의 관계 유형과 관계 품질을 구체적으로 분석
 - 관계 설명은 이 사건의 맥락에서 구체적으로 (예: "지각 문제로 갈등 중인 커플")
+- ★ 모든 stakeholder는 relationships 배열에서 최소 1개 이상의 관계로 다른 인물과 연결되어야 합니다
+- ★ 연결이 없는 고립된 노드가 있으면 안 됩니다. 추가 인물(제3자)도 반드시 from/to로 연결하세요
 
 ### 2. 갈등 타임라인 (conflictTimeline)
 대화의 흐름을 시간순으로 분석하여 핵심 순간들을 추출하세요:
@@ -170,6 +176,10 @@ penaltyInfo: 책임도 60% 이상인 참가자에게만 벌금 (3000-10000원)
         "involvementLevel": 100,
         "description": "이 사건에서의 역할과 특징을 구체적으로"
       }
+      // ★★★ 대화에서 이름이 언급된 모든 제3자를 여기에 반드시 추가하세요! ★★★
+      // 예: { "id": "person3", "name": "실제이름", "role": "secondary", "relationship": "p1의 친구", "involvementLevel": 60, "description": "역할" },
+      //     { "id": "person4", "name": "실제이름", "role": "secondary", "relationship": "p2의 어머니", "involvementLevel": 40, "description": "역할" }
+      // 3명 이상 언급되면 3명 이상 추가. role: secondary(직접관여), witness(목격), mentioned(간접언급)
     ],
     "relationships": [
       {
@@ -179,6 +189,10 @@ penaltyInfo: 책임도 60% 이상인 참가자에게만 벌금 (3000-10000원)
         "quality": "positive|neutral|negative|complicated",
         "description": "이 사건 맥락에서의 구체적 관계 설명"
       }
+      // ★★★ 모든 제3자를 다른 인물과 연결하는 관계를 반드시 추가하세요! ★★★
+      // 모든 stakeholder는 최소 1개 relationship에 연결되어야 합니다 (고립된 노드 금지!)
+      // 예: { "from": "p1", "to": "person3", "type": "friend", "quality": "positive", "description": "오랜 친구" },
+      //     { "from": "p2", "to": "person4", "type": "family", "quality": "positive", "description": "모자 관계" }
     ]
   },
   "conflictTimeline": {
@@ -304,7 +318,7 @@ penaltyInfo: 책임도 60% 이상인 참가자에게만 벌금 (3000-10000원)
 3. 각 참가자의 말투와 성향을 파악해서 개인화된 메시지 작성
 4. faults의 quote는 실제 대화 내용에서 정확히 인용 - 없는 말을 만들지 마세요
 5. 타임라인 이벤트는 대화 흐름에서 실제로 일어난 순간만 포함
-6. 이해관계자는 대화에서 실제로 언급된 인물만 포함
+6. 이해관계자는 대화에서 실제로 언급된 인물만 포함하되, 이름이 언급된 모든 인물을 빠짐없이 stakeholders에 추가하고, 각 인물은 반드시 최소 1개의 relationship으로 다른 인물과 연결하세요. 고립된 노드 금지
 7. 의미 없는 일반론적 분석 절대 금지 - 이 대화의 특수성을 반영한 맞춤 분석만
 8. 벌금은 책임도 60% 이상인 참가자에게만 (미만이면 penaltyInfo를 null로)
 9. keyInsights는 진짜 통찰이어야 함 - 누구나 말할 수 있는 뻔한 말 금지

@@ -19,6 +19,7 @@ export default function RoomlessPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [judgment, setJudgment] = useState<any>(null);
+  const [extendedVerdictData, setExtendedVerdictData] = useState<any>(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -80,6 +81,7 @@ export default function RoomlessPage() {
       
       if (result.success) {
         setJudgment(result.judgment);
+        setExtendedVerdictData(result.extendedVerdictData || null);
         setCurrentStep(5);
       } else {
         throw new Error(result.error || '판결 생성에 실패했습니다.');
@@ -112,6 +114,7 @@ export default function RoomlessPage() {
   const handleNewCase = () => {
     setCurrentStep(1);
     setJudgment(null);
+    setExtendedVerdictData(null);
     setFormData({
       title: '',
       description: '',
@@ -227,6 +230,7 @@ export default function RoomlessPage() {
             <Step5Result
               key="step5"
               judgment={judgment}
+              extendedVerdictData={extendedVerdictData}
               onBackToMain={handleBackToMain}
               onNewCase={handleNewCase}
             />

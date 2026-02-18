@@ -93,14 +93,13 @@ export default function Step1Situation({ formData, setFormData, onNext }: Step1S
             onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
             className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none resize-none h-40 transition-all duration-200 text-gray-800 placeholder-gray-400"
             placeholder="언제, 어디서, 무엇이, 어떻게 일어났는지 구체적으로 설명해주세요. 감정적인 표현보다는 사실 위주로 작성하시면 더 정확한 판결을 받을 수 있어요."
-            maxLength={500}
           />
           <div className="flex justify-between items-center mt-2">
             <div className="flex items-center text-xs text-amber-600">
               <AlertCircle className="w-3 h-3 mr-1" />
               <span>구체적이고 객관적인 설명일수록 정확한 판결을 받을 수 있어요</span>
             </div>
-            <span className="text-xs text-gray-400">{formData.description.length}/500</span>
+            <span className="text-xs text-gray-400">{formData.description.length}자</span>
           </div>
         </motion.div>
       </div>

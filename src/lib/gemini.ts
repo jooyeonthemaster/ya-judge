@@ -336,6 +336,36 @@ export const getFinalVerdict = async (
         };
       }
 
+      // stakeholderMap 유효성 검증 및 보정
+      if (parsedData.stakeholderMap) {
+        const validRoles = ['primary', 'secondary', 'witness', 'mentioned'];
+        const validRelTypes = ['romantic', 'family', 'friend', 'colleague', 'acquaintance', 'conflict'];
+        const validQualities = ['positive', 'neutral', 'negative', 'complicated'];
+
+        if (Array.isArray(parsedData.stakeholderMap.stakeholders)) {
+          parsedData.stakeholderMap.stakeholders = parsedData.stakeholderMap.stakeholders.map((s: any) => ({
+            ...s,
+            id: s.id || `person-${Math.random().toString(36).slice(2, 6)}`,
+            name: s.name || '미상',
+            role: validRoles.includes(s.role) ? s.role : 'secondary',
+            involvementLevel: typeof s.involvementLevel === 'number' ? Math.max(0, Math.min(100, s.involvementLevel)) : 50,
+          }));
+        }
+
+        if (Array.isArray(parsedData.stakeholderMap.relationships)) {
+          const stakeholderIds = new Set(
+            (parsedData.stakeholderMap.stakeholders || []).map((s: any) => s.id)
+          );
+          parsedData.stakeholderMap.relationships = parsedData.stakeholderMap.relationships
+            .filter((r: any) => r.from && r.to && stakeholderIds.has(r.from) && stakeholderIds.has(r.to))
+            .map((r: any) => ({
+              ...r,
+              type: validRelTypes.includes(r.type) ? r.type : 'acquaintance',
+              quality: validQualities.includes(r.quality) ? r.quality : 'complicated',
+            }));
+        }
+      }
+
       return parsedData as ExtendedVerdictData;
 
     } catch (parseError) {
