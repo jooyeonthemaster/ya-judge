@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     }
     
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     
     // 다단계 심층 분석
     const deepAnalysis = await performDeepAnalysis(formData);

@@ -151,7 +151,7 @@ export const analyzeConversation = async (
     
     // 3단계: AI를 통한 고급 분석 (증거 요청, 주제 이탈, 논리적 오류 등)
     // console.log('고급 대화 분석 시작');
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     
     // 참가자 정보 추출
     const participants = Array.from(new Set(userMessages.map(msg => msg.name)));
@@ -276,7 +276,7 @@ export const getFinalVerdict = async (
   
   try {
     // console.log('최종 판결 요청 시작');
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     
     // 사용자 메시지만 필터링하고 시계열 순으로 정렬
     const userMessages = messages
